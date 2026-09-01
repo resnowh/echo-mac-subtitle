@@ -17,7 +17,30 @@ struct EchoMacApp: App {
         WindowGroup {
             ContentView()
         }
-        .windowResizability(.contentSize)
+        .windowResizability(.automatic)
+    }
+}
+
+private struct WindowAccessor: NSViewRepresentable {
+    let alwaysOnTop: Bool
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            if let window = view.window { configure(window) }
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            if let window = nsView.window { configure(window) }
+        }
+    }
+
+    private func configure(_ window: NSWindow) {
+        window.level = alwaysOnTop ? .floating : .normal
+        window.collectionBehavior = alwaysOnTop ? [.canJoinAllSpaces, .fullScreenAuxiliary] : []
     }
 }
 
@@ -28,9 +51,11 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     @Published var status = "准备就绪"
     @Published var errorMessage = ""
     @Published var audioLevel = 0.0
+    @Published var waveformSamples = Array(repeating: 0.0, count: 48)
     @Published var entries: [SubtitleEntry] = []
     @Published var fileStatus = ""
     @Published var sonioxAPIKey: String
+    @Published var isAlwaysOnTop: Bool
 
     private let audioEngine = AVAudioEngine()
     private let audioQueue = DispatchQueue(label: "local.echo.soniox-audio")
@@ -62,6 +87,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         let environmentKey = ProcessInfo.processInfo.environment["SONIOX_API_KEY"] ?? ""
         let savedKey = UserDefaults.standard.string(forKey: "sonioxAPIKey") ?? ""
         sonioxAPIKey = savedKey.isEmpty ? environmentKey : savedKey
+        isAlwaysOnTop = UserDefaults.standard.object(forKey: "alwaysOnTop") as? Bool ?? true
         super.init()
     }
 
@@ -137,7 +163,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         openSonioxSocket(apiKey: apiKey, sessionID: sessionID)
         input.installTap(onBus: 0, bufferSize: 1024, format: inputFormat) { [weak self] buffer, _ in
             let level = Self.rmsLevel(buffer)
-            DispatchQueue.main.async { [weak self] in self?.audioLevel = level }
+            DispatchQueue.main.async { [weak self] in self?.recordAudioLevel(level) }
             self?.audioQueue.async { [weak self] in
                 self?.sendAudio(buffer, sessionID: sessionID)
             }
@@ -266,6 +292,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         audioEngine.stop()
         audioEngine.inputNode.removeTap(onBus: 0)
         audioLevel = 0
+        waveformSamples = Array(repeating: 0.0, count: waveformSamples.count)
         segmentationTimer?.invalidate()
         segmentationTimer = nil
         currentSessionFinished = true
@@ -415,6 +442,18 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         return min(1, max(0, sqrt(sum / Double(count)) * 7.5))
     }
 
+    private func recordAudioLevel(_ level: Double) {
+        // Attack quickly when speech starts, then decay more slowly. This
+        // keeps the history readable without inventing movement when silent.
+        let previous = audioLevel
+        let smoothed = level >= previous
+            ? previous * 0.25 + level * 0.75
+            : previous * 0.82 + level * 0.18
+        audioLevel = smoothed
+        waveformSamples.append(smoothed)
+        if waveformSamples.count > 48 { waveformSamples.removeFirst() }
+    }
+
     private func errorMessageReceived(_ message: String) {
         errorMessage = "Soniox 翻译失败：\(message)"
         status = "翻译失败"
@@ -434,6 +473,11 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         sonioxAPIKey = key
     }
 
+    func toggleAlwaysOnTop() {
+        isAlwaysOnTop.toggle()
+        UserDefaults.standard.set(isAlwaysOnTop, forKey: "alwaysOnTop")
+    }
+
     func clearTranscript() {
         activeSessionID = UUID()
         socket?.cancel(with: .goingAway, reason: nil)
@@ -443,6 +487,8 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         entries = []
         english = ""
         chinese = ""
+        audioLevel = 0
+        waveformSamples = Array(repeating: 0.0, count: waveformSamples.count)
         currentEntryID = nil
         currentSessionFileURL = nil
         currentSessionFinished = false
@@ -526,9 +572,16 @@ struct ContentView: View {
                 }
                 .buttonStyle(.borderless)
                 .help("设置")
+                Button(action: model.toggleAlwaysOnTop) {
+                    Image(systemName: model.isAlwaysOnTop ? "pin.fill" : "pin.slash")
+                        .foregroundStyle(model.isAlwaysOnTop ? .mint : .secondary)
+                }
+                .buttonStyle(.borderless)
+                .help(model.isAlwaysOnTop ? "取消置顶" : "置顶窗口")
             }
 
             SynchronizedTranscriptView(entries: model.entries)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             HStack(spacing: 14) {
                 Button(action: model.toggleRecording) {
@@ -545,7 +598,7 @@ struct ContentView: View {
                     .disabled(model.entries.isEmpty || model.isRecording)
             }
             HStack(spacing: 12) {
-                WaveformView(level: model.audioLevel, active: model.isRecording)
+                WaveformView(samples: model.waveformSamples, active: model.isRecording)
                 Circle()
                     .fill(model.isRecording && model.audioLevel > 0.035 ? .green : .gray)
                     .frame(width: 8, height: 8)
@@ -558,7 +611,11 @@ struct ContentView: View {
             }
         }
         .padding(28)
-        .frame(width: 820)
+        .frame(minWidth: 680, idealWidth: 820, minHeight: 520, idealHeight: 650, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(
+            WindowAccessor(alwaysOnTop: model.isAlwaysOnTop)
+        )
         .sheet(isPresented: $showSettings) {
             SettingsView(model: model)
         }
@@ -606,72 +663,122 @@ struct SettingsView: View {
     }
 }
 
+private struct TranscriptBottomPreferenceKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 struct SynchronizedTranscriptView: View {
     let entries: [SubtitleEntry]
+    @State private var isAtBottom = true
+    @State private var hasNewContent = false
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.vertical) {
-                VStack(spacing: 0) {
-                    HStack(alignment: .top, spacing: 14) {
-                        Text("英文原文").font(.headline).frame(maxWidth: .infinity, alignment: .leading)
-                        Text("中文翻译").font(.headline).frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .padding(.bottom, 10)
-                    if entries.isEmpty {
-                        HStack(alignment: .top, spacing: 14) {
-                            Text("开始说英文后，每条识别结果会保留在这里").foregroundStyle(.secondary)
-                            Text("Soniox 翻译会逐条追加到这里").foregroundStyle(.secondary)
+        GeometryReader { container in
+            ScrollViewReader { proxy in
+                ZStack(alignment: .bottomTrailing) {
+                    ScrollView(.vertical) {
+                        VStack(spacing: 0) {
+                            HStack(alignment: .top, spacing: 14) {
+                                Text("英文原文").font(.headline).frame(maxWidth: .infinity, alignment: .leading)
+                                Text("中文翻译").font(.headline).frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .padding(.bottom, 10)
+                            if entries.isEmpty {
+                                HStack(alignment: .top, spacing: 14) {
+                                    Text("开始说英文后，每条识别结果会保留在这里").foregroundStyle(.secondary)
+                                    Text("Soniox 翻译会逐条追加到这里").foregroundStyle(.secondary)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            } else {
+                                ForEach(entries) { entry in
+                                    HStack(alignment: .top, spacing: 14) {
+                                        Text(entry.english.isEmpty ? "…" : entry.english)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                        Text(entry.chinese.isEmpty ? "翻译中…" : entry.chinese)
+                                            .foregroundStyle(entry.chinese.isEmpty ? .secondary : .primary)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                    .padding(.vertical, 8)
+                                    Divider()
+                                }
+                            }
+                            GeometryReader { bottom in
+                                Color.clear
+                                    .preference(key: TranscriptBottomPreferenceKey.self,
+                                                value: bottom.frame(in: .named("transcriptScroll")).maxY)
+                            }
+                            .frame(height: 1)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    } else {
-                        ForEach(entries) { entry in
-                            HStack(alignment: .top, spacing: 14) {
-                                Text(entry.english.isEmpty ? "…" : entry.english)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                Text(entry.chinese.isEmpty ? "翻译中…" : entry.chinese)
-                                    .foregroundStyle(entry.chinese.isEmpty ? .secondary : .primary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .padding(.vertical, 8)
-                            Divider()
-                        }
+                        .id("subtitle-content")
                     }
-                    Color.clear.frame(height: 1).id("subtitle-bottom")
+                    .coordinateSpace(name: "transcriptScroll")
+                    .onPreferenceChange(TranscriptBottomPreferenceKey.self) { bottomMaxY in
+                        let nowAtBottom = bottomMaxY <= container.size.height + 24
+                        isAtBottom = nowAtBottom
+                        if nowAtBottom { hasNewContent = false }
+                    }
+
+                    if hasNewContent {
+                        Button {
+                            scrollToBottom(proxy)
+                            isAtBottom = true
+                            hasNewContent = false
+                        } label: {
+                            Label("有新内容", systemImage: "arrow.down")
+                                .font(.caption.weight(.semibold))
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.mint)
+                        .padding(10)
+                    }
                 }
+                .onChange(of: entries.count) { _, _ in contentDidChange(proxy) }
+                .onChange(of: entries.map(\.english).joined()) { _, _ in contentDidChange(proxy) }
+                .onChange(of: entries.map(\.chinese).joined()) { _, _ in contentDidChange(proxy) }
             }
-            .frame(height: 220)
-            .onChange(of: entries.count) { _, _ in scrollToBottom(proxy) }
-            .onChange(of: entries.map(\.english).joined()) { _, _ in scrollToBottom(proxy) }
-            .onChange(of: entries.map(\.chinese).joined()) { _, _ in scrollToBottom(proxy) }
+        }
+        .frame(minHeight: 220, maxHeight: .infinity)
+    }
+
+    private func contentDidChange(_ proxy: ScrollViewProxy) {
+        guard isAtBottom else {
+            hasNewContent = true
+            return
+        }
+        hasNewContent = false
+        DispatchQueue.main.async {
+            scrollToBottom(proxy)
         }
     }
 
     private func scrollToBottom(_ proxy: ScrollViewProxy) {
         withAnimation(.easeOut(duration: 0.18)) {
-            proxy.scrollTo("subtitle-bottom", anchor: .bottom)
+            proxy.scrollTo("subtitle-content", anchor: .bottom)
         }
     }
 }
 
 struct WaveformView: View {
-    let level: Double
+    let samples: [Double]
     let active: Bool
-    private let barCount = 36
 
     var body: some View {
         HStack(alignment: .center, spacing: 3) {
-            ForEach(0..<barCount, id: \.self) { index in
-                let shape = 0.35 + 0.65 * abs(sin(Double(index) * 1.7))
+            ForEach(Array(samples.enumerated()), id: \.offset) { _, sample in
                 RoundedRectangle(cornerRadius: 2)
                     .fill(active ? Color.mint.opacity(0.85) : Color.secondary.opacity(0.35))
-                    .frame(width: 4, height: active ? max(3, 5 + level * 38 * shape) : 3)
+                    .frame(width: 3, height: active ? max(2, min(46, 3 + sample * 44)) : 2)
             }
         }
         .frame(maxWidth: .infinity)
         .frame(height: 52, alignment: .center)
         .padding(.horizontal, 12)
         .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 10))
-        .animation(.easeOut(duration: 0.08), value: level)
+        .animation(.easeOut(duration: 0.06), value: samples)
     }
 }
