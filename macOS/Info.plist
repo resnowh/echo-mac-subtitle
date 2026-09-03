@@ -4,4 +4,5 @@
 <key>CFBundleDisplayName</key><string>Echo</string>
 <key>CFBundleIdentifier</key><string>local.echo.subtitle</string>
 <key>NSMicrophoneUsageDescription</key><string>Echo 需要使用麦克风，将英文语音转换为字幕。</string>
+<key>NSScreenCaptureUsageDescription</key><string>Echo 需要捕获电脑正在播放的音频，将其转换为字幕和中文翻译。</string>
 </dict></plist>
