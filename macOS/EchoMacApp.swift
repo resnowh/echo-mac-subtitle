@@ -9,8 +9,33 @@ struct SubtitleEntry: Identifiable {
     let id = UUID()
     var start: TimeInterval
     var end: TimeInterval
+    var recordedAt: Date? = nil
     var english: String
     var chinese: String
+}
+
+struct ArchivedSubtitle: Codable, Identifiable {
+    let id: UUID
+    var start: TimeInterval
+    var end: TimeInterval
+    var recordedAt: Date?
+    var english: String
+    var chinese: String
+}
+
+struct TranscriptSegment: Codable, Identifiable {
+    let id: UUID
+    var startedAt: Date
+    var updatedAt: Date
+    var entries: [ArchivedSubtitle]
+}
+
+struct TranscriptArchive: Codable, Identifiable {
+    let id: UUID
+    var title: String
+    let createdAt: Date
+    var updatedAt: Date
+    var segments: [TranscriptSegment]
 }
 
 enum AudioInputMode: String, CaseIterable, Identifiable {
@@ -204,6 +229,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     @Published var status = "准备就绪"
     @Published var errorMessage = ""
     @Published var audioLevel = 0.0
+    @Published var isReceivingAudio = false
     @Published var waveformSamples = Array(repeating: 0.0, count: 48)
     @Published var entries: [SubtitleEntry] = []
     @Published var fileStatus = ""
@@ -215,6 +241,9 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     @Published var deepSeekAPIKey: String
     @Published var summaryText = ""
     @Published var summaryStatus = ""
+    @Published private(set) var archives: [TranscriptArchive] = []
+    @Published var selectedArchiveID: UUID?
+    @Published var archiveStatus = ""
 
     private let audioEngine = AVAudioEngine()
     private let audioQueue = DispatchQueue(label: "local.echo.soniox-audio")
@@ -237,9 +266,15 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     private var currentSessionFileURL: URL?
     private var lastSessionFileSaveAt: Date?
     private var sessionEntriesStartIndex = 0
+    private var lastSummarizedEntrySignatures: [UUID: String] = [:]
+    private var currentArchiveID: UUID?
+    private var currentSegmentID: UUID?
+    private var completedArchiveID: UUID?
+    private var completedSegmentID: UUID?
     private var currentSessionFinished = false
     private var activeSessionID = UUID()
     private var isClosingSocket = false
+    private var socketReady = false
 
     // Soniox sends finalized tokens once and provisional tokens repeatedly.
     // Keep these separately so a provisional update never erases the transcript.
@@ -261,15 +296,23 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         inputMode = AudioInputMode(rawValue: savedInputMode) ?? .microphone
         isSummaryEnabled = UserDefaults.standard.bool(forKey: "aiSummaryEnabled")
         deepSeekAPIKey = UserDefaults.standard.string(forKey: "deepSeekAPIKey") ?? ""
+        archives = Self.loadArchives()
+        selectedArchiveID = nil
         super.init()
     }
 
     func toggleRecording() {
         if isRecording {
             stop()
-        } else if socket != nil {
-            status = "正在完成上一段录音"
         } else {
+            // A failed WebSocket can outlive the recording session. Do not
+            // permanently block the start button on that stale connection.
+            if socket != nil || urlSession != nil {
+                socket?.cancel(with: .goingAway, reason: nil)
+                socket = nil
+                urlSession?.invalidateAndCancel()
+                urlSession = nil
+            }
             start()
         }
     }
@@ -312,19 +355,19 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     private func requestMicrophoneForInputSwitch(to mode: AudioInputMode, from previousMode: AudioInputMode) {
-        let permission = AVCaptureDevice.authorizationStatus(for: .audio)
-        if permission == .authorized {
+        let permission = AVAudioApplication.shared.recordPermission
+        if permission == .granted {
             finishMicrophoneInputSwitch(to: mode, from: previousMode)
             return
         }
-        guard permission == .notDetermined else {
+        guard permission == .undetermined else {
             isSwitchingInput = false
             errorMessage = "请在“系统设置 → 隐私与安全性 → 麦克风”中允许 Echo，然后再切换到\(mode.title)。"
             status = "输入源未切换"
             return
         }
         status = "等待麦克风授权"
-        AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
+        AVAudioApplication.requestRecordPermission { [weak self] granted in
             DispatchQueue.main.async {
                 guard let self else { return }
                 guard granted else {
@@ -366,6 +409,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         summaryTask?.cancel()
         summaryText = ""
         summaryStatus = ""
+        isReceivingAudio = false
         let key = sonioxAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else {
             errorMessage = "请先填写 Soniox API Key。可从 console.soniox.com 创建。"
@@ -374,21 +418,21 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         }
         UserDefaults.standard.set(key, forKey: "sonioxAPIKey")
 
-        let permission = AVCaptureDevice.authorizationStatus(for: .audio)
+        let permission = AVAudioApplication.shared.recordPermission
         guard inputMode.requiresMicrophone else {
             beginCapture(apiKey: key)
             return
         }
-        if permission == .authorized {
+        if permission == .granted {
             beginCapture(apiKey: key)
             return
         }
-        guard permission == .notDetermined else {
+        guard permission == .undetermined else {
             errorMessage = "请在“系统设置 → 隐私与安全性 → 麦克风”中允许 Echo。"
             return
         }
         status = "等待麦克风授权"
-        AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
+        AVAudioApplication.requestRecordPermission { [weak self] granted in
             DispatchQueue.main.async {
                 guard let self else { return }
                 guard granted else {
@@ -402,6 +446,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
 
     private func beginCapture(apiKey: String) {
         do {
+            prepareArchiveForRecording()
             guard let targetFormat = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16_000, channels: 1, interleaved: true) else {
                 throw NSError(domain: "Echo", code: 4, userInfo: [NSLocalizedDescriptionKey: "无法准备 Soniox 音频格式。"])
             }
@@ -442,8 +487,12 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         lastSessionFileSaveAt = nil
         currentSessionFinished = false
         isClosingSocket = false
+        currentSegmentID = UUID()
+        completedArchiveID = nil
+        completedSegmentID = nil
         sessionStartedAt = Date()
         sessionEntriesStartIndex = entries.count
+        lastSummarizedEntrySignatures = [:]
         activeSessionID = sessionID
         microphoneTapInstalled = false
         systemAudioCapture = nil
@@ -654,6 +703,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         let task = session.webSocketTask(with: sonioxURL)
         urlSession = session
         socket = task
+        socketReady = false
         task.resume()
 
         let config: [String: Any] = [
@@ -671,7 +721,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
                     ["key": "domain", "value": "economics and finance"],
                     ["key": "topic", "value": "economic research, markets, and financial analysis"]
                 ],
-                "text": "This recording may be an economics lecture. Carefully distinguish microeconomic and microeconomics, which refer to individual consumers, firms, markets, and incentives, from macroeconomic and macroeconomics, which refer to economy-wide growth, inflation, unemployment, GDP, and monetary or fiscal policy. Never substitute one term for the other.",
+                "text": "This recording may be an economics lecture. Carefully distinguish microeconomic and microeconomics, which refer to individual consumers, firms, markets, and incentives, from macroeconomic and macroeconomics, which refer to economy-wide growth, inflation, unemployment, GDP, and monetary or fiscal policy. In calculus and economics, derivative, partial derivative, first derivative, second derivative, and derivative of a function refer to calculus concepts and must not be confused with duty or duties, which mean a tax or obligation. Never substitute one term for the other.",
                 "terms": [
                     "microeconomic",
                     "macroeconomic",
@@ -693,7 +743,25 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
                     "marginal cost",
                     "marginal benefits",
                     "marginal costs",
-                    "incremental cost"
+                    "incremental cost",
+                    "derivative",
+                    "derivatives",
+                    "partial derivative",
+                    "first derivative",
+                    "second derivative",
+                    "derivative of",
+                    "take the derivative",
+                    "with respect to",
+                    "differentiate",
+                    "hand",
+                    "hands",
+                    "on the other hand",
+                    "on the one hand",
+                    "one hand",
+                    "other hand",
+                    "right hand",
+                    "left hand",
+                    "hand side"
                 ],
                 "translation_terms": [
                     ["source": "microeconomic", "target": "微观经济学"],
@@ -714,7 +782,14 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
                     ["source": "marginal cost", "target": "边际成本"],
                     ["source": "marginal benefits", "target": "边际收益"],
                     ["source": "marginal costs", "target": "边际成本"],
-                    ["source": "incremental cost", "target": "增量成本"]
+                    ["source": "incremental cost", "target": "增量成本"],
+                    ["source": "derivative", "target": "导数"],
+                    ["source": "derivatives", "target": "导数"],
+                    ["source": "partial derivative", "target": "偏导数"],
+                    ["source": "first derivative", "target": "一阶导数"],
+                    ["source": "second derivative", "target": "二阶导数"],
+                    ["source": "hand", "target": "手"],
+                    ["source": "hands", "target": "手"]
                 ]
             ],
             "translation": [
@@ -725,19 +800,55 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         do {
             let data = try JSONSerialization.data(withJSONObject: config)
             let json = String(decoding: data, as: UTF8.self)
-            task.send(.string(json)) { [weak self] error in
-                if let error {
-                    DispatchQueue.main.async {
-                        guard let self, self.activeSessionID == sessionID else { return }
-                        self.errorMessage = "Soniox 连接失败：\(error.localizedDescription)"
-                        self.status = "连接失败"
-                    }
-                }
-            }
+            sendSocketConfig(json, task: task, sessionID: sessionID, attempt: 0)
             receiveSonioxMessages(from: task, sessionID: sessionID)
         } catch {
             errorMessage = "Soniox 配置失败：\(error.localizedDescription)"
         }
+    }
+
+    private func sendSocketConfig(_ json: String, task: URLSessionWebSocketTask, sessionID: UUID, attempt: Int) {
+        guard activeSessionID == sessionID else { return }
+        task.send(.string(json)) { [weak self, weak task] error in
+            guard let self else { return }
+            if error == nil {
+                DispatchQueue.main.async {
+                    guard self.activeSessionID == sessionID else { return }
+                    self.socketReady = true
+                }
+                return
+            }
+            guard let error else { return }
+            guard attempt < 8 else {
+                DispatchQueue.main.async {
+                    self.handleSocketFailure(error, sessionID: sessionID)
+                }
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                guard let task, self.activeSessionID == sessionID, self.isRecording else { return }
+                self.sendSocketConfig(json, task: task, sessionID: sessionID, attempt: attempt + 1)
+            }
+        }
+    }
+
+    private func handleSocketFailure(_ error: Error, sessionID: UUID) {
+        guard activeSessionID == sessionID else { return }
+        let message = error.localizedDescription
+        socketReady = false
+        errorMessage = "Soniox 连接失败：\(message)"
+        status = "连接失败"
+        isRecording = false
+        isClosingSocket = true
+        isSwitchingInput = false
+        segmentationTimer?.invalidate()
+        segmentationTimer = nil
+        stopMicrophoneCapture()
+        stopSystemAudioCapture()
+        socket?.cancel(with: .goingAway, reason: nil)
+        socket = nil
+        urlSession?.invalidateAndCancel()
+        urlSession = nil
     }
 
     private func receiveSonioxMessages(from task: URLSessionWebSocketTask, sessionID: UUID) {
@@ -762,8 +873,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
                 DispatchQueue.main.async { [weak self] in
                     guard let self, self.activeSessionID == sessionID else { return }
                     if self.isRecording && !self.isClosingSocket {
-                        self.errorMessage = "Soniox 连接中断：\(error.localizedDescription)"
-                        self.status = "连接中断"
+                        self.handleSocketFailure(error, sessionID: sessionID)
                     }
                 }
             }
@@ -794,7 +904,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     private func sendPCMData(_ data: Data, sessionID: UUID) {
-        guard activeSessionID == sessionID, let socket else { return }
+        guard activeSessionID == sessionID, socketReady, let socket else { return }
         socket.send(.data(data)) { [weak self] error in
             if let error {
                 DispatchQueue.main.async {
@@ -813,6 +923,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         stopMicrophoneCapture()
         stopSystemAudioCapture()
         audioLevel = 0
+        isReceivingAudio = false
         waveformSamples = Array(repeating: 0.0, count: waveformSamples.count)
         segmentationTimer?.invalidate()
         segmentationTimer = nil
@@ -820,6 +931,8 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         updateCurrentEntry()
         finalizeCurrentEntry()
         saveCurrentSessionFile(force: true)
+        completedArchiveID = currentArchiveID
+        completedSegmentID = currentSegmentID
         let stoppedSessionID = activeSessionID
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.7) { [weak self] in
             guard let self, self.activeSessionID == stoppedSessionID, !self.isRecording else { return }
@@ -913,7 +1026,8 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     private func ensureCurrentEntry() {
         guard currentEntryID == nil else { return }
         let start = currentSourceStart ?? elapsedSinceSessionStart
-        let entry = SubtitleEntry(start: start, end: start, english: "", chinese: "")
+        let recordedAt = sessionStartedAt?.addingTimeInterval(start)
+        let entry = SubtitleEntry(start: start, end: start, recordedAt: recordedAt, english: "", chinese: "")
         entries.append(entry)
         currentEntryID = entry.id
     }
@@ -922,8 +1036,10 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         guard let currentEntryID,
               let index = entries.firstIndex(where: { $0.id == currentEntryID }) else { return }
         let rawEnglish = (finalEnglish + partialEnglish).trimmingCharacters(in: .whitespacesAndNewlines)
-        entries[index].english = Self.correctEconomicTerms(in: rawEnglish)
-        entries[index].chinese = (finalChinese + partialChinese).trimmingCharacters(in: .whitespacesAndNewlines)
+        let correctedEnglish = Self.correctEconomicTerms(in: rawEnglish)
+        entries[index].english = correctedEnglish
+        let rawChinese = (finalChinese + partialChinese).trimmingCharacters(in: .whitespacesAndNewlines)
+        entries[index].chinese = Self.correctEconomicTranslation(rawChinese, for: correctedEnglish)
         entries[index].start = currentSourceStart ?? entries[index].start
         entries[index].end = max(entries[index].start + 0.1, currentSourceEnd ?? elapsedSinceSessionStart)
         refreshFullTranscript()
@@ -1021,12 +1137,72 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
                 options: [.regularExpression, .caseInsensitive]
             )
         }
+
+        // In an economics/calculus lecture, Soniox can hear “derivative” as
+        // “duty”. Correct only strong calculus phrases so genuine tax or
+        // obligation uses of “duty” remain unchanged.
+        let derivativePhrases = [
+            "first duty", "second duty", "partial duty",
+            "duty of", "duty with respect to", "take the duty", "duty function",
+            "duties of", "first duties", "second duties", "partial duties"
+        ]
+        if derivativePhrases.contains(where: { lowercased.contains($0) }) {
+            result = result.replacingOccurrences(
+                of: "\\bfirst duties?\\b",
+                with: "first derivative",
+                options: [.regularExpression, .caseInsensitive]
+            )
+            result = result.replacingOccurrences(
+                of: "\\bsecond duties?\\b",
+                with: "second derivative",
+                options: [.regularExpression, .caseInsensitive]
+            )
+            result = result.replacingOccurrences(
+                of: "\\bpartial duties?\\b",
+                with: "partial derivative",
+                options: [.regularExpression, .caseInsensitive]
+            )
+            result = result.replacingOccurrences(
+                of: "\\bduties\\b",
+                with: "derivatives",
+                options: [.regularExpression, .caseInsensitive]
+            )
+            result = result.replacingOccurrences(
+                of: "\\bduty\\b",
+                with: "derivative",
+                options: [.regularExpression, .caseInsensitive]
+            )
+        }
+
+        // “hand” may arrive as the truncated token “han”. Limit this fix to
+        // recognizable phrases so a name such as “Han” is left untouched.
+        let handPhrases = [
+            "on the other han", "on the one han", "one han", "other han",
+            "right han", "left han", "han side", "at han"
+        ]
+        if handPhrases.contains(where: { result.lowercased().contains($0) }) {
+            result = result.replacingOccurrences(
+                of: "\\bhan\\b",
+                with: "hand",
+                options: [.regularExpression, .caseInsensitive]
+            )
+        }
         return result
+    }
+
+    private static func correctEconomicTranslation(_ text: String, for english: String) -> String {
+        let lowercasedEnglish = english.lowercased()
+        let isDerivativeContext = lowercasedEnglish.contains("derivative")
+            || lowercasedEnglish.contains("differentiate")
+            || lowercasedEnglish.contains("with respect to")
+        guard isDerivativeContext else { return text }
+        return text.replacingOccurrences(of: "关税", with: "导数")
     }
 
     private func recordAudioLevel(_ level: Double) {
         // Attack quickly when speech starts, then decay more slowly. This
         // keeps the history readable without inventing movement when silent.
+        isReceivingAudio = true
         let previous = audioLevel
         let smoothed = level >= previous
             ? previous * 0.25 + level * 0.75
@@ -1047,6 +1223,154 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
 
     var transcriptFolderPath: String {
         FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first?.path ?? FileManager.default.temporaryDirectory.path
+    }
+
+    var selectedArchiveTitle: String {
+        guard let selectedArchiveID,
+              let archive = archives.first(where: { $0.id == selectedArchiveID }) else {
+            return "新建存档"
+        }
+        return archive.title
+    }
+
+    var canSplitCompletedSegment: Bool {
+        !isRecording && completedArchiveID != nil && completedSegmentID != nil
+    }
+
+    func chooseArchive(_ id: UUID?) {
+        guard !isRecording else { return }
+        selectedArchiveID = id
+        if let id, let archive = archives.first(where: { $0.id == id }) {
+            archiveStatus = "下一段将接续：\(archive.title)"
+        } else {
+            archiveStatus = "下一段将新建存档"
+        }
+    }
+
+    private func prepareArchiveForRecording() {
+        let now = Date()
+        if let selectedArchiveID,
+           let archive = archives.first(where: { $0.id == selectedArchiveID }) {
+            let restoredEntries = archive.segments.flatMap(\.entries).map { archived in
+                SubtitleEntry(
+                    start: archived.start,
+                    end: archived.end,
+                    recordedAt: archived.recordedAt,
+                    english: archived.english,
+                    chinese: archived.chinese
+                )
+            }
+            entries = restoredEntries
+            refreshFullTranscript()
+            currentArchiveID = archive.id
+            archiveStatus = "正在接续：\(archive.title)"
+        } else {
+            let id = UUID()
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "zh_CN")
+            formatter.dateFormat = "MM-dd HH:mm"
+            let archive = TranscriptArchive(
+                id: id,
+                title: "课程 \(formatter.string(from: now))",
+                createdAt: now,
+                updatedAt: now,
+                segments: []
+            )
+            archives.append(archive)
+            selectedArchiveID = id
+            currentArchiveID = id
+            archiveStatus = "已新建：\(archive.title)"
+            saveArchive(archive)
+        }
+    }
+
+    private static var archivesFolderURL: URL {
+        let applicationSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
+        return applicationSupport.appendingPathComponent("Echo/Archives", isDirectory: true)
+    }
+
+    private static func loadArchives() -> [TranscriptArchive] {
+        let folder = archivesFolderURL
+        guard let urls = try? FileManager.default.contentsOfDirectory(
+            at: folder,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ) else { return [] }
+        let decoder = JSONDecoder()
+        return urls
+            .filter { $0.pathExtension == "json" }
+            .compactMap { url in
+                guard let data = try? Data(contentsOf: url) else { return nil }
+                return try? decoder.decode(TranscriptArchive.self, from: data)
+            }
+            .sorted { $0.updatedAt > $1.updatedAt }
+    }
+
+    private func saveArchive(_ archive: TranscriptArchive) {
+        do {
+            try FileManager.default.createDirectory(at: Self.archivesFolderURL, withIntermediateDirectories: true)
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let data = try encoder.encode(archive)
+            let url = Self.archivesFolderURL.appendingPathComponent("\(archive.id.uuidString).json")
+            try data.write(to: url, options: .atomic)
+        } catch {
+            archiveStatus = "存档保存失败：\(error.localizedDescription)"
+        }
+    }
+
+    private func saveArchiveProgress() {
+        guard let archiveID = currentArchiveID,
+              let segmentID = currentSegmentID,
+              let archiveIndex = archives.firstIndex(where: { $0.id == archiveID }) else { return }
+        let source = Array(entries.dropFirst(sessionEntriesStartIndex))
+            .filter { !$0.english.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        let archivedEntries = source.map {
+            ArchivedSubtitle(id: $0.id, start: $0.start, end: $0.end, recordedAt: $0.recordedAt, english: $0.english, chinese: $0.chinese)
+        }
+        let now = Date()
+        var archive = archives[archiveIndex]
+        if let segmentIndex = archive.segments.firstIndex(where: { $0.id == segmentID }) {
+            archive.segments[segmentIndex].entries = archivedEntries
+            archive.segments[segmentIndex].updatedAt = now
+        } else {
+            archive.segments.append(TranscriptSegment(id: segmentID, startedAt: sessionStartedAt ?? now, updatedAt: now, entries: archivedEntries))
+        }
+        archive.updatedAt = now
+        archives[archiveIndex] = archive
+        archives.sort { $0.updatedAt > $1.updatedAt }
+        saveArchive(archive)
+    }
+
+    func splitCompletedSegment() {
+        guard canSplitCompletedSegment,
+              let archiveID = completedArchiveID,
+              let segmentID = completedSegmentID,
+              let archiveIndex = archives.firstIndex(where: { $0.id == archiveID }),
+              let segmentIndex = archives[archiveIndex].segments.firstIndex(where: { $0.id == segmentID }) else {
+            return
+        }
+        var archive = archives[archiveIndex]
+        let segment = archive.segments.remove(at: segmentIndex)
+        archive.updatedAt = Date()
+        archives[archiveIndex] = archive
+        saveArchive(archive)
+
+        let newArchiveID = UUID()
+        let newArchive = TranscriptArchive(
+            id: newArchiveID,
+            title: "\(archive.title) - 本段",
+            createdAt: segment.startedAt,
+            updatedAt: Date(),
+            segments: [segment]
+        )
+        archives.append(newArchive)
+        archives.sort { $0.updatedAt > $1.updatedAt }
+        saveArchive(newArchive)
+        selectedArchiveID = newArchiveID
+        completedArchiveID = nil
+        completedSegmentID = nil
+        archiveStatus = "已将本段拆出为：\(newArchive.title)"
     }
 
     func saveAPIKey() {
@@ -1071,11 +1395,15 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     func generateAISummary() {
-        requestAISummaryForCurrentSession(force: true)
+        requestAISummaryForCurrentSession(manual: true)
     }
 
-    private func requestAISummaryForCurrentSession(force: Bool = false) {
-        guard force || isSummaryEnabled else { return }
+    func regenerateAISummary() {
+        requestAISummaryForCurrentSession(force: true, manual: true)
+    }
+
+    private func requestAISummaryForCurrentSession(force: Bool = false, manual: Bool = false) {
+        guard force || manual || isSummaryEnabled else { return }
         let key = deepSeekAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else {
             summaryStatus = "请先在设置中填写 DeepSeek API Key。"
@@ -1089,11 +1417,25 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
             return
         }
 
+        let sourceSignatures = Dictionary(uniqueKeysWithValues: source.map { ($0.id, Self.summarySignature(for: $0)) })
+        let selectedSource: [SubtitleEntry]
+        if force {
+            selectedSource = source
+        } else {
+            selectedSource = source.filter { entry in
+                lastSummarizedEntrySignatures[entry.id] != sourceSignatures[entry.id]
+            }
+            guard !selectedSource.isEmpty else {
+                summaryStatus = "没有新的文字可以总结。"
+                return
+            }
+        }
+        let selectedSignatures = Dictionary(uniqueKeysWithValues: selectedSource.map { ($0.id, sourceSignatures[$0.id] ?? "") })
+
         summaryTask?.cancel()
         let requestID = UUID()
         summaryRequestID = requestID
-        summaryText = ""
-        summaryStatus = "正在生成 AI 总结…"
+        summaryStatus = force ? "正在重新总结全文…" : "正在总结新增内容…"
 
         let recordingStart = sessionStartedAt ?? Date()
         let calendar = Calendar.current
@@ -1107,7 +1449,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         dateTimeFormatter.dateFormat = "MM-dd HH:mm:ss"
         var previousDay = calendar.startOfDay(for: recordingStart)
         var isFirstTimestamp = true
-        let transcript = source.enumerated().map { index, entry in
+        let transcript = selectedSource.enumerated().map { index, entry in
             let original = entry.english.trimmingCharacters(in: .whitespacesAndNewlines)
             let translated = entry.chinese.trimmingCharacters(in: .whitespacesAndNewlines)
             let startDate = recordingStart.addingTimeInterval(entry.start)
@@ -1120,24 +1462,60 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
             } else {
                 timestamp = timeFormatter.string(from: startDate)
             }
-            return "\(index + 1). \(timestamp)\n英文：\(original)\n中文：\(translated)"
+            return "\(index + 1). [\(timestamp)]\n英文：\(original)\n中文：\(translated)"
         }.joined(separator: "\n\n")
-        let prompt = """
-        请根据下面的英文实时文字稿，生成简洁、准确的简体中文总结。
-        每条文字稿前的方括号是现实世界的本地开始时间，请保留这些时间信息，并在相关要点和待办后尽量标注对应时间。第一条和跨天后的第一条显示 MM-dd HH:mm:ss，同一天的其他条目只显示 HH:mm:ss。时间只表示开始时刻，不要补充结束时间。
-        这是一份实时语音识别稿，可能存在听错、漏词、重复词、断句错误，以及机器翻译不准确的问题。
-        请结合上下文理解原意：英文原文是主要依据，中文翻译只作为辅助参考；如果两者不一致，优先依据英文上下文判断。
-        对明显的同音误识别、专业术语误识别和中文误译进行合理纠正，但不要凭空补充原文没有的信息。
-        对无法确定的内容使用保守表述，不要把猜测写成事实。
-        请使用以下格式：
-        主题：一句话概括
-        要点：用 3-8 条列出关键信息，每条尽量以 [时间] 开头
-        仅在存在明确行动项时输出“待办”一栏，没有行动项时省略该栏；有待办时也请标注 [时间]。
-        只返回总结正文，不要解释过程，也不要提及你看到了文字稿。
+        let prompt: String
+        if force {
+            prompt = """
+            请根据下面的英文实时文字稿，生成简洁、准确的简体中文总结。
+            每条文字稿前的方括号是现实世界的本地开始时间，请保留这些时间信息，并在相关要点和待办后尽量标注对应时间。第一条和跨天后的第一条显示 MM-dd HH:mm:ss，同一天的其他条目只显示 HH:mm:ss。时间只表示开始时刻，不要补充结束时间。
+            输出时间时只能引用一个开始时间点，例如 [09-03 11:24:18] 或 [11:25:02]。严禁输出任何结束时间、时间范围、时间区间，严禁使用“-->”“至”“到”或起止时间之间的短横线。
+            这是一份实时语音识别稿，可能存在听错、漏词、重复词、断句错误，以及机器翻译不准确的问题。
+            请结合上下文理解原意：英文原文是主要依据，中文翻译只作为辅助参考；如果两者不一致，优先依据英文上下文判断。
+            对明显的同音误识别、专业术语误识别和中文误译进行合理纠正，但不要凭空补充原文没有的信息。
+            对无法确定的内容使用保守表述，不要把猜测写成事实。
+            请按自然主题组织内容，不要逐句复述，也不要把每句话拆成一个段落。全文通常分成 2-4 个主题段落；只有主题确实发生变化时才换段。
+            对复杂概念，在对应要点中补充一句简短解释，说明它是什么、为什么重要或与前后内容的关系；必要时给出原文中出现的例子，但不要写成教科书式长篇扩展。
+            每个主题段落列 1-3 个要点，合并重复信息；要点总数通常控制在 3-8 条。每条尽量以单个 [开始时间] 开头，相关解释和因果关系放在同一条中。
+            请使用以下格式：
+            ## 主题
+            一句话概括全文主旨。
 
-        文字稿：
-        \(transcript)
-        """
+            ### 核心概念或主题一
+            - [开始时间] 关键内容；复杂概念后补充简短解释。
+            - [开始时间] 相关因果关系、例子或结论。
+
+            ### 主题二
+            - [开始时间] 关键内容与必要解释。
+            主题标题和段落不要过度拆分；内容不足时合并主题，不要为了凑数量添加空泛要点。
+            仅在存在明确行动项时输出“待办”一栏，没有行动项时省略该栏；有待办时也请标注单个 [开始时间]。
+            只返回总结正文，不要解释过程，也不要提及你看到了文字稿。
+
+            文字稿：
+            \(transcript)
+            """
+        } else {
+            prompt = """
+            下面是一次已经进行中的实时文字稿中，刚刚新增或被修正的部分。请只总结这部分新内容，不要重新总结整场内容，也不要重复之前已经讲过的内容。
+            请按自然主题合并新增内容，不要逐句复述，也不要一句话一个段落。只有主题发生变化时才换段；内容较少时只保留一个段落，不要为了凑数量拆分。
+            对新增内容中的复杂概念，在对应要点中补充一句简短解释，说明它是什么、为什么重要或与上下文的关系；把解释和原要点放在同一条中。
+            请直接使用以下格式：
+            ### 新增内容
+            - [开始时间] 新内容要点；必要时补充简短解释。
+            - [开始时间] 相关因果关系、例子或结论。
+            仅在这部分明确出现行动项时追加“### 待办”，没有行动项时省略。
+            合并重复信息，每个主题保留 1-3 条要点；没有新的实质信息时不要编造内容。
+            每条只能标注一个开始时间点。时间是现实世界的本地开始时间：第一条和跨天后的第一条使用 MM-dd HH:mm:ss，同一天其他条目只使用 HH:mm:ss。
+            严禁输出结束时间、时间范围、时间区间、-->、至、到或起止时间之间的短横线。
+            这是一份实时语音识别稿，可能存在听错、漏词、重复词、断句错误，以及机器翻译不准确的问题。
+            英文原文是主要依据，中文翻译只作为辅助参考；如果两者不一致，优先依据英文上下文判断。
+            对明显的同音误识别、专业术语误识别和中文误译进行合理纠正，但不要凭空补充原文没有的信息。
+            只返回增量总结正文，不要解释过程，也不要提及你看到了文字稿。
+
+            新增文字稿：
+            \(transcript)
+            """
+        }
         let body: [String: Any] = [
             "model": "deepseek-v4-flash",
             "messages": [
@@ -1185,11 +1563,21 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
                     self.summaryStatus = "AI 总结失败：\(message)"
                     return
                 }
-                guard let summary = Self.responseText(from: data), !summary.isEmpty else {
+                guard let rawSummary = Self.responseText(from: data), !rawSummary.isEmpty else {
                     self.summaryStatus = "AI 总结失败：响应中没有总结内容。"
                     return
                 }
-                self.summaryText = summary
+                let cleanedSummary = Self.removeSummaryEndTimes(from: rawSummary)
+                if force || self.summaryText.isEmpty {
+                    self.summaryText = cleanedSummary
+                } else {
+                    self.summaryText += "\n\n" + cleanedSummary
+                }
+                if force {
+                    self.lastSummarizedEntrySignatures = sourceSignatures
+                } else {
+                    self.lastSummarizedEntrySignatures.merge(selectedSignatures) { _, new in new }
+                }
                 self.summaryStatus = "已生成"
             }
         }
@@ -1213,6 +1601,17 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
             return part["text"] as? String
         }.joined()
         return text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func removeSummaryEndTimes(from text: String) -> String {
+        let pattern = "\\[?((?:(?:\\d{4}-\\d{2}-\\d{2}|\\d{2}-\\d{2})\\s+)?\\d{2}:\\d{2}:\\d{2})\\s*(?:-|–|—|~|～|至|到)\\s*(?:(?:\\d{4}-\\d{2}-\\d{2}|\\d{2}-\\d{2})\\s+)?\\d{2}:\\d{2}:\\d{2}\\]?"
+        return text.replacingOccurrences(of: pattern, with: "[$1]", options: [.regularExpression])
+    }
+
+    private static func summarySignature(for entry: SubtitleEntry) -> String {
+        let english = entry.english.trimmingCharacters(in: .whitespacesAndNewlines)
+        let chinese = entry.chinese.trimmingCharacters(in: .whitespacesAndNewlines)
+        return "\(english)\u{1F}" + chinese
     }
 
     private static func apiErrorMessage(from data: Data) -> String? {
@@ -1245,16 +1644,19 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         summaryRequestID = UUID()
         summaryText = ""
         summaryStatus = ""
+        lastSummarizedEntrySignatures = [:]
         stopMicrophoneCapture()
         stopSystemAudioCapture()
         socket?.cancel(with: .goingAway, reason: nil)
         socket = nil
+        socketReady = false
         urlSession?.invalidateAndCancel()
         urlSession = nil
         entries = []
         english = ""
         chinese = ""
         audioLevel = 0
+        isReceivingAudio = false
         waveformSamples = Array(repeating: 0.0, count: waveformSamples.count)
         currentEntryID = nil
         currentSessionFileURL = nil
@@ -1262,6 +1664,12 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         currentSessionFinished = false
         sessionStartedAt = nil
         sessionEntriesStartIndex = 0
+        currentArchiveID = nil
+        currentSegmentID = nil
+        completedArchiveID = nil
+        completedSegmentID = nil
+        selectedArchiveID = nil
+        archiveStatus = ""
         finalEnglish = ""
         partialEnglish = ""
         finalChinese = ""
@@ -1313,6 +1721,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
             try srtText(for: source, base: source.first?.start ?? 0).write(to: url, atomically: true, encoding: .utf8)
             lastSessionFileSaveAt = Date()
             fileStatus = "已保存文字稿：\(url.path)"
+            saveArchiveProgress()
         } catch { fileStatus = "字幕保存失败：\(error.localizedDescription)" }
     }
 
@@ -1371,9 +1780,7 @@ struct ContentView: View {
             SynchronizedTranscriptView(entries: model.entries)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            HStack(spacing: 8) {
-                Text("输入源：")
-                    .foregroundStyle(.secondary)
+            HStack(spacing: 14) {
                 Button(action: model.cycleInputMode) {
                     AudioInputModeLabel(mode: model.inputMode)
                         .frame(minWidth: 132)
@@ -1382,34 +1789,83 @@ struct ContentView: View {
                 .tint(.mint)
                 .disabled(model.isSwitchingInput)
                 .help(model.isSwitchingInput ? "正在切换输入源" : "点击切换输入源")
+                Button(action: model.generateAISummary) {
+                    Label("总结新内容", systemImage: "sparkles")
+                }
+                .disabled(model.entries.isEmpty)
+                .help("只总结上次总结后新增或修正的文字，不会停止录音")
+                Button(action: model.regenerateAISummary) {
+                    Label("重新总结全文", systemImage: "arrow.clockwise")
+                }
+                .disabled(model.entries.isEmpty)
+                .help("根据当前全部文字重新生成 AI 总结，不会停止录音")
+                Button("清空") { model.clearTranscript() }
+                    .disabled(model.isRecording)
+                Button("导出全部字幕") { model.exportAllSubtitles() }
+                    .disabled(model.entries.isEmpty || model.isRecording)
                 Spacer()
             }
 
-            HStack(spacing: 14) {
+            HStack(spacing: 8) {
                 Button(action: model.toggleRecording) {
                     Label(model.isRecording ? "停止录音" : "开始录音", systemImage: model.isRecording ? "stop.fill" : "mic.fill")
                         .frame(width: 120)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(model.isRecording ? .red : .mint)
-                Text(model.status).foregroundStyle(.secondary)
+                Image(systemName: "link")
+                    .foregroundStyle(model.isRecording ? .mint : .secondary)
+                Text(model.status)
+                    .foregroundStyle(.secondary)
                 Spacer()
-                Button(action: model.generateAISummary) {
-                    Label("生成总结", systemImage: "sparkles")
-                }
-                .disabled(model.entries.isEmpty)
-                .help("根据当前已识别文字生成 AI 总结，不会停止录音")
-                Button("清空") { model.clearTranscript() }
-                    .disabled(model.isRecording)
-                Button("导出全部字幕") { model.exportAllSubtitles() }
-                    .disabled(model.entries.isEmpty || model.isRecording)
             }
+
+            HStack(spacing: 10) {
+                Menu {
+                    Button("新建存档") {
+                        model.chooseArchive(nil)
+                    }
+                    if !model.archives.isEmpty {
+                        Divider()
+                        ForEach(model.archives) { archive in
+                            Button(archive.title) {
+                                model.chooseArchive(archive.id)
+                            }
+                        }
+                    }
+                } label: {
+                    Label(model.selectedArchiveTitle, systemImage: "archivebox")
+                        .frame(minWidth: 180, alignment: .leading)
+                }
+                .menuStyle(.borderedButton)
+                .disabled(model.isRecording)
+                .help("选择存档；下一次录音会接续所选存档")
+                if model.canSplitCompletedSegment {
+                    Button("拆出本段") {
+                        model.splitCompletedSegment()
+                    }
+                    .buttonStyle(.bordered)
+                    .help("把刚完成的录音段从当前存档拆成新的存档")
+                }
+                Text(model.archiveStatus)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Spacer()
+            }
+
             HStack(spacing: 12) {
                 WaveformView(samples: model.waveformSamples, active: model.isRecording)
                 Circle()
-                    .fill(model.isRecording && model.audioLevel > 0.035 ? .green : .gray)
+                    .fill(model.isRecording
+                        ? (model.audioLevel > 0.035 ? .green : (model.isReceivingAudio ? .orange : .gray))
+                        : .gray)
                     .frame(width: 8, height: 8)
-                Text(model.isRecording && model.audioLevel > 0.035 ? "检测到\(model.inputMode.title)输入" : "等待\(model.inputMode.title)输入")
+                Text(!model.isRecording
+                    ? "等待\(model.inputMode.title)输入"
+                    : (model.audioLevel > 0.035
+                        ? "检测到\(model.inputMode.title)输入"
+                        : (model.isReceivingAudio ? "已连接\(model.inputMode.title)，等待声音" : "等待\(model.inputMode.title)输入")))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -1425,7 +1881,7 @@ struct ContentView: View {
                     }
                     if !model.summaryText.isEmpty {
                         ScrollView(.vertical) {
-                            Text(model.summaryText)
+                            MarkdownSummaryView(markdown: model.summaryText)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .textSelection(.enabled)
                         }
@@ -1554,6 +2010,20 @@ struct SettingsView: View {
     }
 }
 
+private struct MarkdownSummaryView: View {
+    let markdown: String
+
+    var body: some View {
+        if let rendered = try? AttributedString(markdown: markdown) {
+            Text(rendered)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            Text(markdown)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
 private struct TranscriptBottomPreferenceKey: PreferenceKey {
     static let defaultValue: CGFloat = 0
 
@@ -1585,9 +2055,24 @@ struct SynchronizedTranscriptView: View {
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             } else {
-                                ForEach(entries) { entry in
+                                ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+                                    if isNewDay(at: index) {
+                                        Text(dayLabel(for: entry))
+                                            .font(.subheadline.weight(.semibold))
+                                            .foregroundStyle(.secondary)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .padding(.top, 12)
+                                            .padding(.bottom, 4)
+                                    }
                                     HStack(alignment: .top, spacing: 14) {
-                                        Text(entry.english.isEmpty ? "…" : entry.english)
+                                        HStack(alignment: .top, spacing: 8) {
+                                            Text(timestamp(for: entry, at: index))
+                                                .font(.caption.monospacedDigit())
+                                                .foregroundStyle(.secondary)
+                                                .frame(width: 78, alignment: .leading)
+                                            Text(entry.english.isEmpty ? "…" : entry.english)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                        }
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                         Text(entry.chinese.isEmpty ? "翻译中…" : entry.chinese)
                                             .foregroundStyle(entry.chinese.isEmpty ? .secondary : .primary)
@@ -1634,6 +2119,42 @@ struct SynchronizedTranscriptView: View {
             }
         }
         .frame(minHeight: 220, maxHeight: .infinity)
+    }
+
+    private func timestamp(for entry: SubtitleEntry, at index: Int) -> String {
+        let date = entry.recordedAt
+        let timeFormatter = DateFormatter()
+        timeFormatter.locale = Locale(identifier: "en_US_POSIX")
+        timeFormatter.timeZone = .current
+        timeFormatter.dateFormat = "HH:mm:ss"
+        let dateTimeFormatter = DateFormatter()
+        dateTimeFormatter.locale = Locale(identifier: "en_US_POSIX")
+        dateTimeFormatter.timeZone = .current
+        dateTimeFormatter.dateFormat = "MM-dd HH:mm:ss"
+
+        guard let date else {
+            return timeFormatter.string(from: Date(timeIntervalSince1970: entry.start))
+        }
+        guard index > 0, entries[index - 1].recordedAt != nil else {
+            return dateTimeFormatter.string(from: date)
+        }
+        return timeFormatter.string(from: date)
+    }
+
+    private func isNewDay(at index: Int) -> Bool {
+        guard index > 0,
+              let previousDate = entries[index - 1].recordedAt,
+              let date = entries[index].recordedAt else { return false }
+        return !Calendar.current.isDate(previousDate, inSameDayAs: date)
+    }
+
+    private func dayLabel(for entry: SubtitleEntry) -> String {
+        guard let date = entry.recordedAt else { return "日期" }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy年M月d日"
+        return formatter.string(from: date)
     }
 
     private func contentDidChange(_ proxy: ScrollViewProxy) {
