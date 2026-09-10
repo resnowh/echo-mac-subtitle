@@ -21,9 +21,17 @@ final class MacMicrophoneCapture: AudioCaptureSource {
         inputFormat = engine.inputNode.outputFormat(forBus: 0)
     }
 
+    /// The input route may not be ready when the app is first opened. Always
+    /// refresh the format immediately before creating the converter.
+    func refreshInputFormat() -> AVAudioFormat {
+        let format = engine.inputNode.outputFormat(forBus: 0)
+        inputFormat = format
+        return format
+    }
+
     func start(onAudio: @escaping (AVAudioPCMBuffer) -> Void) throws {
         let input = engine.inputNode
-        let format = input.outputFormat(forBus: 0)
+        let format = refreshInputFormat()
         guard format.sampleRate > 0, format.channelCount > 0 else {
             throw NSError(domain: "Echo", code: 3, userInfo: [NSLocalizedDescriptionKey: "没有检测到可用的麦克风输入，请检查 Mac 的输入设备设置。"])
         }

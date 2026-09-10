@@ -47,10 +47,14 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     private var lifecycleState = LifecycleRecoveryState()
     private var wakeRecoveryWorkItem: DispatchWorkItem?
     private var captureRecoveryWorkItem: DispatchWorkItem?
+    private var microphoneStartupWorkItem: DispatchWorkItem?
     private var archiveStatusWorkItem: DispatchWorkItem?
     private var lastAudioCaptureRecoveryAt: Date?
     // Kept in one place so the wake recovery policy is easy to tune.
     private let lifecycleRecoveryDelay: TimeInterval = 0.75
+    private let microphoneStartupRetryDelay: TimeInterval = 0.45
+    private let microphoneStartupRetryLimit = 4
+    private let microphoneFirstBufferTimeout: TimeInterval = 1.2
     private var isRecoveringAudioCapture = false
     private var summaryTask: URLSessionDataTask?
     private var summaryRequestID = UUID()
@@ -76,6 +80,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     private var activeSessionID = UUID()
     private var isClosingSocket = false
     private var socketReady = false
+    private var microphoneCallbackReceived = false
     private var audioFrameCursors: [PCM16Source: Int64] = [:]
     private var currentSpeaker: String?
     private var currentLanguage: String?
@@ -125,6 +130,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         lifecycleObserver.stop()
         wakeRecoveryWorkItem?.cancel()
         captureRecoveryWorkItem?.cancel()
+        microphoneStartupWorkItem?.cancel()
         archiveStatusWorkItem?.cancel()
     }
 
@@ -140,6 +146,8 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         wakeRecoveryWorkItem = nil
         captureRecoveryWorkItem?.cancel()
         captureRecoveryWorkItem = nil
+        microphoneStartupWorkItem?.cancel()
+        microphoneStartupWorkItem = nil
         isRecoveringAudioCapture = false
         status = "系统即将睡眠，正在暂停录音"
         finishRecordingForSleep()
@@ -245,6 +253,8 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
             wakeRecoveryWorkItem = nil
             captureRecoveryWorkItem?.cancel()
             captureRecoveryWorkItem = nil
+            microphoneStartupWorkItem?.cancel()
+            microphoneStartupWorkItem = nil
             isRecoveringAudioCapture = false
             // A failed WebSocket can outlive the recording session. Do not
             // permanently block the start button on that stale connection.
@@ -413,8 +423,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
             }
 
             if inputMode.requiresMicrophone {
-                try startMicrophoneCapture(sessionID: activeSessionID)
-                finishWakeRecoveryIfReady()
+                startMicrophoneCaptureWithRetry(sessionID: activeSessionID)
             }
             if inputMode.includesComputerAudio {
                 isSwitchingInput = true
@@ -460,7 +469,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     private func startMicrophoneCapture(sessionID: UUID) throws {
-        let inputFormat = microphoneCapture.inputFormat
+        let inputFormat = microphoneCapture.refreshInputFormat()
         guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else {
             throw NSError(domain: "Echo", code: 3, userInfo: [NSLocalizedDescriptionKey: "没有检测到可用的麦克风输入，请检查 Mac 的输入设备设置。"])
         }
@@ -471,6 +480,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
 
         self.converter = converter
         try microphoneCapture.start { [weak self] buffer in
+            self?.microphoneCallbackReceived = true
             let level = Self.rmsLevel(buffer)
             DispatchQueue.main.async { [weak self] in self?.recordAudioLevel(level) }
             self?.audioQueue.async { [weak self] in
@@ -478,6 +488,54 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
             }
         }
         microphoneTapInstalled = true
+    }
+
+    private func startMicrophoneCaptureWithRetry(sessionID: UUID, attempt: Int = 0) {
+        guard activeSessionID == sessionID, isRecording, !isSystemSleeping else { return }
+        do {
+            microphoneCallbackReceived = false
+            try startMicrophoneCapture(sessionID: sessionID)
+            finishWakeRecoveryIfReady()
+            scheduleMicrophoneCallbackCheck(sessionID: sessionID, attempt: attempt)
+        } catch {
+            scheduleMicrophoneStartupRetry(sessionID: sessionID, attempt: attempt, error: error)
+        }
+    }
+
+    private func scheduleMicrophoneCallbackCheck(sessionID: UUID, attempt: Int) {
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self,
+                  self.activeSessionID == sessionID,
+                  self.isRecording,
+                  self.microphoneTapInstalled,
+                  !self.microphoneCallbackReceived else { return }
+            self.stopMicrophoneCapture()
+            let error = NSError(
+                domain: "Echo",
+                code: 5,
+                userInfo: [NSLocalizedDescriptionKey: "麦克风没有产生音频输入。"]
+            )
+            self.scheduleMicrophoneStartupRetry(sessionID: sessionID, attempt: attempt, error: error)
+        }
+        microphoneStartupWorkItem?.cancel()
+        microphoneStartupWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + microphoneFirstBufferTimeout, execute: workItem)
+    }
+
+    private func scheduleMicrophoneStartupRetry(sessionID: UUID, attempt: Int, error: Error) {
+        guard activeSessionID == sessionID, isRecording, !isSystemSleeping else { return }
+        guard attempt < microphoneStartupRetryLimit else {
+            abortCaptureStart(with: "麦克风启动失败：\(error.localizedDescription)")
+            return
+        }
+
+        status = "正在准备麦克风…"
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.startMicrophoneCaptureWithRetry(sessionID: sessionID, attempt: attempt + 1)
+        }
+        microphoneStartupWorkItem?.cancel()
+        microphoneStartupWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + microphoneStartupRetryDelay, execute: workItem)
     }
 
     private func startSystemAudioCapture(sessionID: UUID, targetMode: AudioInputMode, previousMode: AudioInputMode?) {
@@ -537,6 +595,8 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         segmentationTimer = nil
         stopMicrophoneCapture()
         stopSystemAudioCapture()
+        microphoneStartupWorkItem?.cancel()
+        microphoneStartupWorkItem = nil
         sonioxClient.cancel()
         pcmPrebuffer.clear()
         pcmMixer.reset()
@@ -874,6 +934,8 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         wakeRecoveryWorkItem = nil
         captureRecoveryWorkItem?.cancel()
         captureRecoveryWorkItem = nil
+        microphoneStartupWorkItem?.cancel()
+        microphoneStartupWorkItem = nil
         isRecoveringAudioCapture = false
         guard isRecording || sonioxClient.isActive else {
             sonioxConnectionState = .idle
@@ -886,6 +948,8 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     private func stopCurrentRecording(scheduleSummary: Bool) {
         guard isRecording || sonioxClient.isActive else { return }
         isRecording = false
+        microphoneStartupWorkItem?.cancel()
+        microphoneStartupWorkItem = nil
         sonioxConnectionState = .idle
         isClosingSocket = true
         isSwitchingInput = false
@@ -1675,6 +1739,8 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         wakeRecoveryWorkItem = nil
         captureRecoveryWorkItem?.cancel()
         captureRecoveryWorkItem = nil
+        microphoneStartupWorkItem?.cancel()
+        microphoneStartupWorkItem = nil
         isRecoveringAudioCapture = false
         activeSessionID = UUID()
         summaryTask?.cancel()
