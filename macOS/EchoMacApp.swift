@@ -53,6 +53,7 @@ private struct WindowAccessor: NSViewRepresentable {
 struct ContentView: View {
     @StateObject private var model = SpeechViewModel()
     @State private var showSettings = false
+    @State private var isSummaryExpanded = false
     @AppStorage("themeMode") private var themeModeRaw = AppThemeMode.dark.rawValue
 
     private var themeMode: AppThemeMode {
@@ -215,7 +216,20 @@ struct ContentView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .textSelection(.enabled)
                         }
-                        .frame(maxHeight: 150)
+                        .frame(maxHeight: isSummaryExpanded ? 420 : 250)
+                        HStack(spacing: 12) {
+                            Button(isSummaryExpanded ? "收起" : "展开全部") {
+                                isSummaryExpanded.toggle()
+                            }
+                            .buttonStyle(.borderless)
+                            Button {
+                                copySummaryToPasteboard()
+                            } label: {
+                                Label("复制", systemImage: "doc.on.doc")
+                            }
+                            .buttonStyle(.borderless)
+                            Spacer()
+                        }
                     }
                 }
                 .padding(12)
@@ -253,6 +267,11 @@ struct ContentView: View {
         let modes = AppThemeMode.allCases
         guard let index = modes.firstIndex(of: themeMode) else { return }
         themeModeRaw = modes[(index + 1) % modes.count].rawValue
+    }
+
+    private func copySummaryToPasteboard() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(model.summaryText, forType: .string)
     }
 
     private var compactStatus: String {

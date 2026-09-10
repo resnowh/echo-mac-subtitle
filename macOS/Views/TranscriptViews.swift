@@ -20,13 +20,81 @@ struct MarkdownSummaryView: View {
     let markdown: String
 
     var body: some View {
-        if let rendered = try? AttributedString(markdown: markdown) {
-            Text(rendered)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        } else {
-            Text(markdown)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: 7) {
+            ForEach(parseBlocks()) { block in
+                blockView(block)
+            }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func blockView(_ block: SummaryBlock) -> some View {
+        switch block.kind {
+        case .title:
+            Text(block.text)
+                .font(.headline.weight(.semibold))
+                .padding(.top, 2)
+        case .heading:
+            Text(block.text)
+                .font(.subheadline.weight(.semibold))
+                .padding(.top, 10)
+        case .bullet:
+            HStack(alignment: .top, spacing: 8) {
+                Text("•")
+                    .font(.body.weight(.semibold))
+                Text(block.text)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        case .paragraph:
+            Text(block.text)
+                .font(.callout)
+                .lineSpacing(3)
+        }
+    }
+
+    private func parseBlocks() -> [SummaryBlock] {
+        var blocks: [SummaryBlock] = []
+        var paragraphLines: [String] = []
+
+        func flushParagraph() {
+            guard !paragraphLines.isEmpty else { return }
+            blocks.append(SummaryBlock(id: blocks.count, kind: .paragraph, text: paragraphLines.joined(separator: "\n")))
+            paragraphLines.removeAll(keepingCapacity: true)
+        }
+
+        for rawLine in markdown.components(separatedBy: .newlines) {
+            let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            if line.isEmpty {
+                flushParagraph()
+            } else if line.hasPrefix("### ") {
+                flushParagraph()
+                blocks.append(SummaryBlock(id: blocks.count, kind: .heading, text: String(line.dropFirst(4))))
+            } else if line.hasPrefix("## ") {
+                flushParagraph()
+                blocks.append(SummaryBlock(id: blocks.count, kind: .title, text: String(line.dropFirst(3))))
+            } else if line.hasPrefix("- ") || line.hasPrefix("* ") {
+                flushParagraph()
+                blocks.append(SummaryBlock(id: blocks.count, kind: .bullet, text: String(line.dropFirst(2))))
+            } else {
+                paragraphLines.append(line)
+            }
+        }
+        flushParagraph()
+        return blocks
+    }
+
+    private struct SummaryBlock: Identifiable {
+        enum Kind {
+            case title
+            case heading
+            case bullet
+            case paragraph
+        }
+
+        let id: Int
+        let kind: Kind
+        let text: String
     }
 }
 
@@ -80,21 +148,24 @@ struct SynchronizedTranscriptView: View {
                                                 .padding(.top, 12)
                                                 .padding(.bottom, 4)
                                         }
-                                        HStack(alignment: .top, spacing: 14) {
-                                            VStack(alignment: .leading, spacing: 4) {
-                                                Text(metadata(for: entry))
-                                                    .font(.caption.monospacedDigit())
-                                                    .foregroundStyle(.secondary)
+                                        VStack(alignment: .leading, spacing: 5) {
+                                            Text(metadata(for: entry))
+                                                .font(.caption.monospacedDigit())
+                                                .foregroundStyle(.secondary)
+
+                                            HStack(alignment: .top, spacing: 14) {
                                                 Text(entry.english.isEmpty ? "…" : entry.english)
                                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                            }
-                                            .frame(maxWidth: .infinity, alignment: .leading)
 
-                                            if recognitionConfig.translationEnabled {
-                                                Text(entry.chinese.isEmpty ? " " : entry.chinese)
-                                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                                if recognitionConfig.translationEnabled {
+                                                    Text(entry.chinese.isEmpty ? " " : entry.chinese)
+                                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                                }
                                             }
+                                            .font(.body)
+                                            .lineSpacing(3)
                                         }
+                                        .frame(maxWidth: .infinity, alignment: .leading)
                                         .padding(.vertical, 7)
                                         Divider()
                                     }
