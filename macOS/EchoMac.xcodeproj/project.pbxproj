@@ -19,6 +19,8 @@
 		36 /* TranscriptViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37 /* TranscriptViews.swift */; };
 		38 /* SonioxWebSocketClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39 /* SonioxWebSocketClient.swift */; };
 		40 /* SpeechViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41 /* SpeechViewModel.swift */; };
+		42 /* LifecycleRecoveryState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43 /* LifecycleRecoveryState.swift */; };
+		44 /* MacLifecycleObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45 /* MacLifecycleObserver.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -36,6 +38,8 @@
 		37 /* TranscriptViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/TranscriptViews.swift; sourceTree = "<group>"; };
 		39 /* SonioxWebSocketClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/SonioxWebSocketClient.swift; sourceTree = "<group>"; };
 		41 /* SpeechViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewModels/SpeechViewModel.swift; sourceTree = "<group>"; };
+		43 /* LifecycleRecoveryState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/LifecycleRecoveryState.swift; sourceTree = "<group>"; };
+		45 /* MacLifecycleObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/MacLifecycleObserver.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -81,6 +85,8 @@
 				37 /* TranscriptViews.swift */,
 				39 /* SonioxWebSocketClient.swift */,
 				41 /* SpeechViewModel.swift */,
+				43 /* LifecycleRecoveryState.swift */,
+				45 /* MacLifecycleObserver.swift */,
 			);
 			name = Echo;
 			path = .;
@@ -165,6 +171,8 @@
 				36 /* TranscriptViews.swift in Sources */,
 				38 /* SonioxWebSocketClient.swift in Sources */,
 				40 /* SpeechViewModel.swift in Sources */,
+				42 /* LifecycleRecoveryState.swift in Sources */,
+				44 /* MacLifecycleObserver.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

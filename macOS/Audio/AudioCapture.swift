@@ -15,6 +15,7 @@ final class MacMicrophoneCapture: AudioCaptureSource {
     private let engine = AVAudioEngine()
     private(set) var inputFormat: AVAudioFormat
     private(set) var isRunning = false
+    var isEngineActuallyRunning: Bool { engine.isRunning }
 
     init() {
         inputFormat = engine.inputNode.outputFormat(forBus: 0)

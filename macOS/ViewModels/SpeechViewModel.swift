@@ -34,6 +34,14 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     private let pcmMixer = PCM16TimelineMixer()
     private let pcmPrebuffer = PCM16Prebuffer(seconds: 2.5, sampleRate: 16_000)
     private let sonioxClient = SonioxWebSocketClient()
+    private let lifecycleObserver = MacLifecycleObserver()
+    private var lifecycleState = LifecycleRecoveryState()
+    private var wakeRecoveryWorkItem: DispatchWorkItem?
+    private var captureRecoveryWorkItem: DispatchWorkItem?
+    private var lastAudioCaptureRecoveryAt: Date?
+    // Kept in one place so the wake recovery policy is easy to tune.
+    private let lifecycleRecoveryDelay: TimeInterval = 0.75
+    private var isRecoveringAudioCapture = false
     private var summaryTask: URLSessionDataTask?
     private var summaryRequestID = UUID()
     private var converter: AVAudioConverter?
@@ -97,12 +105,132 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         archives = Self.loadArchives()
         selectedArchiveID = nil
         super.init()
+        lifecycleObserver.onWillSleep = { [weak self] in self?.handleSystemWillSleep() }
+        lifecycleObserver.onDidWake = { [weak self] in self?.handleSystemDidWake() }
+        lifecycleObserver.onAudioConfigurationChange = { [weak self] in self?.handleAudioConfigurationChange() }
+        lifecycleObserver.start()
+    }
+
+    deinit {
+        lifecycleObserver.stop()
+        wakeRecoveryWorkItem?.cancel()
+        captureRecoveryWorkItem?.cancel()
+    }
+
+    private var isSystemSleeping: Bool { lifecycleState.isSystemSleeping }
+
+    private func handleSystemWillSleep() {
+        let action = lifecycleState.handle(.willSleep, recordingIntended: isRecording)
+        guard action == .endRecordingForSleep else {
+            status = "系统即将睡眠"
+            return
+        }
+
+        wakeRecoveryWorkItem?.cancel()
+        wakeRecoveryWorkItem = nil
+        captureRecoveryWorkItem?.cancel()
+        captureRecoveryWorkItem = nil
+        isRecoveringAudioCapture = false
+        status = "系统即将睡眠，正在暂停录音"
+        finishRecordingForSleep()
+    }
+
+    private func handleSystemDidWake() {
+        guard lifecycleState.handle(.didWake) == .scheduleWakeRecovery else { return }
+        wakeRecoveryWorkItem?.cancel()
+        status = "系统已唤醒，正在恢复录音"
+
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            guard self.lifecycleState.handle(.recoveryStarted) == .beginWakeRecovery else { return }
+            guard !self.isSystemSleeping else { return }
+            self.start(preserveSummary: true)
+        }
+        wakeRecoveryWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + lifecycleRecoveryDelay, execute: workItem)
+    }
+
+    private func handleAudioConfigurationChange() {
+        guard isRecording, !isSystemSleeping, inputMode.requiresMicrophone else { return }
+        guard !isRecoveringAudioCapture else { return }
+        if let lastAudioCaptureRecoveryAt,
+           Date().timeIntervalSince(lastAudioCaptureRecoveryAt) < lifecycleRecoveryDelay * 2 {
+            return
+        }
+
+        isRecoveringAudioCapture = true
+        lastAudioCaptureRecoveryAt = Date()
+        status = "音频输入已中断，正在恢复录音"
+        stopMicrophoneCapture()
+        let sessionID = activeSessionID
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            guard self.activeSessionID == sessionID,
+                  self.isRecording,
+                  !self.isSystemSleeping else {
+                self.isRecoveringAudioCapture = false
+                return
+            }
+            do {
+                try self.startMicrophoneCapture(sessionID: sessionID)
+                self.isRecoveringAudioCapture = false
+                self.status = "正在通过 Soniox 实时识别与翻译（\(self.inputMode.title)）"
+            } catch {
+                self.isRecoveringAudioCapture = false
+                self.failActiveRecording(message: "音频输入恢复失败：\(error.localizedDescription)")
+            }
+        }
+        captureRecoveryWorkItem?.cancel()
+        captureRecoveryWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + lifecycleRecoveryDelay, execute: workItem)
+    }
+
+    private func finishWakeRecoveryIfReady() {
+        guard lifecycleState.isRecovering, isRecording, socketReady else { return }
+        guard (!inputMode.requiresMicrophone || (microphoneTapInstalled && microphoneCapture.isEngineActuallyRunning)),
+              (!inputMode.includesComputerAudio || systemAudioReady) else { return }
+        _ = lifecycleState.handle(.recoverySucceeded)
+        status = "正在通过 Soniox 实时识别与翻译（\(inputMode.title)）"
+    }
+
+    private func failActiveRecording(message: String) {
+        let wasRecovery = lifecycleState.isRecovering
+        stopCurrentRecording(scheduleSummary: false)
+        sonioxClient.cancel()
+        socketReady = false
+        activeSessionID = UUID()
+        if wasRecovery {
+            _ = lifecycleState.handle(.recoveryFailed)
+        } else {
+            _ = lifecycleState.handle(.userStop)
+        }
+        errorMessage = message
+        status = wasRecovery ? "录音恢复失败" : "音频输入已中断"
+    }
+
+    private func finishRecordingForSleep() {
+        guard isRecording || sonioxClient.isActive else { return }
+        stopCurrentRecording(scheduleSummary: false)
+        // Invalidate every callback created before sleep. The archived segment
+        // remains intact, while wake starts a fresh session/segment.
+        activeSessionID = UUID()
+        sonioxClient.cancel()
+        socketReady = false
+        status = "已暂停，等待系统唤醒"
     }
 
     func toggleRecording() {
         if isRecording {
             stop()
         } else {
+            // A manual start supersedes a delayed wake recovery. This keeps a
+            // user action from racing the scheduled recovery task.
+            _ = lifecycleState.handle(.userStop)
+            wakeRecoveryWorkItem?.cancel()
+            wakeRecoveryWorkItem = nil
+            captureRecoveryWorkItem?.cancel()
+            captureRecoveryWorkItem = nil
+            isRecoveringAudioCapture = false
             // A failed WebSocket can outlive the recording session. Do not
             // permanently block the start button on that stale connection.
             if sonioxClient.isActive { sonioxClient.cancel() }
@@ -196,17 +324,24 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         }
     }
 
-    private func start() {
+    private func start(preserveSummary: Bool = false) {
         errorMessage = ""
         fileStatus = ""
-        summaryTask?.cancel()
-        summaryText = ""
-        summaryStatus = ""
+        if !preserveSummary {
+            summaryTask?.cancel()
+            summaryText = ""
+            summaryStatus = ""
+        }
         isReceivingAudio = false
         let key = sonioxAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else {
             errorMessage = "请先填写 Soniox API Key。可从 console.soniox.com 创建。"
-            status = "等待 Soniox API Key"
+            if lifecycleState.isRecovering {
+                _ = lifecycleState.handle(.recoveryFailed)
+                status = "录音恢复失败"
+            } else {
+                status = "等待 Soniox API Key"
+            }
             return
         }
         UserDefaults.standard.set(key, forKey: "sonioxAPIKey")
@@ -222,6 +357,10 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         }
         guard permission == .undetermined else {
             errorMessage = "请在“系统设置 → 隐私与安全性 → 麦克风”中允许 Echo。"
+            if lifecycleState.isRecovering {
+                _ = lifecycleState.handle(.recoveryFailed)
+                status = "录音恢复失败"
+            }
             return
         }
         status = "等待麦克风授权"
@@ -230,6 +369,10 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
                 guard let self else { return }
                 guard granted else {
                     self.errorMessage = "请在“系统设置 → 隐私与安全性 → 麦克风”中允许 Echo。"
+                    if self.lifecycleState.isRecovering {
+                        _ = self.lifecycleState.handle(.recoveryFailed)
+                        self.status = "录音恢复失败"
+                    }
                     return
                 }
                 self.beginCapture(apiKey: key)
@@ -256,6 +399,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
 
             if inputMode.requiresMicrophone {
                 try startMicrophoneCapture(sessionID: activeSessionID)
+                finishWakeRecoveryIfReady()
             }
             if inputMode.includesComputerAudio {
                 isSwitchingInput = true
@@ -329,6 +473,10 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
             onError: { [weak self] error in
                 DispatchQueue.main.async {
                     guard let self, self.activeSessionID == sessionID, self.isRecording else { return }
+                    if self.lifecycleState.isRecovering {
+                        self.failActiveRecording(message: "电脑音频恢复失败：\(error.localizedDescription)")
+                        return
+                    }
                     self.systemAudioReady = false
                     self.errorMessage = "电脑音频捕获中断：\(error.localizedDescription)"
                     self.status = "电脑音频捕获中断"
@@ -356,13 +504,17 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
                     self.isSwitchingInput = false
                 } else {
                     self.isSwitchingInput = false
-                    self.status = "正在通过 Soniox 实时识别与翻译（\(self.inputMode.title)）"
+                    self.finishWakeRecoveryIfReady()
+                    if !self.lifecycleState.isRecovering {
+                        self.status = "正在通过 Soniox 实时识别与翻译（\(self.inputMode.title)）"
+                    }
                 }
             }
         }
     }
 
     private func abortCaptureStart(with message: String) {
+        let wasRecovery = lifecycleState.isRecovering
         isRecording = false
         isClosingSocket = true
         isSwitchingInput = false
@@ -375,8 +527,12 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         pcmMixer.reset()
         audioFrameCursors.removeAll(keepingCapacity: true)
         socketReady = false
+        activeSessionID = UUID()
+        if wasRecovery {
+            _ = lifecycleState.handle(.recoveryFailed)
+        }
         errorMessage = message
-        status = "启动失败"
+        status = wasRecovery ? "录音恢复失败" : "启动失败"
     }
 
     private func stopMicrophoneCapture() {
@@ -603,6 +759,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
                         for chunk in self.pcmPrebuffer.drain() {
                             self.sendPCMData(chunk.data, sessionID: sessionID)
                         }
+                        self.finishWakeRecoveryIfReady()
                     }
                 },
                 onMessage: { [weak self] message in
@@ -625,21 +782,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
 
     private func handleSocketFailure(_ error: Error, sessionID: UUID) {
         guard activeSessionID == sessionID else { return }
-        let message = error.localizedDescription
-        socketReady = false
-        errorMessage = "Soniox 连接失败：\(message)"
-        status = "连接失败"
-        isRecording = false
-        isClosingSocket = true
-        isSwitchingInput = false
-        segmentationTimer?.invalidate()
-        segmentationTimer = nil
-        stopMicrophoneCapture()
-        stopSystemAudioCapture()
-        pcmPrebuffer.clear()
-        pcmMixer.reset()
-        audioFrameCursors.removeAll(keepingCapacity: true)
-        sonioxClient.cancel()
+        failActiveRecording(message: "Soniox 连接失败：\(error.localizedDescription)")
     }
 
     private func sendAudio(_ buffer: AVAudioPCMBuffer, sessionID: UUID) {
@@ -700,6 +843,20 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     func stop() {
+        _ = lifecycleState.handle(.userStop)
+        wakeRecoveryWorkItem?.cancel()
+        wakeRecoveryWorkItem = nil
+        captureRecoveryWorkItem?.cancel()
+        captureRecoveryWorkItem = nil
+        isRecoveringAudioCapture = false
+        guard isRecording || sonioxClient.isActive else {
+            status = "已停止"
+            return
+        }
+        stopCurrentRecording(scheduleSummary: true)
+    }
+
+    private func stopCurrentRecording(scheduleSummary: Bool) {
         guard isRecording || sonioxClient.isActive else { return }
         isRecording = false
         isClosingSocket = true
@@ -732,19 +889,23 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         saveCurrentSessionFile(force: true)
         completedArchiveID = currentArchiveID
         completedSegmentID = currentSegmentID
-        let stoppedSessionID = activeSessionID
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.7) { [weak self] in
-            guard let self, self.activeSessionID == stoppedSessionID, !self.isRecording else { return }
-            self.requestAISummary(scope: .session)
+        if scheduleSummary {
+            let stoppedSessionID = activeSessionID
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.7) { [weak self] in
+                guard let self, self.activeSessionID == stoppedSessionID, !self.isRecording else { return }
+                self.requestAISummary(scope: .session)
+            }
         }
         status = "正在完成最后一句"
 
         if sonioxClient.isActive {
+            let stoppedSessionID = activeSessionID
             sonioxClient.finish { [weak self] _ in
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                    self?.sonioxClient.cancel()
-                    self?.socketReady = false
-                    self?.status = "已停止"
+                    guard let self, self.activeSessionID == stoppedSessionID else { return }
+                    self.sonioxClient.cancel()
+                    self.socketReady = false
+                    self.status = "已停止"
                 }
             }
         } else {
@@ -1463,6 +1624,12 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     func clearTranscript() {
+        _ = lifecycleState.handle(.userStop)
+        wakeRecoveryWorkItem?.cancel()
+        wakeRecoveryWorkItem = nil
+        captureRecoveryWorkItem?.cancel()
+        captureRecoveryWorkItem = nil
+        isRecoveringAudioCapture = false
         activeSessionID = UUID()
         summaryTask?.cancel()
         summaryRequestID = UUID()

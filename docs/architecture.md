@@ -35,6 +35,8 @@ Audio Source
 - `Audio/PCM16AudioPipeline.swift`：统一 PCM 块表示、双输入按 frame 对齐混音、以及有界 pre-buffer。该文件不依赖 SwiftUI 或 ScreenCaptureKit。
 - `Services/SonioxRequestBuilder.swift`：把 `RecognitionConfig` 映射到 Soniox request 字段，包括语言提示、严格限制、翻译、语言识别和 speaker diarization。
 - `Services/SonioxWebSocketClient.swift`：只负责 Soniox WebSocket 的建立、配置发送重试、接收循环、PCM 发送和关闭。
+- `Services/MacLifecycleObserver.swift`：集中注册和清理 macOS 睡眠、唤醒及 `AVAudioEngine` 配置变化通知，不承载录音业务。
+- `Models/LifecycleRecoveryState.swift`：平台无关的睡眠/唤醒恢复状态机，防止重复恢复并区分用户停止与系统生命周期事件。
 - `ViewModels/SpeechViewModel.swift`：协调录音 session、采集生命周期、WebSocket、token 状态、存档和 UI 发布状态。
 - `Services/SRTExporter.swift`：只负责 session 或 archive 的 SRT 时间线与正文格式化。
 - `Storage/TranscriptArchiveStore.swift`：负责 Archive JSON 的目录、编码、保存和读取。
@@ -57,4 +59,6 @@ Audio Source
 - recording session 开始时重置 speaker/language、token 累积、时间基准、frame cursors、mixer、pre-buffer 和当前字幕状态。
 - WebSocket 先发送配置，配置成功后才置 `socketReady` 并 flush pre-buffer；ready 之前的音频不会被静默丢弃。
 - stop 会停止采集、完成最后一条字幕和文件保存，处理混音器尾块，然后关闭 WebSocket；pre-buffer/mixer/cursors 必须清空。failure 和 clear 也停止采集、取消连接并清空这些 session 状态。
+- `MacLifecycleObserver` 在主线程集中接收 `NSWorkspace` 的 will-sleep/did-wake 和 `AVAudioEngine.configurationChangeNotification`。睡眠前若正在录音，会保存并结束当前字幕/segment、停止两路采集、刷新并清空 mixer/pre-buffer、取消旧 WebSocket，再使旧 `activeSessionID` 失效；唤醒后等待短暂的音频设备恢复窗口，使用原输入源和 Archive 建立新 session/segment。睡眠期间未录音时，唤醒不会自动开始录音。
+- 音频配置变化不等同于业务上的 `isRecording`：若录音仍应继续且话筒 tap/engine 已中断，ViewModel 会串行、限频地重装话筒捕获；失败时停止录音并显示恢复失败。ScreenCaptureKit 的旧 stream 不复用，双输入必须等待话筒和电脑音频都恢复后才回到正常状态。所有延迟恢复任务和旧回调都通过 session ID、生命周期状态及取消逻辑防止重复或污染新 session。
 - Archive 的 segment 可以在一个录音结束后保留，供后续录音接续；这不会复用旧 session 的音频 buffer 或 Soniox connection。
