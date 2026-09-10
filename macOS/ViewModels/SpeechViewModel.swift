@@ -989,8 +989,11 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     private func autoFinalizeIfNeeded() {
         guard isRecording, currentEntryID != nil else { return }
         let text = (finalEnglish + partialEnglish).trimmingCharacters(in: .whitespacesAndNewlines)
-        let translation = (finalChinese + partialChinese).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, !translation.isEmpty else { return }
+        guard !text.isEmpty else { return }
+        if recognitionConfig.translationEnabled {
+            let translation = (finalChinese + partialChinese).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !translation.isEmpty else { return }
+        }
 
         let words = text.split(whereSeparator: { $0 == " " || $0 == "\n" }).count
         let elapsed = elapsedSinceSessionStart - (currentSourceStart ?? elapsedSinceSessionStart)

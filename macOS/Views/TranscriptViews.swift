@@ -40,6 +40,7 @@ private struct TranscriptBottomPreferenceKey: PreferenceKey {
 
 struct SynchronizedTranscriptView: View {
     let entries: [SubtitleEntry]
+    let recognitionConfig: RecognitionConfig
     @State private var isAtBottom = true
     @State private var hasNewContent = false
 
@@ -47,69 +48,73 @@ struct SynchronizedTranscriptView: View {
         GeometryReader { container in
             ScrollViewReader { proxy in
                 ZStack(alignment: .bottomTrailing) {
-                    ScrollView(.vertical) {
-                        VStack(spacing: 0) {
-                            HStack(alignment: .top, spacing: 14) {
-                                Text("英文原文").font(.headline).frame(maxWidth: .infinity, alignment: .leading)
-                                Text("中文翻译").font(.headline).frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .padding(.bottom, 10)
-                            if entries.isEmpty {
-                                HStack(alignment: .top, spacing: 14) {
-                                    Text("开始说英文后，每条识别结果会保留在这里").foregroundStyle(.secondary)
-                                    Text("Soniox 翻译会逐条追加到这里").foregroundStyle(.secondary)
-                                }
+                    VStack(spacing: 0) {
+                        HStack(alignment: .center, spacing: 14) {
+                            Text(sourceHeader)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                            } else {
-                                ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
-                                    if isNewDay(at: index) {
-                                        Text(dayLabel(for: entry))
-                                            .font(.subheadline.weight(.semibold))
-                                            .foregroundStyle(.secondary)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                            .padding(.top, 12)
-                                            .padding(.bottom, 4)
-                                    }
-                                    HStack(alignment: .top, spacing: 14) {
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            if let speaker = entry.speaker, !speaker.isEmpty {
-                                                Text(speaker)
-                                                    .font(.caption.weight(.semibold))
-                                                    .foregroundStyle(.mint)
-                                            }
-                                            HStack(alignment: .top, spacing: 8) {
-                                                Text(timestamp(for: entry, at: index))
+                            if recognitionConfig.translationEnabled {
+                                Text(targetHeader)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.bottom, 8)
+
+                        Divider().opacity(0.55)
+
+                        ScrollView(.vertical) {
+                            VStack(spacing: 0) {
+                                if entries.isEmpty {
+                                    Text("开始录音后，每条识别结果会保留在这里")
+                                        .foregroundStyle(.secondary)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(.top, 14)
+                                } else {
+                                    ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+                                        if isNewDay(at: index) {
+                                            Text(dayLabel(for: entry))
+                                                .font(.subheadline.weight(.semibold))
+                                                .foregroundStyle(.secondary)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                                .padding(.top, 12)
+                                                .padding(.bottom, 4)
+                                        }
+                                        HStack(alignment: .top, spacing: 14) {
+                                            VStack(alignment: .leading, spacing: 4) {
+                                                Text(metadata(for: entry))
                                                     .font(.caption.monospacedDigit())
                                                     .foregroundStyle(.secondary)
-                                                    .frame(width: 78, alignment: .leading)
                                                 Text(entry.english.isEmpty ? "…" : entry.english)
                                                     .frame(maxWidth: .infinity, alignment: .leading)
                                             }
-                                        }
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        Text(entry.chinese.isEmpty ? "翻译中…" : entry.chinese)
-                                            .foregroundStyle(entry.chinese.isEmpty ? .secondary : .primary)
                                             .frame(maxWidth: .infinity, alignment: .leading)
+
+                                            if recognitionConfig.translationEnabled {
+                                                Text(entry.chinese.isEmpty ? " " : entry.chinese)
+                                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                            }
+                                        }
+                                        .padding(.vertical, 7)
+                                        Divider()
                                     }
-                                    .padding(.vertical, 8)
-                                    Divider()
                                 }
+                                GeometryReader { bottom in
+                                    Color.clear
+                                        .preference(key: TranscriptBottomPreferenceKey.self,
+                                                    value: bottom.frame(in: .named("transcriptScroll")).maxY)
+                                }
+                                .frame(height: 1)
                             }
-                            GeometryReader { bottom in
-                                Color.clear
-                                    .preference(key: TranscriptBottomPreferenceKey.self,
-                                                value: bottom.frame(in: .named("transcriptScroll")).maxY)
-                            }
-                            .frame(height: 1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .id("subtitle-content")
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .id("subtitle-content")
-                    }
-                    .coordinateSpace(name: "transcriptScroll")
-                    .onPreferenceChange(TranscriptBottomPreferenceKey.self) { bottomMaxY in
-                        let nowAtBottom = bottomMaxY <= container.size.height + 24
-                        isAtBottom = nowAtBottom
-                        if nowAtBottom { hasNewContent = false }
+                        .coordinateSpace(name: "transcriptScroll")
+                        .onPreferenceChange(TranscriptBottomPreferenceKey.self) { bottomMaxY in
+                            let nowAtBottom = bottomMaxY <= container.size.height + 24
+                            isAtBottom = nowAtBottom
+                            if nowAtBottom { hasNewContent = false }
+                        }
                     }
 
                     if hasNewContent {
@@ -134,24 +139,36 @@ struct SynchronizedTranscriptView: View {
         .frame(minHeight: 220, maxHeight: .infinity)
     }
 
-    private func timestamp(for entry: SubtitleEntry, at index: Int) -> String {
-        let date = entry.recordedAt
+    private var sourceHeader: String {
+        guard recognitionConfig.sourceLanguageMode == .specified else { return "原文" }
+        return languageTitle(for: recognitionConfig.specifiedSourceLanguage)
+    }
+
+    private var targetHeader: String {
+        languageTitle(for: recognitionConfig.targetTranslationLanguage)
+    }
+
+    private func languageTitle(for code: String) -> String {
+        LanguageOption.supported.first(where: { $0.code == code })?.title ?? code
+    }
+
+    private func metadata(for entry: SubtitleEntry) -> String {
+        var values: [String] = []
+        if recognitionConfig.speakerDiarizationEnabled,
+           let speaker = entry.speaker,
+           !speaker.isEmpty {
+            values.append(speaker)
+        }
+        values.append(timestamp(for: entry))
+        return values.joined(separator: " · ")
+    }
+
+    private func timestamp(for entry: SubtitleEntry) -> String {
         let timeFormatter = DateFormatter()
         timeFormatter.locale = Locale(identifier: "en_US_POSIX")
         timeFormatter.timeZone = .current
         timeFormatter.dateFormat = "HH:mm:ss"
-        let dateTimeFormatter = DateFormatter()
-        dateTimeFormatter.locale = Locale(identifier: "en_US_POSIX")
-        dateTimeFormatter.timeZone = .current
-        dateTimeFormatter.dateFormat = "MM-dd HH:mm:ss"
-
-        guard let date else {
-            return timeFormatter.string(from: Date(timeIntervalSince1970: entry.start))
-        }
-        guard index > 0, entries[index - 1].recordedAt != nil else {
-            return dateTimeFormatter.string(from: date)
-        }
-        return timeFormatter.string(from: date)
+        return timeFormatter.string(from: entry.recordedAt ?? Date(timeIntervalSince1970: entry.start))
     }
 
     private func isNewDay(at index: Int) -> Bool {
