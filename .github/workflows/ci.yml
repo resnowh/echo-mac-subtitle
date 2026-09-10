@@ -1,0 +1,35 @@
+name: macOS CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build Debug
+        run: >-
+          xcodebuild
+          -project macOS/EchoMac.xcodeproj
+          -scheme Echo
+          -configuration Debug
+          -sdk macosx
+          CODE_SIGNING_ALLOWED=NO
+          build
+
+      - name: Build Release
+        run: >-
+          xcodebuild
+          -project macOS/EchoMac.xcodeproj
+          -scheme Echo
+          -configuration Release
+          -sdk macosx
+          CODE_SIGNING_ALLOWED=NO
+          build
