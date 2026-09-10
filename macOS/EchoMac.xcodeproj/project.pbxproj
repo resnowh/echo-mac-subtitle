@@ -8,12 +8,34 @@
 
 /* Begin PBXBuildFile section */
 		9 /* EchoMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6 /* EchoMacApp.swift */; };
+		20 /* TranscriptModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21 /* TranscriptModels.swift */; };
+		22 /* PCM16AudioPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23 /* PCM16AudioPipeline.swift */; };
+		24 /* SonioxRequestBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25 /* SonioxRequestBuilder.swift */; };
+		26 /* SRTExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27 /* SRTExporter.swift */; };
+		28 /* TranscriptArchiveStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29 /* TranscriptArchiveStore.swift */; };
+		30 /* DeepSeekService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31 /* DeepSeekService.swift */; };
+		32 /* MacSystemAudioCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33 /* MacSystemAudioCapture.swift */; };
+		34 /* AudioCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35 /* AudioCapture.swift */; };
+		36 /* TranscriptViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37 /* TranscriptViews.swift */; };
+		38 /* SonioxWebSocketClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39 /* SonioxWebSocketClient.swift */; };
+		40 /* SpeechViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41 /* SpeechViewModel.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		4 /* Echo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Echo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6 /* EchoMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EchoMacApp.swift; sourceTree = "<group>"; };
 		7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		21 /* TranscriptModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/TranscriptModels.swift; sourceTree = "<group>"; };
+		23 /* PCM16AudioPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Audio/PCM16AudioPipeline.swift; sourceTree = "<group>"; };
+		25 /* SonioxRequestBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/SonioxRequestBuilder.swift; sourceTree = "<group>"; };
+		27 /* SRTExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/SRTExporter.swift; sourceTree = "<group>"; };
+		29 /* TranscriptArchiveStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Storage/TranscriptArchiveStore.swift; sourceTree = "<group>"; };
+		31 /* DeepSeekService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/DeepSeekService.swift; sourceTree = "<group>"; };
+		33 /* MacSystemAudioCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Audio/MacSystemAudioCapture.swift; sourceTree = "<group>"; };
+		35 /* AudioCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Audio/AudioCapture.swift; sourceTree = "<group>"; };
+		37 /* TranscriptViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/TranscriptViews.swift; sourceTree = "<group>"; };
+		39 /* SonioxWebSocketClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/SonioxWebSocketClient.swift; sourceTree = "<group>"; };
+		41 /* SpeechViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewModels/SpeechViewModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -48,6 +70,17 @@
 			children = (
 				6 /* EchoMacApp.swift */,
 				7 /* Info.plist */,
+				21 /* TranscriptModels.swift */,
+				23 /* PCM16AudioPipeline.swift */,
+				25 /* SonioxRequestBuilder.swift */,
+				27 /* SRTExporter.swift */,
+				29 /* TranscriptArchiveStore.swift */,
+				31 /* DeepSeekService.swift */,
+				33 /* MacSystemAudioCapture.swift */,
+				35 /* AudioCapture.swift */,
+				37 /* TranscriptViews.swift */,
+				39 /* SonioxWebSocketClient.swift */,
+				41 /* SpeechViewModel.swift */,
 			);
 			name = Echo;
 			path = .;
@@ -121,6 +154,17 @@
 			buildActionMask = 2147483647;
 			files = (
 				9 /* EchoMacApp.swift in Sources */,
+				20 /* TranscriptModels.swift in Sources */,
+				22 /* PCM16AudioPipeline.swift in Sources */,
+				24 /* SonioxRequestBuilder.swift in Sources */,
+				26 /* SRTExporter.swift in Sources */,
+				28 /* TranscriptArchiveStore.swift in Sources */,
+				30 /* DeepSeekService.swift in Sources */,
+				32 /* MacSystemAudioCapture.swift in Sources */,
+				34 /* AudioCapture.swift in Sources */,
+				36 /* TranscriptViews.swift in Sources */,
+				38 /* SonioxWebSocketClient.swift in Sources */,
+				40 /* SpeechViewModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

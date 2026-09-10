@@ -1,42 +1,78 @@
-# Echo：英文语音转写与中文翻译
+# Echo：macOS 实时语音转写与翻译
 
-Echo 是一个仅支持 macOS 的原生实时字幕应用：从话筒采集英文语音，同时显示英文原文和简体中文翻译。
+Echo 是一个原生 macOS 实时字幕应用。它从话筒或 Mac 正在播放的声音采集音频，通过 Soniox 实时识别，并在界面中保留英文原文、翻译和时间戳。默认行为是英语识别、简体中文翻译；音频默认不保存。
 
-主界面可以选择三种输入源：
+## 当前功能
 
-- `电脑音频`：识别 Mac 正在播放的声音。
-- `话筒`：识别麦克风输入。
-- `电脑音频和话筒`：同时识别电脑播放声音和麦克风输入。
+- 输入源可在录音中热切换：
+  - **电脑音频**：识别 Mac 正在播放的声音。
+  - **话筒**：识别麦克风输入。
+  - **电脑音频和话筒**：两路先在本地按时间轴混音，再发送给 Soniox。
+- 识别到的字幕逐条保留，支持现实本地时间、跨天日期行和滚动时的新内容提醒。
+- Soniox speaker diarization 可显示并保存匿名编号，如 `Speaker 1`、`Speaker 2`。
+- 设置中可选择：
+  - 自动识别源语言，或指定语言（指定语言会作为 Soniox 语言提示）；
+  - 指定语言的严格限制；
+  - 是否翻译，以及翻译目标语言；
+  - 是否启用 Speaker 编号。
+- 可选择新建存档或接续已有存档；一次课程可以由多个录音段组成，也可以把刚完成的录音段拆出。
+- 每段录音自动保存带时间戳的 `.srt` 文字稿；可从主界面导出当前存档的全部字幕。
+- 可选 DeepSeek AI 总结：
+  - 总结新增内容；
+  - 重新总结当前录音段；
+  - 总结整个存档。
+  AI 总结默认关闭，录音不会因为手动生成总结而停止。
+- 支持浅色、深色和跟随系统主题，以及窗口置顶开关。
 
-主界面右上角可以循环切换浅色、深色和跟随系统，主题设置会保存在本机；设置菜单中也可以直接选择主题。
+## 系统要求
 
-捕获电脑音频使用 macOS ScreenCaptureKit。第一次使用 `电脑音频` 或 `电脑音频和话筒` 时，需要在“系统设置 → 隐私与安全性 → 屏幕与系统音频录制”中允许 Echo；使用话筒时仍需要允许麦克风。录音过程中可以直接热切换输入源，Soniox 会话和已识别文字不会清空。
+- macOS 15.0 或更高版本。
+- Apple Silicon 或 Intel Mac。
+- Soniox API Key 和网络连接。
+- 使用话筒需要允许 Echo 访问麦克风。
+- 使用电脑音频需要允许 Echo 访问“屏幕与系统音频录制”。
+- AI 总结还需要单独填写 DeepSeek API Key。
 
-## 使用
+Echo 当前只支持 macOS。项目没有 Windows 版本，也没有现成 GitHub Release 安装包或 Apple notarization。
 
-1. 用 Xcode 打开 `macOS/EchoMac.xcodeproj`，运行 `Echo` Scheme；或者双击 `build_mac.command` 自动编译并启动。
-2. 打开主界面的设置，在 `Soniox API Key` 输入框粘贴你的 Key。Key 只保存在本机的 UserDefaults 中。
-3. 第一次录音时，在 macOS 弹窗中允许 Echo 使用麦克风。
+## 使用方法
 
-Soniox Key 可从 [Soniox Console](https://console.soniox.com/) 创建。应用使用 Soniox `stt-rt-v5` WebSocket，实时返回英文原文和简体中文翻译。Soniox 是云端服务，因此需要网络连接并按 Soniox 计费；音频只通过实时连接发送，默认不会在本机保存。
+1. 用 Xcode 打开 `macOS/EchoMac.xcodeproj`，运行 `Echo` Scheme。
+2. 打开设置，在 `Soniox API Key` 中填写 Key。Key 只保存在本机 UserDefaults，不写入源码。
+3. 按需在“识别与翻译”中选择源语言和翻译目标；默认是 English → 简体中文。
+4. 在主界面选择输入源，点击“开始录音”。
+5. 第一次使用话筒或电脑音频时，根据 macOS 提示授予权限。
 
-设置中可以选择开启 AI 自动总结。开启后，应用会在每次停止录音后将本次带时间戳的英文文字稿发送给 DeepSeek，并在主界面生成中文的主题、要点和待办；该功能默认关闭，需要单独填写 DeepSeek API Key。录音过程中也可以点击“生成总结”，按当前已识别内容生成总结，不会停止录音。
+Soniox Key 可从 [Soniox Console](https://console.soniox.com/) 创建。Echo 使用 Soniox `stt-rt-v5` 实时 WebSocket；音频会发送到 Soniox 云端，应用默认不保存音频。
 
-支持 Apple Silicon 和 Intel Mac。项目不需要 Python、Node.js 或 Homebrew。
+## 文字稿与存档位置
 
-如果 macOS 因安全设置不让双击运行：右键 `build_mac.command`，选择“打开”；仍被拦截时，打开终端执行：
+- 每次录音结束后，SRT 文字稿自动保存到用户的“下载”文件夹，文件名类似 `Echo-20260910-143000.srt`。
+- Archive JSON 保存在 `~/Library/Application Support/Echo/Archives/`，用于多段录音接续、恢复 Speaker/语言信息和全量 SRT 导出。
+- 设置页面会显示文字稿保存位置；当前版本没有修改自动保存目录的功能。
+- “导出全部字幕”会打开保存面板，可把当前存档另存到自选位置。
+- 默认不保存音频。
+
+## 从源码构建
+
+在项目根目录执行：
+
+```sh
+xcodebuild -project macOS/EchoMac.xcodeproj -scheme Echo -configuration Debug -sdk macosx build
+```
+
+也可以执行：
 
 ```sh
 chmod +x build_mac.command
 ./build_mac.command
 ```
 
-## 文字稿
+脚本使用 Release 配置构建未签名的本地 app，并尝试打开构建结果。正式 Developer ID 签名、notarization、DMG 和 GitHub Release 流程见 [docs/release.md](docs/release.md)。
 
-每次录音结束后，应用会自动在“下载”文件夹保存 `Echo-日期时间.srt`。文件包含英文原文、中文翻译和时间戳；默认不保存音频。设置中可以修改文字稿保存目录，界面的“导出全部字幕”按钮可以把当前窗口中的所有字幕另存为新的 `.srt` 文件。
+## 相关文档
 
-## 构建
-
-```sh
-xcodebuild -project macOS/EchoMac.xcodeproj -scheme Echo -configuration Debug -sdk macosx build
-```
+- [当前架构](docs/architecture.md)
+- [数据模型与持久化](docs/data-model.md)
+- [变更记录](CHANGELOG.md)
+- [发布准备](docs/release.md)
