@@ -169,8 +169,7 @@ struct ContentView: View {
                         }
                         .disabled(!model.canSplitCompletedSegment)
                     } label: {
-                        Image(systemName: "ellipsis")
-                            .frame(width: 24)
+                        Label("更多", systemImage: "ellipsis")
                     }
                     .menuStyle(.borderedButton)
                     .help("更多存档操作")
@@ -193,22 +192,17 @@ struct ContentView: View {
             }
 
             if model.isSummaryEnabled || !model.summaryText.isEmpty || !model.summaryStatus.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: model.summaryText.isEmpty ? 6 : 8) {
                     HStack {
                         Label("AI 总结", systemImage: "sparkles")
                             .font(.headline)
-                        Spacer()
-                        Menu {
-                            Button("总结新内容") { model.generateAISummary() }
-                                .disabled(model.entries.isEmpty)
-                            Button("重新总结当前录音段") { model.regenerateAISummary() }
-                                .disabled(model.entries.isEmpty)
-                            Button("总结整个存档") { model.summarizeSelectedArchive() }
-                                .disabled(model.archives.isEmpty)
-                        } label: {
-                            Label("总结", systemImage: "sparkles")
+                        if model.summaryText.isEmpty, model.isRecording {
+                            Text("录音中，可随时生成")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
-                        .menuStyle(.borderedButton)
+                        Spacer()
+                        summaryMenu
                     }
                     if !model.summaryStatus.isEmpty {
                         Text(model.summaryStatus)
@@ -222,14 +216,6 @@ struct ContentView: View {
                                 .textSelection(.enabled)
                         }
                         .frame(maxHeight: 150)
-                    } else if model.isRecording {
-                        Text("录音中，可随时从“总结”菜单生成")
-                            .foregroundStyle(.secondary)
-                            .font(.callout)
-                    } else {
-                        Text("暂无总结")
-                            .foregroundStyle(.secondary)
-                            .font(.callout)
                     }
                 }
                 .padding(12)
@@ -270,18 +256,28 @@ struct ContentView: View {
     }
 
     private var compactStatus: String {
-        guard model.isRecording else { return model.status }
-        if model.status.contains("恢复") || model.status.contains("中断") || model.status.contains("失败") {
+        switch model.sonioxConnectionState {
+        case .connecting:
+            return "正在连接 Soniox…"
+        case .connected:
+            return model.isReceivingAudio ? "Soniox 已连接 · 识别中" : "Soniox 已连接 · 等待声音"
+        case .recovering:
+            return "正在恢复录音…"
+        case .failed:
+            return "Soniox 连接失败"
+        case .idle:
             return model.status
         }
-        return model.isReceivingAudio ? "Soniox 已连接 · 识别中" : "Soniox 已连接 · 等待声音"
     }
 
     private var statusColor: Color {
-        guard model.isRecording else { return .secondary }
-        if model.status.contains("失败") || model.status.contains("中断") { return .red }
-        if model.status.contains("恢复") { return .orange }
-        return .mint
+        switch model.sonioxConnectionState {
+        case .connecting: return .orange
+        case .connected: return .mint
+        case .recovering: return .orange
+        case .failed: return .red
+        case .idle: return .secondary
+        }
     }
 
     private var audioStatusText: String {
@@ -296,6 +292,21 @@ struct ContentView: View {
         guard model.isRecording else { return .secondary }
         if !model.errorMessage.isEmpty || model.status.contains("中断") || model.status.contains("失败") { return .red }
         return model.audioLevel > 0.035 ? .green : .orange
+    }
+
+    @ViewBuilder
+    private var summaryMenu: some View {
+        Menu {
+            Button("总结新内容") { model.generateAISummary() }
+                .disabled(model.entries.isEmpty)
+            Button("重新总结当前录音段") { model.regenerateAISummary() }
+                .disabled(model.entries.isEmpty)
+            Button("总结整个存档") { model.summarizeSelectedArchive() }
+                .disabled(model.archives.isEmpty)
+        } label: {
+            Label("总结", systemImage: "sparkles")
+        }
+        .menuStyle(.borderedButton)
     }
 }
 

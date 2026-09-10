@@ -5,6 +5,14 @@ import ScreenCaptureKit
 import SwiftUI
 import UniformTypeIdentifiers
 
+enum SonioxConnectionState: Equatable {
+    case idle
+    case connecting
+    case connected
+    case recovering
+    case failed
+}
+
 final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     @Published var isRecording = false
     @Published var english = ""
@@ -13,6 +21,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     @Published var errorMessage = ""
     @Published var audioLevel = 0.0
     @Published var isReceivingAudio = false
+    @Published private(set) var sonioxConnectionState: SonioxConnectionState = .idle
     @Published var waveformSamples = Array(repeating: 0.0, count: 48)
     @Published var entries: [SubtitleEntry] = []
     @Published var fileStatus = ""
@@ -38,6 +47,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     private var lifecycleState = LifecycleRecoveryState()
     private var wakeRecoveryWorkItem: DispatchWorkItem?
     private var captureRecoveryWorkItem: DispatchWorkItem?
+    private var archiveStatusWorkItem: DispatchWorkItem?
     private var lastAudioCaptureRecoveryAt: Date?
     // Kept in one place so the wake recovery policy is easy to tune.
     private let lifecycleRecoveryDelay: TimeInterval = 0.75
@@ -115,6 +125,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         lifecycleObserver.stop()
         wakeRecoveryWorkItem?.cancel()
         captureRecoveryWorkItem?.cancel()
+        archiveStatusWorkItem?.cancel()
     }
 
     private var isSystemSleeping: Bool { lifecycleState.isSystemSleeping }
@@ -137,6 +148,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     private func handleSystemDidWake() {
         guard lifecycleState.handle(.didWake) == .scheduleWakeRecovery else { return }
         wakeRecoveryWorkItem?.cancel()
+        sonioxConnectionState = .recovering
         status = "系统已唤醒，正在恢复录音"
 
         let workItem = DispatchWorkItem { [weak self] in
@@ -192,6 +204,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         guard (!inputMode.requiresMicrophone || (microphoneTapInstalled && microphoneCapture.isEngineActuallyRunning)),
               (!inputMode.includesComputerAudio || systemAudioReady) else { return }
         _ = lifecycleState.handle(.recoverySucceeded)
+        sonioxConnectionState = .connected
         status = "正在通过 Soniox 实时识别与翻译（\(inputMode.title)）"
     }
 
@@ -529,6 +542,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         pcmMixer.reset()
         audioFrameCursors.removeAll(keepingCapacity: true)
         socketReady = false
+        sonioxConnectionState = .idle
         activeSessionID = UUID()
         if wasRecovery {
             _ = lifecycleState.handle(.recoveryFailed)
@@ -646,6 +660,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
 
     private func openSonioxSocket(apiKey: String, sessionID: UUID) {
         socketReady = false
+        sonioxConnectionState = lifecycleState.isRecovering ? .recovering : .connecting
 
         var config: [String: Any] = [
             "api_key": apiKey,
@@ -761,7 +776,13 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
                         for chunk in self.pcmPrebuffer.drain() {
                             self.sendPCMData(chunk.data, sessionID: sessionID)
                         }
-                        self.finishWakeRecoveryIfReady()
+                        DispatchQueue.main.async { [weak self] in
+                            guard let self,
+                                  self.activeSessionID == sessionID,
+                                  self.isRecording else { return }
+                            self.sonioxConnectionState = self.lifecycleState.isRecovering ? .recovering : .connected
+                            self.finishWakeRecoveryIfReady()
+                        }
                     }
                 },
                 onMessage: { [weak self] message in
@@ -779,12 +800,15 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
             )
         } catch {
             errorMessage = "Soniox 配置失败：\(error.localizedDescription)"
+            sonioxConnectionState = .failed
+            status = "Soniox 连接失败"
         }
     }
 
     private func handleSocketFailure(_ error: Error, sessionID: UUID) {
         guard activeSessionID == sessionID else { return }
         failActiveRecording(message: "Soniox 连接失败：\(error.localizedDescription)")
+        sonioxConnectionState = .failed
     }
 
     private func sendAudio(_ buffer: AVAudioPCMBuffer, sessionID: UUID) {
@@ -852,6 +876,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         captureRecoveryWorkItem = nil
         isRecoveringAudioCapture = false
         guard isRecording || sonioxClient.isActive else {
+            sonioxConnectionState = .idle
             status = "已停止"
             return
         }
@@ -861,6 +886,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     private func stopCurrentRecording(scheduleSummary: Bool) {
         guard isRecording || sonioxClient.isActive else { return }
         isRecording = false
+        sonioxConnectionState = .idle
         isClosingSocket = true
         isSwitchingInput = false
         stopMicrophoneCapture()
@@ -907,6 +933,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
                     guard let self, self.activeSessionID == stoppedSessionID else { return }
                     self.sonioxClient.cancel()
                     self.socketReady = false
+                    self.sonioxConnectionState = .idle
                     self.status = "已停止"
                 }
             }
@@ -929,6 +956,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
             status = "已停止"
             sonioxClient.cancel()
             socketReady = false
+            sonioxConnectionState = .idle
             return
         }
 
@@ -1237,11 +1265,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     func chooseArchive(_ id: UUID?) {
         guard !isRecording else { return }
         selectedArchiveID = id
-        if let id, let archive = archives.first(where: { $0.id == id }) {
-            archiveStatus = "下一段将接续：\(archive.title)"
-        } else {
-            archiveStatus = "下一段将新建存档"
-        }
+        showTransientArchiveStatus(id == nil ? "已选择新存档" : "已选择存档")
     }
 
     private func prepareArchiveForRecording() {
@@ -1262,7 +1286,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
             entries = restoredEntries
             refreshFullTranscript()
             currentArchiveID = archive.id
-            archiveStatus = "正在接续：\(archive.title)"
+            showTransientArchiveStatus("已接续")
         } else {
             let id = UUID()
             let formatter = DateFormatter()
@@ -1278,7 +1302,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
             archives.append(archive)
             selectedArchiveID = id
             currentArchiveID = id
-            archiveStatus = "已新建：\(archive.title)"
+            showTransientArchiveStatus("已新建")
             saveArchive(archive)
         }
     }
@@ -1291,8 +1315,25 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         do {
             try TranscriptArchiveStore().save(archive)
         } catch {
-            archiveStatus = "存档保存失败：\(error.localizedDescription)"
+            showArchiveError("存档保存失败：\(error.localizedDescription)")
         }
+    }
+
+    private func showTransientArchiveStatus(_ message: String) {
+        archiveStatusWorkItem?.cancel()
+        archiveStatus = message
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self, self.archiveStatus == message else { return }
+            self.archiveStatus = ""
+        }
+        archiveStatusWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.4, execute: workItem)
+    }
+
+    private func showArchiveError(_ message: String) {
+        archiveStatusWorkItem?.cancel()
+        archiveStatusWorkItem = nil
+        archiveStatus = message
     }
 
     private func saveArchiveProgress() {
@@ -1355,7 +1396,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         selectedArchiveID = newArchiveID
         completedArchiveID = nil
         completedSegmentID = nil
-        archiveStatus = "已将本段拆出为：\(newArchive.title)"
+        showTransientArchiveStatus("已拆出本段")
     }
 
     func saveAPIKey() {
@@ -1645,6 +1686,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         stopSystemAudioCapture()
         sonioxClient.cancel()
         socketReady = false
+        sonioxConnectionState = .idle
         audioQueue.sync {
             pcmPrebuffer.clear()
             pcmMixer.reset()
@@ -1667,6 +1709,8 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         completedArchiveID = nil
         completedSegmentID = nil
         selectedArchiveID = nil
+        archiveStatusWorkItem?.cancel()
+        archiveStatusWorkItem = nil
         archiveStatus = ""
         finalEnglish = ""
         partialEnglish = ""
