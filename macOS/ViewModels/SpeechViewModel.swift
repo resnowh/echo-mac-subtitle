@@ -122,7 +122,6 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     private func handleSystemWillSleep() {
         let action = lifecycleState.handle(.willSleep, recordingIntended: isRecording)
         guard action == .endRecordingForSleep else {
-            status = "系统即将睡眠"
             return
         }
 
@@ -174,7 +173,10 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
             do {
                 try self.startMicrophoneCapture(sessionID: sessionID)
                 self.isRecoveringAudioCapture = false
-                self.status = "正在通过 Soniox 实时识别与翻译（\(self.inputMode.title)）"
+                self.finishWakeRecoveryIfReady()
+                if !self.lifecycleState.isRecovering {
+                    self.status = "正在通过 Soniox 实时识别与翻译（\(self.inputMode.title)）"
+                }
             } catch {
                 self.isRecoveringAudioCapture = false
                 self.failActiveRecording(message: "音频输入恢复失败：\(error.localizedDescription)")
