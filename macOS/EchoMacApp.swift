@@ -301,16 +301,28 @@ struct ContentView: View {
 
     private var audioStatusText: String {
         guard model.isRecording else { return "未在录音" }
-        if !model.errorMessage.isEmpty || model.status.contains("中断") || model.status.contains("失败") {
+        switch model.audioCaptureState {
+        case .starting:
+            return "正在准备音频…"
+        case .recovering:
+            return "正在恢复音频…"
+        case .failed:
             return "音频输入异常"
+        case .idle:
+            return "等待音频"
+        case .active:
+            return model.audioLevel > 0.035 ? "检测到声音" : "等待声音"
         }
-        return model.audioLevel > 0.035 ? "检测到声音" : "等待声音"
     }
 
     private var audioStatusColor: Color {
         guard model.isRecording else { return .secondary }
-        if !model.errorMessage.isEmpty || model.status.contains("中断") || model.status.contains("失败") { return .red }
-        return model.audioLevel > 0.035 ? .green : .orange
+        switch model.audioCaptureState {
+        case .failed: return .red
+        case .starting, .recovering: return .orange
+        case .active: return model.audioLevel > 0.035 ? .green : .orange
+        case .idle: return .secondary
+        }
     }
 
     @ViewBuilder

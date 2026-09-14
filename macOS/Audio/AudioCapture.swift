@@ -4,6 +4,7 @@ import Foundation
 protocol AudioCaptureSource: AnyObject {
     func start(
         targetFormat: AVAudioFormat,
+        onRawInput: @escaping () -> Void,
         onAudio: @escaping (AVAudioPCMBuffer) -> Void,
         completion: @escaping (Result<AVAudioFormat, Error>) -> Void
     )
@@ -32,11 +33,13 @@ enum MicrophoneLifecycleLog {
 /// blocking SwiftUI's main thread.
 final class MacMicrophoneCapture: AudioCaptureSource {
     private let controlQueue = DispatchQueue(label: "local.echo.microphone-control")
+    private let processingQueue = DispatchQueue(label: "local.echo.microphone-processing")
     private let stateLock = NSLock()
     private var engine: AVAudioEngine?
     private var configurationObserver: NSObjectProtocol?
     private var operationID: UInt64 = 0
     private var running = false
+    private var lastRawCallbackUptime: TimeInterval?
     var onConfigurationChange: (() -> Void)?
 
     var isRunning: Bool {
@@ -45,8 +48,16 @@ final class MacMicrophoneCapture: AudioCaptureSource {
         return running
     }
 
+    func hasRecentRawCallback(within interval: TimeInterval) -> Bool {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        guard let lastRawCallbackUptime else { return false }
+        return ProcessInfo.processInfo.systemUptime - lastRawCallbackUptime <= interval
+    }
+
     func start(
         targetFormat: AVAudioFormat,
+        onRawInput: @escaping () -> Void,
         onAudio: @escaping (AVAudioPCMBuffer) -> Void,
         completion: @escaping (Result<AVAudioFormat, Error>) -> Void
     ) {
@@ -64,7 +75,7 @@ final class MacMicrophoneCapture: AudioCaptureSource {
             let input = engine.inputNode
             let inputFormat = input.outputFormat(forBus: 0)
             #if DEBUG
-            MicrophoneLifecycleLog.mark("refresh input format end sampleRate=\(inputFormat.sampleRate) channels=\(inputFormat.channelCount)")
+            MicrophoneLifecycleLog.mark("refresh input format end sampleRate=\(inputFormat.sampleRate) channels=\(inputFormat.channelCount) commonFormat=\(inputFormat.commonFormat.rawValue) interleaved=\(inputFormat.isInterleaved)")
             #endif
 
             guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else {
@@ -92,10 +103,20 @@ final class MacMicrophoneCapture: AudioCaptureSource {
                 guard let self else { return }
                 #if DEBUG
                 if !self.isFirstCallbackLogged(for: operationID) {
-                    MicrophoneLifecycleLog.mark("first callback")
+                    MicrophoneLifecycleLog.mark("first raw callback frameLength=\(buffer.frameLength) sampleRate=\(buffer.format.sampleRate) channels=\(buffer.format.channelCount) commonFormat=\(buffer.format.commonFormat.rawValue) interleaved=\(buffer.format.isInterleaved)")
                 }
                 #endif
-                self.convert(buffer, with: converter, to: targetFormat, onAudio: onAudio)
+                onRawInput()
+                self.markRawCallback()
+                guard let ownedBuffer = Self.copy(buffer, format: inputFormat) else {
+                    #if DEBUG
+                    self.logFirstConversion("raw buffer copy failed")
+                    #endif
+                    return
+                }
+                self.processingQueue.async { [weak self] in
+                    self?.convert(ownedBuffer, with: converter, to: targetFormat, onAudio: onAudio)
+                }
             }
             #if DEBUG
             MicrophoneLifecycleLog.mark("install tap end")
@@ -201,8 +222,27 @@ final class MacMicrophoneCapture: AudioCaptureSource {
             status.pointee = .haveData
             return buffer
         }
+        #if DEBUG
+        logFirstConversion("status=\(conversionStatus.rawValue) inputFrames=\(buffer.frameLength) outputFrames=\(converted.frameLength) error=\(conversionError?.localizedDescription ?? "none")")
+        #endif
         guard conversionStatus != .error, converted.frameLength > 0 else { return }
         onAudio(converted)
+    }
+
+    private static func copy(_ buffer: AVAudioPCMBuffer, format: AVAudioFormat) -> AVAudioPCMBuffer? {
+        guard let copy = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: buffer.frameLength) else { return nil }
+        copy.frameLength = buffer.frameLength
+        let sourceBuffers = UnsafeMutableAudioBufferListPointer(buffer.mutableAudioBufferList)
+        let destinationBuffers = UnsafeMutableAudioBufferListPointer(copy.mutableAudioBufferList)
+        guard sourceBuffers.count == destinationBuffers.count else { return nil }
+        for index in 0..<sourceBuffers.count {
+            let source = sourceBuffers[index]
+            guard let sourceData = source.mData, let destinationData = destinationBuffers[index].mData else { return nil }
+            let byteCount = min(Int(source.mDataByteSize), Int(destinationBuffers[index].mDataByteSize))
+            memcpy(destinationData, sourceData, byteCount)
+            destinationBuffers[index].mDataByteSize = UInt32(byteCount)
+        }
+        return copy
     }
 
     private func setRunning(_ value: Bool) {
@@ -211,8 +251,15 @@ final class MacMicrophoneCapture: AudioCaptureSource {
         stateLock.unlock()
     }
 
+    private func markRawCallback() {
+        stateLock.lock()
+        lastRawCallbackUptime = ProcessInfo.processInfo.systemUptime
+        stateLock.unlock()
+    }
+
     #if DEBUG
     private var firstCallbackOperationID: UInt64?
+    private var firstConversionOperationID: UInt64?
 
     private func isFirstCallbackLogged(for operationID: UInt64) -> Bool {
         stateLock.lock()
@@ -220,6 +267,14 @@ final class MacMicrophoneCapture: AudioCaptureSource {
         if firstCallbackOperationID == operationID { return true }
         firstCallbackOperationID = operationID
         return false
+    }
+
+    private func logFirstConversion(_ message: String) {
+        stateLock.lock()
+        let shouldLog = firstConversionOperationID != operationID
+        if shouldLog { firstConversionOperationID = operationID }
+        stateLock.unlock()
+        if shouldLog { MicrophoneLifecycleLog.mark("first conversion \(message)") }
     }
     #endif
 
