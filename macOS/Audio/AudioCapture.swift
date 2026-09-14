@@ -11,6 +11,20 @@ protocol AudioCaptureSource: AnyObject {
     func stop()
 }
 
+struct AudioInputFormatSignature: Equatable {
+    let sampleRate: Double
+    let channelCount: UInt32
+    let commonFormatRawValue: UInt
+    let isInterleaved: Bool
+
+    init(_ format: AVAudioFormat) {
+        sampleRate = format.sampleRate
+        channelCount = format.channelCount
+        commonFormatRawValue = format.commonFormat.rawValue
+        isInterleaved = format.isInterleaved
+    }
+}
+
 protocol SystemAudioCaptureSource: AnyObject {
     func start(completion: @escaping (Error?) -> Void)
     func stop(completion: (() -> Void)?)
@@ -38,8 +52,10 @@ final class MacMicrophoneCapture: AudioCaptureSource {
     private var engine: AVAudioEngine?
     private var configurationObserver: NSObjectProtocol?
     private var operationID: UInt64 = 0
+    private var activeOperationID: UInt64?
     private var running = false
     private var lastRawCallbackUptime: TimeInterval?
+    private var currentFormatSignature: AudioInputFormatSignature?
     var onConfigurationChange: (() -> Void)?
 
     var isRunning: Bool {
@@ -55,6 +71,22 @@ final class MacMicrophoneCapture: AudioCaptureSource {
         return ProcessInfo.processInfo.systemUptime - lastRawCallbackUptime <= interval
     }
 
+    var inputFormatSignature: AudioInputFormatSignature? {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return currentFormatSignature
+    }
+
+    func inspectCurrentInputFormat(completion: @escaping (AudioInputFormatSignature?) -> Void) {
+        controlQueue.async { [weak self] in
+            guard let self else { return }
+            let signature = self.engine.map { AudioInputFormatSignature($0.inputNode.outputFormat(forBus: 0)) }
+            DispatchQueue.main.async {
+                completion(signature)
+            }
+        }
+    }
+
     func start(
         targetFormat: AVAudioFormat,
         onRawInput: @escaping () -> Void,
@@ -66,6 +98,7 @@ final class MacMicrophoneCapture: AudioCaptureSource {
             self.operationID &+= 1
             let operationID = self.operationID
             self.teardownOnControlQueue()
+            self.setActiveOperation(operationID)
 
             #if DEBUG
             MicrophoneLifecycleLog.mark("mic startup control begin")
@@ -106,16 +139,17 @@ final class MacMicrophoneCapture: AudioCaptureSource {
                     MicrophoneLifecycleLog.mark("first raw callback frameLength=\(buffer.frameLength) sampleRate=\(buffer.format.sampleRate) channels=\(buffer.format.channelCount) commonFormat=\(buffer.format.commonFormat.rawValue) interleaved=\(buffer.format.isInterleaved)")
                 }
                 #endif
+                guard self.markRawCallback(operationID: operationID) else { return }
                 onRawInput()
-                self.markRawCallback()
                 guard let ownedBuffer = Self.copy(buffer, format: inputFormat) else {
                     #if DEBUG
-                    self.logFirstConversion("raw buffer copy failed")
+                    self.logFirstConversion(operationID: operationID, message: "raw buffer copy failed")
                     #endif
                     return
                 }
                 self.processingQueue.async { [weak self] in
-                    self?.convert(ownedBuffer, with: converter, to: targetFormat, onAudio: onAudio)
+                    guard let self, self.isCurrentOperation(operationID) else { return }
+                    self.convert(ownedBuffer, with: converter, to: targetFormat, operationID: operationID, onAudio: onAudio)
                 }
             }
             #if DEBUG
@@ -141,12 +175,13 @@ final class MacMicrophoneCapture: AudioCaptureSource {
                 return
             }
 
-            guard operationID == self.operationID else {
+            guard self.isCurrentOperation(operationID) else {
                 input.removeTap(onBus: 0)
                 engine.stop()
                 return
             }
             self.engine = engine
+            self.setFormatSignature(AudioInputFormatSignature(inputFormat))
             self.installConfigurationObserver(for: engine)
             self.setRunning(true)
             self.complete(.success(inputFormat), operationID: operationID, completion: completion)
@@ -162,6 +197,9 @@ final class MacMicrophoneCapture: AudioCaptureSource {
     }
 
     private func teardownOnControlQueue() {
+        setActiveOperation(nil)
+        setFormatSignature(nil)
+        clearRawCallbackActivity()
         removeConfigurationObserver()
         guard let engine else {
             setRunning(false)
@@ -176,10 +214,13 @@ final class MacMicrophoneCapture: AudioCaptureSource {
     private func installConfigurationObserver(for engine: AVAudioEngine) {
         removeConfigurationObserver()
         configurationObserver = NotificationCenter.default.addObserver(
-            forName: Notification.Name("AVAudioEngineConfigurationChangeNotification"),
+            forName: .AVAudioEngineConfigurationChange,
             object: engine,
             queue: .main
         ) { [weak self] _ in
+            #if DEBUG
+            MicrophoneLifecycleLog.mark("configuration notification format=\(self?.inputFormatSignature.map(String.init(describing:)) ?? "none")")
+            #endif
             self?.onConfigurationChange?()
         }
     }
@@ -206,8 +247,10 @@ final class MacMicrophoneCapture: AudioCaptureSource {
         _ buffer: AVAudioPCMBuffer,
         with converter: AVAudioConverter,
         to targetFormat: AVAudioFormat,
+        operationID: UInt64,
         onAudio: @escaping (AVAudioPCMBuffer) -> Void
     ) {
+        guard isCurrentOperation(operationID) else { return }
         let ratio = targetFormat.sampleRate / max(buffer.format.sampleRate, 1)
         let capacity = AVAudioFrameCount(max(1, Int(Double(buffer.frameLength) * ratio) + 1024))
         guard let converted = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: capacity) else { return }
@@ -223,9 +266,10 @@ final class MacMicrophoneCapture: AudioCaptureSource {
             return buffer
         }
         #if DEBUG
-        logFirstConversion("status=\(conversionStatus.rawValue) inputFrames=\(buffer.frameLength) outputFrames=\(converted.frameLength) error=\(conversionError?.localizedDescription ?? "none")")
+        logFirstConversion(operationID: operationID, message: "status=\(conversionStatus.rawValue) inputFrames=\(buffer.frameLength) outputFrames=\(converted.frameLength) error=\(conversionError?.localizedDescription ?? "none")")
         #endif
         guard conversionStatus != .error, converted.frameLength > 0 else { return }
+        guard isCurrentOperation(operationID) else { return }
         onAudio(converted)
     }
 
@@ -251,9 +295,38 @@ final class MacMicrophoneCapture: AudioCaptureSource {
         stateLock.unlock()
     }
 
-    private func markRawCallback() {
+    private func markRawCallback(operationID: UInt64) -> Bool {
         stateLock.lock()
+        guard activeOperationID == operationID else {
+            stateLock.unlock()
+            return false
+        }
         lastRawCallbackUptime = ProcessInfo.processInfo.systemUptime
+        stateLock.unlock()
+        return true
+    }
+
+    private func clearRawCallbackActivity() {
+        stateLock.lock()
+        lastRawCallbackUptime = nil
+        stateLock.unlock()
+    }
+
+    private func setActiveOperation(_ operationID: UInt64?) {
+        stateLock.lock()
+        activeOperationID = operationID
+        stateLock.unlock()
+    }
+
+    private func isCurrentOperation(_ operationID: UInt64) -> Bool {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return activeOperationID == operationID
+    }
+
+    private func setFormatSignature(_ signature: AudioInputFormatSignature?) {
+        stateLock.lock()
+        currentFormatSignature = signature
         stateLock.unlock()
     }
 
@@ -269,7 +342,7 @@ final class MacMicrophoneCapture: AudioCaptureSource {
         return false
     }
 
-    private func logFirstConversion(_ message: String) {
+    private func logFirstConversion(operationID: UInt64, message: String) {
         stateLock.lock()
         let shouldLog = firstConversionOperationID != operationID
         if shouldLog { firstConversionOperationID = operationID }

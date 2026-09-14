@@ -57,6 +57,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     private var wakeRecoveryWorkItem: DispatchWorkItem?
     private var captureRecoveryWorkItem: DispatchWorkItem?
     private var microphoneStartupWorkItem: DispatchWorkItem?
+    private var microphoneConversionHealthWorkItem: DispatchWorkItem?
     private var archiveStatusWorkItem: DispatchWorkItem?
     private var lastAudioCaptureRecoveryAt: Date?
     // Kept in one place so the wake recovery policy is easy to tune.
@@ -64,6 +65,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     private let microphoneStartupRetryDelay: TimeInterval = 0.45
     private let microphoneStartupRetryLimit = 2
     private let microphoneFirstBufferTimeout: TimeInterval = 1.2
+    private let microphoneConversionTimeout: TimeInterval = 2.5
     private var isRecoveringAudioCapture = false
     private var summaryTask: URLSessionDataTask?
     private var summaryRequestID = UUID()
@@ -90,6 +92,8 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     private var socketReady = false
     private var microphoneStartupAttemptID = UUID()
     private var microphoneRawCallbackReceived = false
+    private var microphoneConvertedPCMReceived = false
+    private var microphoneFormatSignature: AudioInputFormatSignature?
     #if DEBUG
     private var microphoneConvertedPCMAttemptID: UUID?
     private var microphoneQueuedPCMAttemptID: UUID?
@@ -203,14 +207,24 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
             // startup can emit one while its tap is already delivering data.
             // Inspect the live engine after a short settling period before
             // tearing down a healthy pipeline.
-            guard !self.microphoneCapture.isRunning
-                    || !self.microphoneCapture.hasRecentRawCallback(within: 0.35) else { return }
-            self.isRecoveringAudioCapture = true
-            self.audioCaptureState = .recovering
-            self.lastAudioCaptureRecoveryAt = Date()
-            self.status = "音频输入已中断，正在恢复录音"
-            self.stopMicrophoneCapture()
-            self.startMicrophoneCaptureWithRetry(
+            self.microphoneCapture.inspectCurrentInputFormat { [weak self] currentSignature in
+                guard let self,
+                      self.activeSessionID == sessionID,
+                      self.isRecording,
+                      !self.isSystemSleeping else { return }
+                let formatChanged = currentSignature != self.microphoneFormatSignature
+                guard !self.microphoneCapture.isRunning
+                        || !self.microphoneCapture.hasRecentRawCallback(within: 0.35)
+                        || formatChanged else { return }
+                #if DEBUG
+                MicrophoneLifecycleLog.mark("capture recovery reason=\(formatChanged ? "input format changed" : "raw callback stopped") old=\(self.microphoneFormatSignature.map(String.init(describing:)) ?? "none") new=\(currentSignature.map(String.init(describing:)) ?? "none")")
+                #endif
+                self.isRecoveringAudioCapture = true
+                self.audioCaptureState = .recovering
+                self.lastAudioCaptureRecoveryAt = Date()
+                self.status = "音频输入已中断，正在恢复录音"
+                self.stopMicrophoneCapture()
+                self.startMicrophoneCaptureWithRetry(
                 sessionID: sessionID,
                 onReady: {
                     self.isRecoveringAudioCapture = false
@@ -223,7 +237,8 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
                     self.isRecoveringAudioCapture = false
                     self.failActiveRecording(message: "音频输入恢复失败：\(error.localizedDescription)")
                 }
-            )
+                )
+            }
         }
         captureRecoveryWorkItem?.cancel()
         captureRecoveryWorkItem = workItem
@@ -251,6 +266,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
             _ = lifecycleState.handle(.userStop)
         }
         errorMessage = message
+        audioCaptureState = .failed(message)
         status = wasRecovery ? "录音恢复失败" : "音频输入已中断"
     }
 
@@ -497,6 +513,9 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         activeSessionID = sessionID
         microphoneStartupAttemptID = UUID()
         microphoneTapInstalled = false
+        microphoneRawCallbackReceived = false
+        microphoneConvertedPCMReceived = false
+        microphoneFormatSignature = nil
         #if DEBUG
         microphoneConvertedPCMAttemptID = nil
         microphoneQueuedPCMAttemptID = nil
@@ -525,6 +544,13 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         let attemptID = UUID()
         microphoneStartupAttemptID = attemptID
         microphoneRawCallbackReceived = false
+        microphoneConvertedPCMReceived = false
+        microphoneFormatSignature = nil
+        microphoneConversionHealthWorkItem?.cancel()
+        microphoneConversionHealthWorkItem = nil
+        #if DEBUG
+        microphoneConvertedPCMAttemptID = nil
+        #endif
         #if DEBUG
         MicrophoneLifecycleLog.mark("mic startup requested attempt=\(attempt)")
         #endif
@@ -537,20 +563,28 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
                           self.microphoneStartupAttemptID == attemptID,
                           self.isRecording else { return }
                     self.microphoneRawCallbackReceived = true
+                    self.updateMicrophoneCaptureStateIfReady()
                 }
             },
             onAudio: { [weak self] buffer in
                 guard let self else { return }
-                #if DEBUG
                 DispatchQueue.main.async { [weak self] in
                     guard let self,
                           self.activeSessionID == sessionID,
                           self.microphoneStartupAttemptID == attemptID,
-                          self.microphoneConvertedPCMAttemptID != attemptID else { return }
+                          self.isRecording else { return }
+                    #if DEBUG
+                    guard self.microphoneConvertedPCMAttemptID != attemptID else {
+                        return
+                    }
                     self.microphoneConvertedPCMAttemptID = attemptID
+                    #endif
+                    self.microphoneConvertedPCMReceived = true
+                    self.updateMicrophoneCaptureStateIfReady()
+                    #if DEBUG
                     MicrophoneLifecycleLog.mark("converted PCM produced frames=\(buffer.frameLength)")
+                    #endif
                 }
-                #endif
                 let level = Self.rmsLevel(buffer)
                 DispatchQueue.main.async { [weak self] in
                     guard let self,
@@ -570,9 +604,11 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
                       self.isRecording,
                       !self.isSystemSleeping else { return }
                 switch result {
-                case .success:
+                case .success(let inputFormat):
                     self.microphoneTapInstalled = true
-                    self.audioCaptureState = self.inputMode.includesComputerAudio && !self.systemAudioReady ? .starting : .active
+                    self.microphoneFormatSignature = AudioInputFormatSignature(inputFormat)
+                    self.audioCaptureState = .starting
+                    self.updateMicrophoneCaptureStateIfReady()
                     self.isRecoveringAudioCapture = false
                     self.finishWakeRecoveryIfReady()
                     onReady()
@@ -581,6 +617,11 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
                         attemptID: attemptID,
                         attempt: attempt,
                         onReady: onReady,
+                        onFailure: onFailure
+                    )
+                    self.scheduleMicrophoneConversionHealthCheck(
+                        sessionID: sessionID,
+                        attemptID: attemptID,
                         onFailure: onFailure
                     )
                 case .failure(let error):
@@ -595,6 +636,43 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
                 }
             }
         )
+    }
+
+    private func updateMicrophoneCaptureStateIfReady() {
+        guard microphoneTapInstalled,
+              microphoneRawCallbackReceived,
+              microphoneConvertedPCMReceived else { return }
+        guard !inputMode.includesComputerAudio || systemAudioReady else { return }
+        audioCaptureState = .active
+    }
+
+    private func scheduleMicrophoneConversionHealthCheck(
+        sessionID: UUID,
+        attemptID: UUID,
+        onFailure: @escaping (Error) -> Void
+    ) {
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self,
+                  self.activeSessionID == sessionID,
+                  self.microphoneStartupAttemptID == attemptID,
+                  self.isRecording,
+                  self.microphoneTapInstalled else { return }
+            guard self.microphoneRawCallbackReceived, !self.microphoneConvertedPCMReceived else { return }
+            #if DEBUG
+            MicrophoneLifecycleLog.mark("conversion health timeout raw callback healthy")
+            #endif
+            let error = NSError(
+                domain: "Echo",
+                code: 6,
+                userInfo: [NSLocalizedDescriptionKey: "麦克风已连接，但音频转换失败。"]
+            )
+            self.audioCaptureState = .failed(error.localizedDescription)
+            self.stopMicrophoneCapture()
+            onFailure(error)
+        }
+        microphoneConversionHealthWorkItem?.cancel()
+        microphoneConversionHealthWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + microphoneConversionTimeout, execute: workItem)
     }
 
     private func scheduleMicrophoneCallbackCheck(
@@ -698,6 +776,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
                 if !targetMode.requiresMicrophone || self.microphoneTapInstalled {
                     self.audioCaptureState = .active
                 }
+                self.updateMicrophoneCaptureStateIfReady()
                 if let previousMode {
                     self.activateInputMode(targetMode)
                     self.removeSourcesNotNeeded(from: previousMode, to: targetMode)
@@ -743,6 +822,11 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         microphoneStartupAttemptID = UUID()
         microphoneStartupWorkItem?.cancel()
         microphoneStartupWorkItem = nil
+        microphoneConversionHealthWorkItem?.cancel()
+        microphoneConversionHealthWorkItem = nil
+        microphoneRawCallbackReceived = false
+        microphoneConvertedPCMReceived = false
+        microphoneFormatSignature = nil
         microphoneCapture.stop()
         microphoneTapInstalled = false
         if !isRecording { audioCaptureState = .idle }
