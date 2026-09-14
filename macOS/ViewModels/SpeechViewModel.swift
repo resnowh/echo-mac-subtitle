@@ -53,12 +53,11 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     // Kept in one place so the wake recovery policy is easy to tune.
     private let lifecycleRecoveryDelay: TimeInterval = 0.75
     private let microphoneStartupRetryDelay: TimeInterval = 0.45
-    private let microphoneStartupRetryLimit = 4
+    private let microphoneStartupRetryLimit = 2
     private let microphoneFirstBufferTimeout: TimeInterval = 1.2
     private var isRecoveringAudioCapture = false
     private var summaryTask: URLSessionDataTask?
     private var summaryRequestID = UUID()
-    private var converter: AVAudioConverter?
     private var targetAudioFormat: AVAudioFormat?
     private var systemAudioCapture: SystemAudioCaptureSource?
     private var systemConverter: AVAudioConverter?
@@ -80,6 +79,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     private var activeSessionID = UUID()
     private var isClosingSocket = false
     private var socketReady = false
+    private var microphoneStartupAttemptID = UUID()
     private var microphoneCallbackReceived = false
     private var audioFrameCursors: [PCM16Source: Int64] = [:]
     private var currentSpeaker: String?
@@ -122,7 +122,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         super.init()
         lifecycleObserver.onWillSleep = { [weak self] in self?.handleSystemWillSleep() }
         lifecycleObserver.onDidWake = { [weak self] in self?.handleSystemDidWake() }
-        lifecycleObserver.onAudioConfigurationChange = { [weak self] in self?.handleAudioConfigurationChange() }
+        microphoneCapture.onConfigurationChange = { [weak self] in self?.handleAudioConfigurationChange() }
         lifecycleObserver.start()
     }
 
@@ -190,17 +190,20 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
                 self.isRecoveringAudioCapture = false
                 return
             }
-            do {
-                try self.startMicrophoneCapture(sessionID: sessionID)
-                self.isRecoveringAudioCapture = false
-                self.finishWakeRecoveryIfReady()
-                if !self.lifecycleState.isRecovering {
-                    self.status = "正在通过 Soniox 实时识别与翻译（\(self.inputMode.title)）"
+            self.startMicrophoneCaptureWithRetry(
+                sessionID: sessionID,
+                onReady: {
+                    self.isRecoveringAudioCapture = false
+                    self.finishWakeRecoveryIfReady()
+                    if !self.lifecycleState.isRecovering {
+                        self.status = "正在通过 Soniox 实时识别与翻译（\(self.inputMode.title)）"
+                    }
+                },
+                onFailure: { error in
+                    self.isRecoveringAudioCapture = false
+                    self.failActiveRecording(message: "音频输入恢复失败：\(error.localizedDescription)")
                 }
-            } catch {
-                self.isRecoveringAudioCapture = false
-                self.failActiveRecording(message: "音频输入恢复失败：\(error.localizedDescription)")
-            }
+            )
         }
         captureRecoveryWorkItem?.cancel()
         captureRecoveryWorkItem = workItem
@@ -209,7 +212,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
 
     private func finishWakeRecoveryIfReady() {
         guard lifecycleState.isRecovering, isRecording, socketReady else { return }
-        guard (!inputMode.requiresMicrophone || (microphoneTapInstalled && microphoneCapture.isEngineActuallyRunning)),
+        guard (!inputMode.requiresMicrophone || microphoneTapInstalled),
               (!inputMode.includesComputerAudio || systemAudioReady) else { return }
         _ = lifecycleState.handle(.recoverySucceeded)
         sonioxConnectionState = .connected
@@ -328,16 +331,22 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     private func finishMicrophoneInputSwitch(to mode: AudioInputMode, from previousMode: AudioInputMode) {
-        do {
-            try startMicrophoneCapture(sessionID: activeSessionID)
-            activateInputMode(mode)
-            removeSourcesNotNeeded(from: previousMode, to: mode)
-            isSwitchingInput = false
-        } catch {
-            isSwitchingInput = false
-            errorMessage = "话筒启动失败：\(error.localizedDescription)"
-            status = "输入源未切换"
-        }
+        let sessionID = activeSessionID
+        startMicrophoneCaptureWithRetry(
+            sessionID: sessionID,
+            onReady: { [weak self] in
+                guard let self, self.activeSessionID == sessionID, self.isRecording else { return }
+                self.activateInputMode(mode)
+                self.removeSourcesNotNeeded(from: previousMode, to: mode)
+                self.isSwitchingInput = false
+            },
+            onFailure: { [weak self] error in
+                guard let self, self.activeSessionID == sessionID else { return }
+                self.isSwitchingInput = false
+                self.errorMessage = "话筒启动失败：\(error.localizedDescription)"
+                self.status = "输入源未切换"
+            }
+        )
     }
 
     private func removeSourcesNotNeeded(from previousMode: AudioInputMode, to mode: AudioInputMode) {
@@ -412,7 +421,6 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
                 throw NSError(domain: "Echo", code: 4, userInfo: [NSLocalizedDescriptionKey: "无法准备 Soniox 音频格式。"])
             }
             targetAudioFormat = targetFormat
-            converter = nil
             resetSessionState()
             openSonioxSocket(apiKey: apiKey, sessionID: activeSessionID)
             isRecording = true
@@ -423,7 +431,13 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
             }
 
             if inputMode.requiresMicrophone {
-                startMicrophoneCaptureWithRetry(sessionID: activeSessionID)
+                startMicrophoneCaptureWithRetry(
+                    sessionID: activeSessionID,
+                    onReady: {},
+                    onFailure: { [weak self] error in
+                        self?.abortCaptureStart(with: "麦克风启动失败：\(error.localizedDescription)")
+                    }
+                )
             }
             if inputMode.includesComputerAudio {
                 isSwitchingInput = true
@@ -460,6 +474,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         sessionEntriesStartIndex = entries.count
         lastSummarizedEntrySignatures = [:]
         activeSessionID = sessionID
+        microphoneStartupAttemptID = UUID()
         microphoneTapInstalled = false
         systemAudioCapture = nil
         systemAudioReady = false
@@ -468,70 +483,128 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         systemInputChannelCount = 0
     }
 
-    private func startMicrophoneCapture(sessionID: UUID) throws {
-        let inputFormat = microphoneCapture.refreshInputFormat()
-        guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else {
-            throw NSError(domain: "Echo", code: 3, userInfo: [NSLocalizedDescriptionKey: "没有检测到可用的麦克风输入，请检查 Mac 的输入设备设置。"])
-        }
-        guard let targetFormat = targetAudioFormat,
-              let converter = AVAudioConverter(from: inputFormat, to: targetFormat) else {
-            throw NSError(domain: "Echo", code: 4, userInfo: [NSLocalizedDescriptionKey: "无法准备麦克风音频格式。"])
-        }
-
-        self.converter = converter
-        try microphoneCapture.start { [weak self] buffer in
-            self?.microphoneCallbackReceived = true
-            let level = Self.rmsLevel(buffer)
-            DispatchQueue.main.async { [weak self] in self?.recordAudioLevel(level) }
-            self?.audioQueue.async { [weak self] in
-                self?.sendAudio(buffer, sessionID: sessionID)
-            }
-        }
-        microphoneTapInstalled = true
-    }
-
-    private func startMicrophoneCaptureWithRetry(sessionID: UUID, attempt: Int = 0) {
+    private func startMicrophoneCaptureWithRetry(
+        sessionID: UUID,
+        attempt: Int = 0,
+        onReady: @escaping () -> Void,
+        onFailure: @escaping (Error) -> Void
+    ) {
         guard activeSessionID == sessionID, isRecording, !isSystemSleeping else { return }
-        do {
-            microphoneCallbackReceived = false
-            try startMicrophoneCapture(sessionID: sessionID)
-            finishWakeRecoveryIfReady()
-            scheduleMicrophoneCallbackCheck(sessionID: sessionID, attempt: attempt)
-        } catch {
-            scheduleMicrophoneStartupRetry(sessionID: sessionID, attempt: attempt, error: error)
+        guard let targetFormat = targetAudioFormat else {
+            onFailure(NSError(domain: "Echo", code: 4, userInfo: [NSLocalizedDescriptionKey: "无法准备麦克风音频格式。"]))
+            return
         }
+
+        let attemptID = UUID()
+        microphoneStartupAttemptID = attemptID
+        microphoneCallbackReceived = false
+        #if DEBUG
+        MicrophoneLifecycleLog.mark("mic startup requested attempt=\(attempt)")
+        #endif
+        microphoneCapture.start(
+            targetFormat: targetFormat,
+            onAudio: { [weak self] buffer in
+                guard let self else { return }
+                let level = Self.rmsLevel(buffer)
+                DispatchQueue.main.async { [weak self] in
+                    guard let self,
+                          self.activeSessionID == sessionID,
+                          self.microphoneStartupAttemptID == attemptID,
+                          self.isRecording else { return }
+                    self.microphoneCallbackReceived = true
+                    self.recordAudioLevel(level)
+                }
+                self.audioQueue.async { [weak self] in
+                    self?.sendAudio(buffer, sessionID: sessionID, attemptID: attemptID)
+                }
+            },
+            completion: { [weak self] result in
+                guard let self,
+                      self.activeSessionID == sessionID,
+                      self.microphoneStartupAttemptID == attemptID,
+                      self.isRecording,
+                      !self.isSystemSleeping else { return }
+                switch result {
+                case .success:
+                    self.microphoneTapInstalled = true
+                    self.isRecoveringAudioCapture = false
+                    self.finishWakeRecoveryIfReady()
+                    onReady()
+                    self.scheduleMicrophoneCallbackCheck(
+                        sessionID: sessionID,
+                        attemptID: attemptID,
+                        attempt: attempt,
+                        onReady: onReady,
+                        onFailure: onFailure
+                    )
+                case .failure(let error):
+                    self.scheduleMicrophoneStartupRetry(
+                        sessionID: sessionID,
+                        attempt: attempt,
+                        error: error,
+                        onReady: onReady,
+                        onFailure: onFailure
+                    )
+                }
+            }
+        )
     }
 
-    private func scheduleMicrophoneCallbackCheck(sessionID: UUID, attempt: Int) {
+    private func scheduleMicrophoneCallbackCheck(
+        sessionID: UUID,
+        attemptID: UUID,
+        attempt: Int,
+        onReady: @escaping () -> Void,
+        onFailure: @escaping (Error) -> Void
+    ) {
         let workItem = DispatchWorkItem { [weak self] in
             guard let self,
                   self.activeSessionID == sessionID,
+                  self.microphoneStartupAttemptID == attemptID,
                   self.isRecording,
-                  self.microphoneTapInstalled,
-                  !self.microphoneCallbackReceived else { return }
+                  self.microphoneTapInstalled else { return }
+            guard !self.microphoneCallbackReceived else { return }
             self.stopMicrophoneCapture()
             let error = NSError(
                 domain: "Echo",
                 code: 5,
                 userInfo: [NSLocalizedDescriptionKey: "麦克风没有产生音频输入。"]
             )
-            self.scheduleMicrophoneStartupRetry(sessionID: sessionID, attempt: attempt, error: error)
+            self.scheduleMicrophoneStartupRetry(
+                sessionID: sessionID,
+                attempt: attempt,
+                error: error,
+                onReady: onReady,
+                onFailure: onFailure
+            )
         }
         microphoneStartupWorkItem?.cancel()
         microphoneStartupWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + microphoneFirstBufferTimeout, execute: workItem)
     }
 
-    private func scheduleMicrophoneStartupRetry(sessionID: UUID, attempt: Int, error: Error) {
+    private func scheduleMicrophoneStartupRetry(
+        sessionID: UUID,
+        attempt: Int,
+        error: Error,
+        onReady: @escaping () -> Void,
+        onFailure: @escaping (Error) -> Void
+    ) {
         guard activeSessionID == sessionID, isRecording, !isSystemSleeping else { return }
         guard attempt < microphoneStartupRetryLimit else {
-            abortCaptureStart(with: "麦克风启动失败：\(error.localizedDescription)")
+            onFailure(error)
             return
         }
 
         status = "正在准备麦克风…"
+        isRecoveringAudioCapture = true
         let workItem = DispatchWorkItem { [weak self] in
-            self?.startMicrophoneCaptureWithRetry(sessionID: sessionID, attempt: attempt + 1)
+            self?.startMicrophoneCaptureWithRetry(
+                sessionID: sessionID,
+                attempt: attempt + 1,
+                onReady: onReady,
+                onFailure: onFailure
+            )
         }
         microphoneStartupWorkItem?.cancel()
         microphoneStartupWorkItem = workItem
@@ -612,10 +685,11 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     private func stopMicrophoneCapture() {
-        guard microphoneTapInstalled else { return }
+        microphoneStartupAttemptID = UUID()
+        microphoneStartupWorkItem?.cancel()
+        microphoneStartupWorkItem = nil
         microphoneCapture.stop()
         microphoneTapInstalled = false
-        converter = nil
     }
 
     private func stopSystemAudioCapture() {
@@ -871,25 +945,12 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         sonioxConnectionState = .failed
     }
 
-    private func sendAudio(_ buffer: AVAudioPCMBuffer, sessionID: UUID) {
-        guard activeSessionID == sessionID, let converter, let targetFormat = targetAudioFormat else { return }
-        let ratio = targetFormat.sampleRate / max(buffer.format.sampleRate, 1)
-        let capacity = AVAudioFrameCount(max(1, Int(Double(buffer.frameLength) * ratio) + 1024))
-        guard let converted = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: capacity) else { return }
-        var consumed = false
-        var conversionError: NSError?
-        let conversionStatus = converter.convert(to: converted, error: &conversionError) { _, status in
-            if consumed {
-                status.pointee = .noDataNow
-                return nil
-            }
-            consumed = true
-            status.pointee = .haveData
-            return buffer
-        }
-        guard conversionStatus != .error, converted.frameLength > 0,
-              let dataPointer = converted.audioBufferList.pointee.mBuffers.mData else { return }
-        let dataSize = Int(converted.audioBufferList.pointee.mBuffers.mDataByteSize)
+    private func sendAudio(_ buffer: AVAudioPCMBuffer, sessionID: UUID, attemptID: UUID) {
+        guard activeSessionID == sessionID,
+              microphoneStartupAttemptID == attemptID,
+              buffer.frameLength > 0,
+              let dataPointer = buffer.audioBufferList.pointee.mBuffers.mData else { return }
+        let dataSize = Int(buffer.audioBufferList.pointee.mBuffers.mDataByteSize)
         let data = Data(bytes: dataPointer, count: dataSize)
         enqueueAudio(data, source: .microphone, sessionID: sessionID)
     }
