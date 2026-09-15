@@ -72,6 +72,7 @@ chmod +x build_mac.command
 
 ## 相关文档
 
+- [产品路线图：Mac 体验优先，Windows 随后](docs/roadmap/README.md)（设计计划，尚未实现 Windows/移动端）
 - [当前架构](docs/architecture.md)
 - [数据模型与持久化](docs/data-model.md)
 - [变更记录](CHANGELOG.md)
