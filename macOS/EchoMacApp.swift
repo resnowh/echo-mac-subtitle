@@ -53,7 +53,7 @@ private struct WindowAccessor: NSViewRepresentable {
 struct ContentView: View {
     @StateObject private var model = SpeechViewModel()
     @State private var showSettings = false
-    @State private var isSummaryExpanded = false
+    @State private var isSummaryExpanded = true
     @AppStorage("themeMode") private var themeModeRaw = AppThemeMode.dark.rawValue
 
     private var themeMode: AppThemeMode {
@@ -211,12 +211,14 @@ struct ContentView: View {
                             .foregroundStyle(.secondary)
                     }
                     if !model.summaryText.isEmpty {
-                        ScrollView(.vertical) {
-                            MarkdownSummaryView(markdown: model.summaryText)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .textSelection(.enabled)
+                        if isSummaryExpanded {
+                            ScrollView(.vertical) {
+                                MarkdownSummaryView(markdown: model.summaryText)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .textSelection(.enabled)
+                            }
+                            .frame(maxHeight: 420)
                         }
-                        .frame(maxHeight: isSummaryExpanded ? 420 : 250)
                         HStack(spacing: 12) {
                             Button(isSummaryExpanded ? "收起" : "展开全部") {
                                 isSummaryExpanded.toggle()
