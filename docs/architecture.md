@@ -34,7 +34,7 @@ Audio Source
 - `Audio/MacSystemAudioCapture.swift`：macOS ScreenCaptureKit 系统音频实现。
 - `Audio/PCM16AudioPipeline.swift`：统一 PCM 块表示、双输入按 frame 对齐混音、以及有界 pre-buffer。该文件不依赖 SwiftUI 或 ScreenCaptureKit。
 - `Services/SonioxRequestBuilder.swift`：把 `RecognitionConfig` 映射到 Soniox request 字段，包括语言提示、严格限制、翻译、语言识别和 speaker diarization。
-- `Services/SonioxWebSocketClient.swift`：只负责 Soniox WebSocket 的建立、配置发送重试、接收循环、PCM 发送和关闭。
+- `Services/SonioxWebSocketClient.swift`：负责 Soniox WebSocket 建立、单次配置发送、接收循环、PCM 顺序发送和关闭。内部 transport 串行队列持有连接状态，消费者回调在独立串行队列执行；回调校验 socket identity。PCM 待发送量（含在途）最多 160 KB，建连/单次发送超时 15 秒；超限或超时明确失败。结束标记等待已接受的 PCM 发送完毕。配置发送失败不在原连接重发。
 - `Services/MacLifecycleObserver.swift`：集中注册和清理 macOS 睡眠、唤醒及 `AVAudioEngine` 配置变化通知，不承载录音业务。
 - `Models/LifecycleRecoveryState.swift`：平台无关的睡眠/唤醒恢复状态机，防止重复恢复并区分用户停止与系统生命周期事件。
 - `ViewModels/SpeechViewModel.swift`：协调录音 session、采集生命周期、WebSocket、token 状态、存档和 UI 发布状态。

@@ -67,10 +67,10 @@ final class PCM16TimelineMixer {
     }
 
     func append(_ data: Data, source: PCM16Source, startFrame: Int64, now: Date = Date()) -> [PCM16Chunk] {
-        let samples = Self.samples(from: data)
-        guard !samples.isEmpty else { return [] }
+        let frameCount = data.count / 2
+        guard frameCount > 0 else { return [] }
         buffers[source, default: []].append(PCM16Chunk(data: data, startFrame: startFrame))
-        latestFrame[source] = max(latestFrame[source] ?? 0, startFrame + Int64(samples.count))
+        latestFrame[source] = max(latestFrame[source] ?? 0, startFrame + Int64(frameCount))
         lastArrival[source] = now
         firstArrival = firstArrival ?? now
         nextFrame = nextFrame ?? startFrame
@@ -127,7 +127,13 @@ final class PCM16TimelineMixer {
             let index = frame - chunk.startFrame
             guard index >= 0 else { continue }
             guard index < Int64(chunk.frameCount) else { return nil }
-            return Self.samples(from: chunk.data)[Int(index)]
+            // Decode only the requested sample, not the entire PCM block for
+            // every output frame (quadratic work in the old hot path).
+            return chunk.data.withUnsafeBytes { raw in
+                let bytes = raw.bindMemory(to: UInt8.self)
+                let offset = Int(index) * 2
+                return Int16(bitPattern: UInt16(bytes[offset]) | (UInt16(bytes[offset + 1]) << 8))
+            }
         }
         return nil
     }

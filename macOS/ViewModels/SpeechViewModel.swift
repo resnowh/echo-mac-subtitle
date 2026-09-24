@@ -1511,7 +1511,12 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         return text.replacingOccurrences(of: "关税", with: "导数")
     }
 
+    private var lastAudioLevelPublication: TimeInterval = 0
+
     private func recordAudioLevel(_ level: Double) {
+        let now = ProcessInfo.processInfo.systemUptime
+        guard now - lastAudioLevelPublication >= 1.0 / 20 else { return }
+        lastAudioLevelPublication = now
         // Attack quickly when speech starts, then decay more slowly. This
         // keeps the history readable without inventing movement when silent.
         isReceivingAudio = true
@@ -2040,14 +2045,14 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     private func saveCurrentSessionFile(force: Bool = false) {
-        let source = Array(entries.dropFirst(sessionEntriesStartIndex))
-            .filter { !$0.english.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        guard !source.isEmpty else { return }
         if !force,
            let lastSessionFileSaveAt,
            Date().timeIntervalSince(lastSessionFileSaveAt) < 3 {
             return
         }
+        let source = Array(entries.dropFirst(sessionEntriesStartIndex))
+            .filter { !$0.english.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        guard !source.isEmpty else { return }
         let url: URL
         if let currentSessionFileURL { url = currentSessionFileURL }
         else {

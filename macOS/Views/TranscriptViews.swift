@@ -98,22 +98,15 @@ struct MarkdownSummaryView: View {
     }
 }
 
-private struct TranscriptBottomPreferenceKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
 struct SynchronizedTranscriptView: View {
     let entries: [SubtitleEntry]
     let recognitionConfig: RecognitionConfig
     @State private var isAtBottom = true
     @State private var hasNewContent = false
+    @State private var isUserScrolling = false
 
     var body: some View {
-        GeometryReader { container in
+        GeometryReader { _ in
             ScrollViewReader { proxy in
                 ZStack(alignment: .bottomTrailing) {
                     VStack(spacing: 0) {
@@ -132,58 +125,62 @@ struct SynchronizedTranscriptView: View {
                         Divider().opacity(0.55)
 
                         ScrollView(.vertical) {
-                            VStack(spacing: 0) {
+                            LazyVStack(spacing: 0) {
                                 if entries.isEmpty {
                                     Text("开始录音后，每条识别结果会保留在这里")
                                         .foregroundStyle(.secondary)
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                         .padding(.top, 14)
                                 } else {
-                                    ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
-                                        if isNewDay(at: index) {
-                                            Text(dayLabel(for: entry))
-                                                .font(.subheadline.weight(.semibold))
-                                                .foregroundStyle(.secondary)
-                                                .frame(maxWidth: .infinity, alignment: .leading)
-                                                .padding(.top, 12)
-                                                .padding(.bottom, 4)
-                                        }
-                                        VStack(alignment: .leading, spacing: 5) {
-                                            Text(metadata(for: entry))
-                                                .font(.caption.monospacedDigit())
-                                                .foregroundStyle(.secondary)
-
-                                            HStack(alignment: .top, spacing: 14) {
-                                                Text(entry.english.isEmpty ? "…" : entry.english)
+                                    ForEach(entries.indices, id: \.self) { index in
+                                        let entry = entries[index]
+                                        VStack(spacing: 0) {
+                                            if isNewDay(at: index) {
+                                                Text(dayLabel(for: entry))
+                                                    .font(.subheadline.weight(.semibold))
+                                                    .foregroundStyle(.secondary)
                                                     .frame(maxWidth: .infinity, alignment: .leading)
-
-                                                if recognitionConfig.translationEnabled {
-                                                    Text(entry.chinese.isEmpty ? " " : entry.chinese)
-                                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                                }
+                                                    .padding(.top, 12)
+                                                    .padding(.bottom, 4)
                                             }
-                                            .font(.body)
-                                            .lineSpacing(3)
+                                            VStack(alignment: .leading, spacing: 5) {
+                                                Text(metadata(for: entry))
+                                                    .font(.caption.monospacedDigit())
+                                                    .foregroundStyle(.secondary)
+
+                                                HStack(alignment: .top, spacing: 14) {
+                                                    Text(entry.english.isEmpty ? "…" : entry.english)
+                                                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                                                    if recognitionConfig.translationEnabled {
+                                                        Text(entry.chinese.isEmpty ? " " : entry.chinese)
+                                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                                    }
+                                                }
+                                                .font(.body)
+                                                .lineSpacing(3)
+                                            }
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .padding(.vertical, 7)
+                                            Divider()
                                         }
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .padding(.vertical, 7)
-                                        Divider()
                                     }
                                 }
-                                GeometryReader { bottom in
-                                    Color.clear
-                                        .preference(key: TranscriptBottomPreferenceKey.self,
-                                                    value: bottom.frame(in: .named("transcriptScroll")).maxY)
-                                }
-                                .frame(height: 1)
+                                Color.clear.frame(height: 1).id("subtitle-bottom")
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .id("subtitle-content")
                         }
                         .coordinateSpace(name: "transcriptScroll")
-                        .onPreferenceChange(TranscriptBottomPreferenceKey.self) { bottomMaxY in
-                            let nowAtBottom = bottomMaxY <= container.size.height + 24
-                            isAtBottom = nowAtBottom
+                        .onScrollPhaseChange { _, phase in
+                            isUserScrolling = phase == .tracking || phase == .interacting || phase == .decelerating
+                        }
+                        .onScrollGeometryChange(for: Bool.self) { geometry in
+                            geometry.contentSize.height - geometry.contentOffset.y - geometry.containerSize.height <= 32
+                        } action: { _, nowAtBottom in
+                            // Content growth must not be mistaken for the user
+                            // scrolling away from the live end.
+                            if isUserScrolling || nowAtBottom { isAtBottom = nowAtBottom }
                             if nowAtBottom { hasNewContent = false }
                         }
                     }
@@ -203,8 +200,8 @@ struct SynchronizedTranscriptView: View {
                     }
                 }
                 .onChange(of: entries.count) { _, _ in contentDidChange(proxy) }
-                .onChange(of: entries.map(\.english).joined()) { _, _ in contentDidChange(proxy) }
-                .onChange(of: entries.map(\.chinese).joined()) { _, _ in contentDidChange(proxy) }
+                .onChange(of: entries.last?.english) { _, _ in contentDidChange(proxy) }
+                .onChange(of: entries.last?.chinese) { _, _ in contentDidChange(proxy) }
             }
         }
         .frame(minHeight: 220, maxHeight: .infinity)
@@ -235,11 +232,9 @@ struct SynchronizedTranscriptView: View {
     }
 
     private func timestamp(for entry: SubtitleEntry) -> String {
-        let timeFormatter = DateFormatter()
-        timeFormatter.locale = Locale(identifier: "en_US_POSIX")
-        timeFormatter.timeZone = .current
-        timeFormatter.dateFormat = "HH:mm:ss"
-        return timeFormatter.string(from: entry.recordedAt ?? Date(timeIntervalSince1970: entry.start))
+        (entry.recordedAt ?? Date(timeIntervalSince1970: entry.start))
+            .formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits).second(.twoDigits)
+                .locale(Locale(identifier: "en_GB")))
     }
 
     private func isNewDay(at index: Int) -> Bool {
@@ -270,9 +265,7 @@ struct SynchronizedTranscriptView: View {
     }
 
     private func scrollToBottom(_ proxy: ScrollViewProxy) {
-        withAnimation(.easeOut(duration: 0.18)) {
-            proxy.scrollTo("subtitle-content", anchor: .bottom)
-        }
+        proxy.scrollTo("subtitle-bottom", anchor: .bottom)
     }
 }
 

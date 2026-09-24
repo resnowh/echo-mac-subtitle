@@ -90,41 +90,16 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 10) {
-                    Menu {
-                        ForEach(AudioInputMode.allCases) { mode in
-                            Button {
-                                model.setInputMode(mode)
-                            } label: {
-                                AudioInputModeLabel(mode: mode)
-                            }
-                        }
-                    } label: {
-                        AudioInputModeLabel(mode: model.inputMode)
-                            .frame(minWidth: 148, alignment: .leading)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 10) {
+                        recordingButtons
+                        connectionStatus
+                        Spacer(minLength: 0)
                     }
-                    .menuStyle(.borderedButton)
-                    .disabled(model.isSwitchingInput)
-                    .help(model.isSwitchingInput ? "正在切换输入源" : "选择输入源")
-
-                    Button(action: model.toggleRecording) {
-                        Label(model.isRecording ? "停止录音" : "开始录音", systemImage: model.isRecording ? "stop.fill" : "mic.fill")
-                            .frame(minWidth: 126)
+                    VStack(alignment: .leading, spacing: 6) {
+                        recordingButtons
+                        connectionStatus
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(model.isRecording ? .red : .mint)
-                    .layoutPriority(1)
-
-                    HStack(spacing: 7) {
-                        Circle()
-                            .fill(statusColor)
-                            .frame(width: 8, height: 8)
-                        Text(compactStatus)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                    .layoutPriority(1)
-                    Spacer(minLength: 0)
                 }
 
                 HStack(spacing: 10) {
@@ -142,102 +117,47 @@ struct ContentView: View {
                         }
                     } label: {
                         Label(model.selectedArchiveTitle, systemImage: "archivebox")
-                            .frame(minWidth: 180, alignment: .leading)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .frame(maxWidth: 260, alignment: .leading)
                     }
                     .menuStyle(.borderedButton)
                     .disabled(model.isRecording)
-                    .help("选择存档；下一次录音会接续所选存档")
+                    .help(model.selectedArchiveTitle)
 
-                    if !model.archiveStatus.isEmpty {
-                        Text(model.archiveStatus)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-
+                    Spacer(minLength: 0)
                     Button("导出") { model.exportAllSubtitles() }
                         .buttonStyle(.bordered)
+                        .fixedSize()
                         .disabled(model.entries.isEmpty || model.isRecording)
-                        .help("导出全部字幕")
 
                     Menu {
-                        Button("清空字幕", role: .destructive) {
-                            model.clearTranscript()
-                        }
-                        .disabled(model.isRecording || model.entries.isEmpty)
-                        Button("拆出本段") {
-                            model.splitCompletedSegment()
-                        }
-                        .disabled(!model.canSplitCompletedSegment)
-                    } label: {
-                        Label("更多", systemImage: "ellipsis")
-                    }
+                        Button("清空字幕", role: .destructive) { model.clearTranscript() }
+                            .disabled(model.isRecording || model.entries.isEmpty)
+                        Button("拆出本段") { model.splitCompletedSegment() }
+                            .disabled(!model.canSplitCompletedSegment)
+                    } label: { Text("更多") }
                     .menuStyle(.borderedButton)
-                    .help("更多存档操作")
-                    Spacer(minLength: 0)
+                    .fixedSize()
+                }
+                if !model.archiveStatus.isEmpty {
+                    Text(model.archiveStatus)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
                 }
 
                 HStack(spacing: 12) {
                     WaveformView(samples: model.waveformSamples, active: model.isRecording)
                     HStack(spacing: 6) {
-                        Circle()
-                            .fill(audioStatusColor)
-                            .frame(width: 8, height: 8)
-                        Text(audioStatusText)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                        Circle().fill(audioStatusColor).frame(width: 8, height: 8)
+                        Text(audioStatusText).font(.caption).foregroundStyle(.secondary)
                     }
-                    .frame(minWidth: 106, alignment: .leading)
+                    .fixedSize(horizontal: true, vertical: false)
                 }
             }
 
-            if model.isSummaryEnabled || !model.summaryText.isEmpty || !model.summaryStatus.isEmpty {
-                VStack(alignment: .leading, spacing: model.summaryText.isEmpty ? 6 : 8) {
-                    HStack {
-                        Label("AI 总结", systemImage: "sparkles")
-                            .font(.headline)
-                        if model.summaryText.isEmpty, model.isRecording {
-                            Text("录音中，可随时生成")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        summaryMenu
-                    }
-                    if !model.summaryStatus.isEmpty {
-                        Text(model.summaryStatus)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    if !model.summaryText.isEmpty {
-                        if isSummaryExpanded {
-                            ScrollView(.vertical) {
-                                MarkdownSummaryView(markdown: model.summaryText)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .textSelection(.enabled)
-                            }
-                            .frame(maxHeight: 420)
-                        }
-                        HStack(spacing: 12) {
-                            Button(isSummaryExpanded ? "收起" : "展开全部") {
-                                isSummaryExpanded.toggle()
-                            }
-                            .buttonStyle(.borderless)
-                            Button {
-                                copySummaryToPasteboard()
-                            } label: {
-                                Label("复制", systemImage: "doc.on.doc")
-                            }
-                            .buttonStyle(.borderless)
-                            Spacer()
-                        }
-                    }
-                }
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 10))
-            }
+            summaryPanel
             if !model.errorMessage.isEmpty {
                 HStack(alignment: .top, spacing: 10) {
                     Text(model.errorMessage)
@@ -245,24 +165,109 @@ struct ContentView: View {
                         .font(.callout)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     Button(action: model.dismissError) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
                     }
                     .buttonStyle(.borderless)
                     .help("关闭警告")
                 }
             }
         }
-        .padding(28)
+        .padding(20)
         .frame(minWidth: 680, idealWidth: 820, minHeight: 520, idealHeight: 650, alignment: .topLeading)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(
-            WindowAccessor(alwaysOnTop: model.isAlwaysOnTop)
-        )
-        .sheet(isPresented: $showSettings) {
-            SettingsView(model: model)
-        }
+        .background(WindowAccessor(alwaysOnTop: model.isAlwaysOnTop))
+        .sheet(isPresented: $showSettings) { SettingsView(model: model) }
         .preferredColorScheme(themeMode.colorScheme)
+    }
+
+    private var recordingButtons: some View {
+        HStack(spacing: 10) {
+            Menu {
+                ForEach(AudioInputMode.allCases) { mode in
+                    Button {
+                        model.setInputMode(mode)
+                    } label: {
+                        AudioInputModeLabel(mode: mode)
+                    }
+                }
+            } label: {
+                AudioInputModeLabel(mode: model.inputMode)
+                    .frame(minWidth: 148, alignment: .leading)
+            }
+            .menuStyle(.borderedButton)
+            .disabled(model.isSwitchingInput)
+            .help(model.isSwitchingInput ? "正在切换输入源" : "选择输入源")
+
+            Button(action: model.toggleRecording) {
+                Label(model.isRecording ? "停止录音" : "开始录音", systemImage: model.isRecording ? "stop.fill" : "mic.fill")
+                    .frame(minWidth: 126)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(model.isRecording ? .red : .mint)
+            .layoutPriority(1)
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private var connectionStatus: some View {
+        HStack(spacing: 7) {
+            Circle()
+                .fill(statusColor)
+                .frame(width: 8, height: 8)
+            Text(compactStatus)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    @ViewBuilder private var summaryPanel: some View {
+        if model.isSummaryEnabled || !model.summaryText.isEmpty || !model.summaryStatus.isEmpty {
+            VStack(alignment: .leading, spacing: model.summaryText.isEmpty ? 6 : 8) {
+                HStack {
+                    Label("AI 总结", systemImage: "sparkles")
+                        .font(.headline)
+                    if model.summaryText.isEmpty, model.isRecording {
+                        Text("录音中，可随时生成")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    summaryMenu
+                }
+                if !model.summaryStatus.isEmpty {
+                    Text(model.summaryStatus)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if !model.summaryText.isEmpty {
+                    if isSummaryExpanded {
+                        ScrollView(.vertical) {
+                            MarkdownSummaryView(markdown: model.summaryText)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .textSelection(.enabled)
+                        }
+                        .frame(maxHeight: 220)
+                    }
+                    HStack(spacing: 12) {
+                        Button(isSummaryExpanded ? "收起" : "展开全部") {
+                            isSummaryExpanded.toggle()
+                        }
+                        .buttonStyle(.borderless)
+                        Button {
+                            copySummaryToPasteboard()
+                        } label: {
+                            Label("复制", systemImage: "doc.on.doc")
+                        }
+                        .buttonStyle(.borderless)
+                        Spacer()
+                    }
+                }
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 10))
+        }
     }
 
     private func cycleThemeMode() {
@@ -281,7 +286,7 @@ struct ContentView: View {
         case .connecting:
             return "正在连接 Soniox…"
         case .connected:
-            return model.isReceivingAudio ? "Soniox 已连接 · 识别中" : "Soniox 已连接 · 等待声音"
+            return model.audioLevel > 0.035 ? "Soniox 已连接 · 识别中" : "Soniox 已连接 · 等待声音"
         case .recovering:
             return "正在恢复录音…"
         case .failed:
