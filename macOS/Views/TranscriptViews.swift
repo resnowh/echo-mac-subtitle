@@ -1,5 +1,146 @@
 import SwiftUI
 
+struct SubtitleCorrectionEditor: View {
+    @ObservedObject var model: SpeechViewModel
+    let entry: SubtitleEntry
+    @Environment(\.dismiss) private var dismiss
+    @State private var source: String
+    @State private var translation: String
+    @State private var baselineSource: String
+    @State private var baselineTranslation: String
+    @State private var term = ""
+    @State private var termNotice = ""
+    @State private var confirmDiscard = false
+
+    init(model: SpeechViewModel, entry: SubtitleEntry) {
+        self.model = model
+        self.entry = entry
+        _source = State(initialValue: entry.english)
+        _translation = State(initialValue: entry.chinese)
+        _baselineSource = State(initialValue: entry.english)
+        _baselineTranslation = State(initialValue: entry.chinese)
+    }
+
+    private var current: SubtitleEntry? { model.entries.first { $0.id == entry.id } }
+    private var isDirty: Bool { source != baselineSource || translation != baselineTranslation }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("纠正字幕").font(.headline)
+                Spacer()
+                Button("关闭") {
+                    if isDirty { confirmDiscard = true } else { dismiss() }
+                }
+            }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("录音会继续。仅保存改动的字段；未编辑的内容继续接收识别结果。")
+                        .font(.caption).foregroundStyle(.secondary)
+                    if let current, current.english != baselineSource || current.chinese != baselineTranslation {
+                        Text("本条识别稿仍在更新；保存会覆盖你编辑过的字段。")
+                            .font(.caption).foregroundStyle(.orange)
+                        Button("载入最新识别稿") { reloadDraft() }.disabled(isDirty)
+                    }
+                    Text("原文").font(.subheadline.bold())
+                    TextEditor(text: $source).frame(height: 95)
+                        .overlay(RoundedRectangle(cornerRadius: 4).stroke(.secondary.opacity(0.3)))
+                    Text("译文").font(.subheadline.bold())
+                    TextEditor(text: $translation).frame(height: 95)
+                        .overlay(RoundedRectangle(cornerRadius: 4).stroke(.secondary.opacity(0.3)))
+                    HStack {
+                        Button("AI 校对") { model.requestCorrection(entry.id) }
+                            .disabled(isDirty || current == nil)
+                        Button("重新翻译") { model.requestCorrection(entry.id, translate: true) }
+                            .disabled(isDirty || current == nil || !model.recognitionConfig.translationEnabled)
+                        Button("撤销上次纠正") {
+                            model.undoCorrection(entry.id)
+                            reloadDraft()
+                        }
+                        .disabled(isDirty || current?.correction?.history.isEmpty != false)
+                    }
+                    Text(isDirty ? "请先保存修改，再请求 AI 校对或重新翻译。" : "AI 只读取文字；点击请求将本句和相邻上下文发送给 DeepSeek，可能产生费用。")
+                        .font(.caption).foregroundStyle(.secondary)
+                    if let status = model.correctionStatuses[entry.id] {
+                        Text(status).font(.caption).foregroundStyle(.secondary)
+                    }
+                    if model.archiveStatus.contains("失败") { Text(model.archiveStatus).foregroundStyle(.red) }
+                    if model.fileStatus.contains("失败") { Text(model.fileStatus).foregroundStyle(.red) }
+                    if let suggestion = model.correctionSuggestions[entry.id] {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(suggestion.uncertain ? "待确认建议（AI 无法确认原音）" : "AI 校对建议").font(.subheadline.bold())
+                            Text(suggestion.source)
+                            Text(suggestion.translation)
+                            Text(suggestion.reason).font(.caption).foregroundStyle(.secondary)
+                            Button("采用建议到编辑框") {
+                                source = suggestion.source
+                                if model.recognitionConfig.translationEnabled { translation = suggestion.translation }
+                            }
+                            .disabled(isDirty)
+                            Text("采用后仍需点击保存；请先核对专业词、数字和否定词。")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        .padding(10).background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+                    }
+                    if let correction = current?.correction {
+                        DisclosureGroup("识别稿与修改前版本") {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("识别稿（未应用手动纠正）").font(.caption.bold())
+                                Text(correction.rawSource)
+                                Text(correction.rawTranslation)
+                                ForEach(Array(correction.history.enumerated()), id: \.offset) { _, version in
+                                    Divider()
+                                    Text(version.date, style: .time).font(.caption)
+                                    Text(version.source)
+                                    Text(version.translation)
+                                }
+                            }.textSelection(.enabled)
+                        }
+                    }
+                    HStack {
+                        TextField("需要记住的专业词（可选）", text: $term)
+                        Button("加入术语表") {
+                            if model.addCorrectionTerm(term) {
+                                term = ""
+                                termNotice = "已加入；识别提示在下次建连生效"
+                            } else { termNotice = "术语已存在，或已达到 100 个上限" }
+                        }
+                        .disabled(term.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || term.count > 80)
+                    }
+                    if !termNotice.isEmpty { Text(termNotice).font(.caption).foregroundStyle(.secondary) }
+                    Text("已生成的总结不会自动重写；修正后的文字用于后续导出与总结。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            HStack {
+                Spacer()
+                Button("保存纠正") {
+                    model.saveCorrection(entry.id,
+                        source: source != baselineSource ? source : nil,
+                        translation: translation != baselineTranslation ? translation : nil)
+                    reloadDraft()
+                }
+                .buttonStyle(.borderedProminent).tint(.mint)
+                .disabled(!isDirty || current == nil || source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(20).frame(width: 560, height: 600)
+        .interactiveDismissDisabled(isDirty)
+        .confirmationDialog("放弃尚未保存的修改？", isPresented: $confirmDiscard) {
+            Button("放弃修改", role: .destructive) { dismiss() }
+            Button("继续编辑", role: .cancel) { }
+        }
+    }
+
+    private func reloadDraft() {
+        guard let current else { return }
+        source = current.english
+        translation = current.chinese
+        baselineSource = source
+        baselineTranslation = translation
+    }
+}
+
 struct AudioInputModeLabel: View {
     let mode: AudioInputMode
 
@@ -101,6 +242,8 @@ struct MarkdownSummaryView: View {
 struct SynchronizedTranscriptView: View {
     let entries: [SubtitleEntry]
     let recognitionConfig: RecognitionConfig
+    var suggestedIDs: Set<UUID> = []
+    var onEdit: (SubtitleEntry) -> Void = { _ in }
     @State private var isAtBottom = true
     @State private var hasNewContent = false
     @State private var isUserScrolling = false
@@ -144,9 +287,18 @@ struct SynchronizedTranscriptView: View {
                                                     .padding(.bottom, 4)
                                             }
                                             VStack(alignment: .leading, spacing: 5) {
-                                                Text(metadata(for: entry))
-                                                    .font(.caption.monospacedDigit())
-                                                    .foregroundStyle(.secondary)
+                                                HStack {
+                                                    Text(metadata(for: entry))
+                                                    if entry.correction != nil { Text("已纠正") }
+                                                    Spacer()
+                                                    Button { onEdit(entry) } label: {
+                                                        Label(suggestedIDs.contains(entry.id) ? "查看校对" : "纠正", systemImage: "pencil")
+                                                    }
+                                                    .buttonStyle(.borderless)
+                                                    .help("编辑原文和译文，不中断录音")
+                                                }
+                                                .font(.caption.monospacedDigit())
+                                                .foregroundStyle(.secondary)
 
                                                 HStack(alignment: .top, spacing: 14) {
                                                     Text(entry.english.isEmpty ? "…" : entry.english)

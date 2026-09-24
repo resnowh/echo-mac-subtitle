@@ -28,6 +28,19 @@ Audio Source
 
 ## 模块职责
 
+### 字幕纠正旁路
+
+每行“纠正/查看校对”打开 `SubtitleCorrectionEditor`，不停止录音。ViewModel 通过
+`SubtitleEntry.edit/applyRecognition/undoCorrection` 维护锁定和历史，强制保存当前段，并按稳定 UUID 更新历史段。
+DeepSeek 校对默认关闭；可手动请求，或开启后在分句结束 3 秒后排队。每次处理一句和附近两句上下文，
+一个请求在途、最多 20 个等待任务、手动任务优先、最多保留 100 个候选，失败不自动重试。
+清空/新录音准备取消旧任务并变更 generation；结果还必须匹配 archive、语言配置、文本和纠正 revision。
+关闭自动校对后不接纳在途自动结果。AI 不直接修改字幕，uncertain 候选要求人工核对。
+只发送文字不发送音频，使用独立 JSON 请求，不改变总结或音频/WebSocket 生命周期。
+JSON 参数依据 [DeepSeek 官方说明](https://api-docs.deepseek.com/guides/json_mode/)，截断或缺字段响应会被拒绝。
+UserDefaults 的 `correctionTerms` 保存课程术语，AI 校对立即使用，Soniox 从下次建连使用；
+`aiCorrectionEnabled` 缺省为 false。
+
 - `Models/TranscriptModels.swift`：平台无关的字幕、存档、输入源、主题和识别配置模型。
 - `Audio/AudioCapture.swift`：音频采集抽象；`AudioCaptureSource` 描述 PCM 话筒源，`SystemAudioCaptureSource` 描述系统音频源。
 - `Audio/AudioCapture.swift` 中的 `MacMicrophoneCapture`：macOS `AVAudioEngine` 话筒实现。

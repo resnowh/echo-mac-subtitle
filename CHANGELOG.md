@@ -4,6 +4,9 @@
 
 ### Added
 
+- 录音中可手动纠正原文/译文、查看修改前版本并撤销；字段锁定及历史随 Archive 保存。
+- 默认关闭的 DeepSeek 语境校对、重新翻译和课程术语表。AI 仅生成需人工确认的建议，不自动改稿。
+
 - 支持 Soniox speaker diarization，并在字幕、Archive 和 SRT 中保留匿名 Speaker 编号。
 - 增加自动识别/指定源语言、语言提示、严格语言限制和可配置翻译目标的 `RecognitionConfig`。
 - 为 Soniox 建连前增加约 2.5 秒有界音频缓冲。

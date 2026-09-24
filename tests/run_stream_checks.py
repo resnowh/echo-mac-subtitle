@@ -17,6 +17,8 @@ class WebSocketFixture(socketserver.StreamRequestHandler):
             while line := self.rfile.readline().strip():
                 name, value = line.decode().split(":", 1)
                 headers[name.lower()] = value.strip()
+            if "sec-websocket-key" not in headers:
+                return  # Expected when the client cancels before its handshake.
             digest = hashlib.sha1((headers["sec-websocket-key"] +
                                    "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode()).digest()
             accept = base64.b64encode(digest).decode()
@@ -56,6 +58,10 @@ with tempfile.TemporaryDirectory(prefix="echo-stream-checks-") as folder:
     subprocess.run(["xcrun", "swiftc", "-sdk", sdk, "-O", "-o", executable,
                     str(root / "macOS/Audio/PCM16AudioPipeline.swift"),
                     str(root / "macOS/Services/SonioxWebSocketClient.swift"),
+                    str(root / "macOS/Models/TranscriptModels.swift"),
+                    str(root / "macOS/Services/DeepSeekService.swift"),
+                    str(root / "macOS/Services/SRTExporter.swift"),
+                    str(root / "tests/CorrectionChecks.swift"),
                     str(root / "tests/StreamChecks.swift")], check=True)
     with socketserver.ThreadingTCPServer(("127.0.0.1", 0), WebSocketFixture) as server:
         server.daemon_threads = True

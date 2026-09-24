@@ -2,7 +2,8 @@ import Foundation
 
 @main
 struct StreamChecks {
-    static func main() {
+    static func main() throws {
+        try CorrectionChecks.run()
         let pcm = PCM16TimelineMixer.self
         let samples: [Int16] = [.min, -1, 0, 1, .max]
         precondition(pcm.samples(from: pcm.data(from: samples)) == samples)

@@ -1,5 +1,29 @@
 import Foundation
 
+/// Optional on older subtitles. Original recognition and undo history never
+/// replace the effective text consumed by SRT and summary.
+struct SubtitleCorrection: Codable {
+    var rawSource: String
+    var rawTranslation: String
+    var sourceLocked = false
+    var translationLocked = false
+    var revision = UUID()
+    var history: [Revision] = []
+
+    struct Revision: Codable {
+        var source: String
+        var translation: String
+        var date: Date
+    }
+}
+
+struct CorrectionSuggestion: Decodable {
+    let source: String
+    let translation: String
+    let reason: String
+    let uncertain: Bool
+}
+
 struct SubtitleEntry: Identifiable {
     let id: UUID
     var start: TimeInterval
@@ -9,6 +33,7 @@ struct SubtitleEntry: Identifiable {
     var chinese: String
     var speaker: String?
     var language: String?
+    var correction: SubtitleCorrection?
 
     init(
         id: UUID = UUID(),
@@ -18,7 +43,8 @@ struct SubtitleEntry: Identifiable {
         english: String,
         chinese: String,
         speaker: String? = nil,
-        language: String? = nil
+        language: String? = nil,
+        correction: SubtitleCorrection? = nil
     ) {
         self.id = id
         self.start = start
@@ -28,6 +54,44 @@ struct SubtitleEntry: Identifiable {
         self.chinese = chinese
         self.speaker = speaker
         self.language = language
+        self.correction = correction
+    }
+
+    mutating func edit(source: String, translation: String) {
+        guard source != english || translation != chinese else { return }
+        var state = correction ?? SubtitleCorrection(rawSource: english, rawTranslation: chinese)
+        state.history.append(.init(source: english, translation: chinese, date: Date()))
+        if source != english { state.sourceLocked = true }
+        if translation != chinese { state.translationLocked = true }
+        state.revision = UUID()
+        english = source
+        chinese = translation
+        correction = state
+    }
+
+    mutating func undoCorrection() {
+        guard var state = correction, let previous = state.history.popLast() else { return }
+        english = previous.source
+        chinese = previous.translation
+        // Undo is an explicit human choice too; late tokens must not undo it.
+        state.sourceLocked = true
+        state.translationLocked = true
+        state.revision = UUID()
+        correction = state
+    }
+
+    mutating func applyRecognition(source: String, translation: String) {
+        if correction != nil {
+            correction?.rawSource = source
+            correction?.rawTranslation = translation
+        }
+        if correction?.sourceLocked != true { english = source }
+        if correction?.translationLocked != true { chinese = translation }
+    }
+
+    func matchesCorrectionSnapshot(_ snapshot: SubtitleEntry) -> Bool {
+        id == snapshot.id && english == snapshot.english && chinese == snapshot.chinese
+            && correction?.revision == snapshot.correction?.revision
     }
 }
 
@@ -40,6 +104,7 @@ struct ArchivedSubtitle: Codable, Identifiable {
     var chinese: String
     var speaker: String?
     var language: String?
+    var correction: SubtitleCorrection?
 
     init(
         id: UUID,
@@ -49,7 +114,8 @@ struct ArchivedSubtitle: Codable, Identifiable {
         english: String,
         chinese: String,
         speaker: String? = nil,
-        language: String? = nil
+        language: String? = nil,
+        correction: SubtitleCorrection? = nil
     ) {
         self.id = id
         self.start = start
@@ -59,6 +125,7 @@ struct ArchivedSubtitle: Codable, Identifiable {
         self.chinese = chinese
         self.speaker = speaker
         self.language = language
+        self.correction = correction
     }
 }
 
@@ -75,6 +142,20 @@ struct TranscriptArchive: Codable, Identifiable {
     let createdAt: Date
     var updatedAt: Date
     var segments: [TranscriptSegment]
+
+    mutating func updateCorrection(_ entry: SubtitleEntry) -> Bool {
+        for segmentIndex in segments.indices {
+            if let index = segments[segmentIndex].entries.firstIndex(where: { $0.id == entry.id }) {
+                segments[segmentIndex].entries[index].english = entry.english
+                segments[segmentIndex].entries[index].chinese = entry.chinese
+                segments[segmentIndex].entries[index].correction = entry.correction
+                segments[segmentIndex].updatedAt = Date()
+                updatedAt = Date()
+                return true
+            }
+        }
+        return false
+    }
 }
 
 enum AudioInputMode: String, CaseIterable, Identifiable {

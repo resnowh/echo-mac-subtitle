@@ -1,5 +1,10 @@
 # Isolated stream checks
 
+`CorrectionChecks.swift` additionally tests field locks, late recognition,
+undo/stale revisions, old/new Archive JSON, cross-segment UUID matching,
+corrected SRT and structured DeepSeek responses. No DeepSeek calls are made;
+these checks do not establish real AI correction quality.
+
 Run `python3 tests/run_stream_checks.py` on macOS with Xcode selected.
 If local Command Line Tools and Xcode disagree, set `DEVELOPER_DIR` to the
 installed Xcode developer directory for this command only.

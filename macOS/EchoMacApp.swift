@@ -53,6 +53,7 @@ private struct WindowAccessor: NSViewRepresentable {
 struct ContentView: View {
     @StateObject private var model = SpeechViewModel()
     @State private var showSettings = false
+    @State private var editingSubtitle: SubtitleEntry?
     @State private var isSummaryExpanded = true
     @AppStorage("themeMode") private var themeModeRaw = AppThemeMode.dark.rawValue
 
@@ -86,7 +87,8 @@ struct ContentView: View {
                 .help(model.isAlwaysOnTop ? "取消置顶" : "置顶窗口")
             }
 
-            SynchronizedTranscriptView(entries: model.entries, recognitionConfig: model.recognitionConfig)
+            SynchronizedTranscriptView(entries: model.entries, recognitionConfig: model.recognitionConfig,
+                suggestedIDs: Set(model.correctionStatuses.keys), onEdit: { editingSubtitle = $0 })
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             VStack(alignment: .leading, spacing: 10) {
@@ -177,6 +179,7 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(WindowAccessor(alwaysOnTop: model.isAlwaysOnTop))
         .sheet(isPresented: $showSettings) { SettingsView(model: model) }
+        .sheet(item: $editingSubtitle) { entry in SubtitleCorrectionEditor(model: model, entry: entry) }
         .preferredColorScheme(themeMode.colorScheme)
     }
 
@@ -435,6 +438,15 @@ struct SettingsView: View {
                     SecureField("DeepSeek API Key（可选）", text: $model.deepSeekAPIKey)
                         .textFieldStyle(.roundedBorder)
                     Toggle("停止录音后自动生成 AI 总结", isOn: $model.isSummaryEnabled)
+                    Toggle("自动 AI 语境校对（仅生成建议）", isOn: $model.isAICorrectionEnabled)
+                    Text("默认关闭。开启后将已分句文字及相邻上下文发送给 DeepSeek，可能产生费用；不发送音频。建议需人工确认，不会自动覆盖文字。")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Text("课程术语（每行一个，最多使用 100 个）")
+                    TextEditor(text: $model.correctionTerms)
+                        .font(.body).frame(height: 90)
+                        .overlay(RoundedRectangle(cornerRadius: 4).stroke(.secondary.opacity(0.3)))
+                    Text("术语用于 AI 校对及下一次 Soniox 建连的识别提示，不作全局替换。")
+                        .font(.caption).foregroundStyle(.secondary)
                     Text("总结会把文字稿发送到云端 AI；API Key 只保存在本机。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
