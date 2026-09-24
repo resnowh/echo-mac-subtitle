@@ -20,7 +20,7 @@ Audio Source
 - **电脑音频链路**：`MacSystemAudioCapture` 使用 ScreenCaptureKit 的音频流。收到的 `CMSampleBuffer` 被转换成同一目标格式，再进入音频串行队列。捕获电脑音频需要系统的“屏幕与系统音频录制”权限。
 - **双输入混音**：两路采集独立进行，以各自的 PCM frame position 放入 `PCM16TimelineMixer`。混音器按重叠 frame 对齐，多个输入的 signed 16-bit sample 取平均并限制在 Int16 范围内；不会把两段 PCM 直接首尾拼接。单输入模式绕过混音器，仍发送一条连续 PCM 流。输入源切换时保留当前 Soniox 会话和文字。
 - **建连前缓冲**：`PCM16Prebuffer` 最多保留约 2.5 秒的完整 PCM 块。WebSocket 配置发送成功并标记 ready 后，按 FIFO 顺序 flush；新 session、停止、失败和清空都会清理它。
-- **Soniox token 处理**：WebSocket 返回的 finalized token 与 provisional token 分开累积。`<end>`/`<fin>`、句末标点、长度和静默时间共同触发一条字幕完成，避免字幕长期只更新一行。翻译 token 写入中文字段，原文 token 写入英文字段；同一字幕中 speaker 改变时先完成前一条。
+- **Soniox token 处理**：WebSocket 返回的 finalized token 与 provisional token 分开累积。优先使用 Soniox 语义端点 `<end>`/`<fin>` 完成一句。兜底仅在至少 5 个词静默 4.5 秒后分段；若 endpoint 丢失且单条达到 80 词、90 秒，则触发安全上限。句号、短停顿或 16 词本身不会提前切段。翻译 token 写入译文，原文 token 写入原文字段；同一字幕中 speaker 改变时先完成前一条。
 - **Speaker / language**：请求开启 speaker diarization 和 language identification。token 的 `speaker` 保存为 `Speaker 1` 形式，`language` 保存为语言代码，随后进入 `SubtitleEntry` 和 `ArchivedSubtitle`。当前只使用匿名编号，不推断真人身份。
 - **Archive**：录音开始时可新建存档或选择已有存档接续。每次 session 是一个 `TranscriptSegment`，识别到的非空字幕会定期写入 `Application Support/Echo/Archives/*.json`；旧存档缺少新增可选字段时仍可加载。
 - **SRT**：当前 session 使用 session-relative `start/end` 导出。整存档导出时按 segment 的 `startedAt` 和 entry 的 `recordedAt` 建立跨 session 的相对 timeline，并强制保持单调递增；字幕正文可带 `[Speaker 1]` 前缀，但不会改变标准 SRT 时间行。

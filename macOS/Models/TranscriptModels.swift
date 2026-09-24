@@ -1,5 +1,15 @@
 import Foundation
 
+enum TranscriptSegmentationPolicy {
+    static func shouldFinalize(text: String, elapsed: TimeInterval, quiet: TimeInterval) -> Bool {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+        let words = text.split(whereSeparator: \.isWhitespace).count
+        // Ordinary fallback waits for a genuine quiet gap; punctuation alone
+        // is deliberately insufficient. A 90s/80-word guard bounds a runaway row.
+        return (words >= 5 && quiet >= 4.5) || (words >= 80 && elapsed >= 90)
+    }
+}
+
 /// Optional on older subtitles. Original recognition and undo history never
 /// replace the effective text consumed by SRT and summary.
 struct SubtitleCorrection: Codable {

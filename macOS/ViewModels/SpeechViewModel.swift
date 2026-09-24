@@ -968,7 +968,8 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
             "enable_language_identification": true,
             "enable_speaker_diarization": recognitionConfig.speakerDiarizationEnabled,
             "enable_endpoint_detection": true,
-            "max_endpoint_delay_ms": 900,
+            "max_endpoint_delay_ms": 3_000,
+            "endpoint_sensitivity": -0.3,
             "context": [
                 "general": [
                     ["key": "domain", "value": "economics and finance"],
@@ -1336,15 +1337,11 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
             guard !translation.isEmpty else { return }
         }
 
-        let words = text.split(whereSeparator: { $0 == " " || $0 == "\n" }).count
         let elapsed = elapsedSinceSessionStart - (currentSourceStart ?? elapsedSinceSessionStart)
-        let endsSentence = text.range(of: "[.!?。！？][\\\"’”)]*$", options: .regularExpression) != nil
-        let longEnough = words >= 16 || (text.count >= 90 && elapsed >= 3)
-        let quietLongEnough = lastTokenReceivedAt.map { Date().timeIntervalSince($0) >= 1.8 } ?? false
-
-        // Soniox normally emits <end>. These fallbacks handle devices/streams
-        // where endpoint tokens are omitted, so one row cannot grow forever.
-        guard (endsSentence && words >= 3) || longEnough || (quietLongEnough && words >= 5) else { return }
+        let quiet = lastTokenReceivedAt.map { Date().timeIntervalSince($0) } ?? 0
+        // Prefer Soniox's semantic <end>. This is only a safety fallback when
+        // endpoint tokens are absent: don't split at punctuation or short pauses.
+        guard TranscriptSegmentationPolicy.shouldFinalize(text: text, elapsed: elapsed, quiet: quiet) else { return }
         finalizeCurrentEntry()
         saveCurrentSessionFile()
     }
