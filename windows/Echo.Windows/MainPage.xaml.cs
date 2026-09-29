@@ -116,7 +116,7 @@ public sealed partial class MainPage : Page
             Content = $"“{archive.Title}”及其中的字幕和总结会从列表移除，并保留在本地 Deleted 文件夹。可把 JSON 文件移回 Archives 文件夹恢复。",
             PrimaryButtonText = "移入回收区", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Close, XamlRoot = XamlRoot
         };
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary) ViewModel.MoveSelectedArchiveToDeleted();
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary) await ViewModel.MoveSelectedArchiveToDeletedAsync();
     }
     private async void SplitSegment_Click(object sender, RoutedEventArgs e)
     {
@@ -126,7 +126,7 @@ public sealed partial class MainPage : Page
             Content = "这会把刚完成的录音段移入一个新存档，并从原存档移除。原存档写入时会保留 .bak 备份。",
             PrimaryButtonText = "拆出本段", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Close, XamlRoot = XamlRoot
         };
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary) ViewModel.SplitCompletedSegment();
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary) await ViewModel.SplitCompletedSegmentAsync();
     }
     private async void RenameArchive_Click(object sender, RoutedEventArgs e)
     {
@@ -138,7 +138,7 @@ public sealed partial class MainPage : Page
         {
             if (string.IsNullOrWhiteSpace(name.Text)) { args.Cancel = true; ViewModel.Status = "存档名称不能为空。"; }
         };
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary && ViewModel.RenameSelectedArchive(name.Text))
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary && await ViewModel.RenameSelectedArchiveAsync(name.Text))
             ArchiveTitle.Text = ViewModel.SelectedArchive?.Title ?? "新的录音";
     }
     private async void Start_Click(object sender, RoutedEventArgs e) => await ViewModel.StartAsync(Mode.SelectedIndex, (OutputDevice.SelectedItem as AudioDevice)?.Id, (InputDevice.SelectedItem as AudioDevice)?.Id);
@@ -247,7 +247,7 @@ public sealed partial class MainPage : Page
             if (file is not null)
             {
                 if (new FileInfo(file.Path).Length > 32 * 1024 * 1024) throw new InvalidOperationException("存档超过 32 MB，请先拆分存档。");
-                ViewModel.Import(await File.ReadAllTextAsync(file.Path));
+                await ViewModel.ImportAsync(await File.ReadAllTextAsync(file.Path));
             }
         }
         catch (Exception error) { ViewModel.Status = "导入失败：" + error.Message; }
@@ -257,7 +257,8 @@ public sealed partial class MainPage : Page
         try
         {
             if (ViewModel.SelectedArchive is not { } archive) { ViewModel.Status = "请先选择或创建存档。"; return; }
-            string text = srt ? TranscriptFiles.Srt(archive) : JsonSerializer.Serialize(archive, TranscriptFiles.Json);
+            var snapshot = TranscriptFiles.Snapshot(archive);
+            string text = await Task.Run(() => srt ? TranscriptFiles.Srt(snapshot) : JsonSerializer.Serialize(snapshot, TranscriptFiles.Json));
             var picker = new FileSavePicker(App.Window.AppWindow.Id) { SuggestedFileName = $"Echo-{DateTime.Now:yyyyMMdd-HHmmss}" };
             picker.FileTypeChoices.Add(srt ? "SRT 字幕" : "Echo 存档", new List<string> { srt ? ".srt" : ".json" });
             var file = await picker.PickSaveFileAsync();

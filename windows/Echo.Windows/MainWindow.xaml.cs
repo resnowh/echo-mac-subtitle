@@ -12,6 +12,7 @@ namespace Echo_Windows;
 /// </summary>
 public sealed partial class MainWindow : Window
 {
+    private bool closingAfterSave;
     public MainWindow()
     {
         InitializeComponent();
@@ -28,16 +29,16 @@ public sealed partial class MainWindow : Window
         AppWindow.Resize(new Windows.Graphics.SizeInt32(Math.Min((int)(920 * scale), work.Width), Math.Min((int)(720 * scale), work.Height)));
         AppWindow.Closing += async (_, e) =>
         {
+            if (closingAfterSave) return;
             if (RootFrame.Content is MainPage page)
             {
                 if (page.ViewModel.IsBusy) { e.Cancel = true; return; }
-                if (page.ViewModel.IsRecording)
-                {
-                    e.Cancel = true;
-                    await page.ViewModel.StopAsync();
-                    Close();
-                }
-                else page.ViewModel.Save();
+                e.Cancel = true;
+                if (page.ViewModel.IsRecording) await page.ViewModel.StopAsync();
+                if (page.ViewModel.IsBusy) return;
+                if (!await page.ViewModel.FlushPendingSavesAsync()) return;
+                closingAfterSave = true;
+                Close();
             }
         };
     }

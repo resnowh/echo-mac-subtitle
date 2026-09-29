@@ -18,6 +18,7 @@ public partial class MainPageViewModel : ObservableObject
     private TokenAssembler? assembler;
     private readonly DispatcherQueueTimer checkpoint;
     private readonly HttpClient http = new() { Timeout = TimeSpan.FromSeconds(90) };
+    private Task saveTail = Task.CompletedTask;
     private readonly SubtitleCorrectionService corrections = new();
     private readonly SemaphoreSlim correctionQueue = new(1, 1);
     private readonly HashSet<Guid> correctionScheduled = [];
@@ -88,23 +89,30 @@ public partial class MainPageViewModel : ObservableObject
         if (!CanEdit) return;
         var a = new Archive(); Archives.Insert(0, a); SelectedArchive = a; Save();
     }
-    public bool RenameSelectedArchive(string title)
+    public async Task<bool> RenameSelectedArchiveAsync(string title)
     {
         if (!CanEdit || SelectedArchive is null) return false;
         title = title.Trim();
         if (title.Length is 0 or > 80) { Status = "存档名称需为 1 到 80 个字符。"; return false; }
         var archive = SelectedArchive; string previous = archive.Title;
+        IsBusy = true;
         archive.Title = title;
-        if (Save()) { Status = "存档名称已更新。"; return true; }
-        archive.Title = previous;
-        return false;
-    }
-    public bool MoveSelectedArchiveToDeleted()
-    {
-        if (!CanDeleteSelectedArchive || SelectedArchive is not { } archive) return false;
         try
         {
-            TranscriptFiles.Save(archive);
+            if (await SaveArchiveAndWaitAsync(archive)) { Status = "存档名称已更新。"; return true; }
+            archive.Title = previous;
+            _ = Save();
+            return false;
+        }
+        finally { IsBusy = false; }
+    }
+    public async Task<bool> MoveSelectedArchiveToDeletedAsync()
+    {
+        if (!CanDeleteSelectedArchive || SelectedArchive is not { } archive) return false;
+        IsBusy = true;
+        try
+        {
+            if (!await SaveArchiveAndWaitAsync(archive)) return false;
             string path = TranscriptFiles.MoveToDeleted(archive);
             Archives.Remove(archive);
             if (completedArchiveId == archive.Id) { completedArchiveId = completedSegmentId = null; OnPropertyChanged(nameof(CanSplitCompletedSegment)); }
@@ -113,11 +121,42 @@ public partial class MainPageViewModel : ObservableObject
             return true;
         }
         catch (Exception e) { Status = "未能移入回收区，存档仍保留：" + e.Message; return false; }
+        finally { IsBusy = false; }
     }
     public bool Save()
     {
         if (SelectedArchive is null) return false;
-        try { TranscriptFiles.Save(SelectedArchive); return true; }
+        var task = EnqueueSave(SelectedArchive);
+        _ = ReportSaveFailureAsync(task);
+        return true;
+    }
+    private Task EnqueueSave(Archive archive)
+    {
+        archive.UpdatedAt = Archive.Now;
+        var snapshot = TranscriptFiles.Snapshot(archive);
+        Task previous = saveTail;
+        saveTail = PersistAfterAsync(previous, snapshot);
+        return saveTail;
+    }
+    private static async Task PersistAfterAsync(Task previous, Archive snapshot)
+    {
+        try { await previous; } catch { /* A failed older checkpoint must not block a newer full snapshot. */ }
+        await Task.Run(() => TranscriptFiles.Save(snapshot));
+    }
+    private async Task ReportSaveFailureAsync(Task pending)
+    {
+        try { await pending; }
+        catch (Exception e) { ui.TryEnqueue(() => Status = "存档尚未保存，请导出备份：" + e.Message); }
+    }
+    private async Task<bool> SaveArchiveAndWaitAsync(Archive archive)
+    {
+        try { await EnqueueSave(archive); return true; }
+        catch (Exception e) { Status = "存档尚未保存，请导出备份：" + e.Message; return false; }
+    }
+    public async Task<bool> FlushPendingSavesAsync()
+    {
+        if (SelectedArchive is not null && !await SaveArchiveAndWaitAsync(SelectedArchive)) return false;
+        try { await saveTail; return true; }
         catch (Exception e) { Status = "存档尚未保存，请导出备份：" + e.Message; return false; }
     }
     public void SaveCorrection(Subtitle entry, string source, string translation)
@@ -250,11 +289,14 @@ public partial class MainPageViewModel : ObservableObject
             {
                 try
                 {
-                    TranscriptFiles.Save(SelectedArchive);
-                    completedArchiveId = SelectedArchive.Id; completedSegmentId = segment.Id;
+                    var archive = SelectedArchive;
+                    var segmentSnapshot = new Archive { Segments = [segment] };
+                    var segmentId = segment.Id;
+                    if (!await SaveArchiveAndWaitAsync(archive)) throw new IOException(Status);
+                    completedArchiveId = archive.Id; completedSegmentId = segmentId;
                     OnPropertyChanged(nameof(CanSplitCompletedSegment));
-                    var single = new Archive { Segments = [segment] };
-                    TranscriptFiles.AtomicWrite(Path.Combine(TranscriptFiles.Root, "Exports", $"Echo-{DateTime.Now:yyyyMMdd-HHmmss}-{segment.Id.ToString()[..8]}.srt"), TranscriptFiles.Srt(single));
+                    string path = Path.Combine(TranscriptFiles.Root, "Exports", $"Echo-{DateTime.Now:yyyyMMdd-HHmmss}-{segmentId.ToString()[..8]}.srt");
+                    await Task.Run(() => TranscriptFiles.AtomicWrite(path, TranscriptFiles.Srt(segmentSnapshot)));
                     Status = warning.Length > 0 ? warning + " 已保留收到的文字。" : "录音已保存 · 单段 SRT 已写入数据目录的 Exports 文件夹";
                 }
                 catch (Exception e) { Status = "保存失败，请使用导出：" + e.Message; }
@@ -262,25 +304,30 @@ public partial class MainPageViewModel : ObservableObject
             IsBusy = false;
         }
     }
-    public bool SplitCompletedSegment()
+    public async Task<bool> SplitCompletedSegmentAsync()
     {
         if (!CanSplitCompletedSegment || completedArchiveId is not Guid archiveId || completedSegmentId is not Guid segmentId) return false;
         var original = Archives.FirstOrDefault(a => a.Id == archiveId);
         if (original is null) return false;
         var split = ArchiveOperations.SplitSegment(original, segmentId);
         if (split is null) return false;
+        IsBusy = true;
         try
         {
-            TranscriptFiles.Save(original);
-            TranscriptFiles.Save(split.ExtractedArchive);
+            if (!await SaveArchiveAndWaitAsync(original) || !await SaveArchiveAndWaitAsync(split.ExtractedArchive))
+                throw new IOException(Status);
         }
         catch (Exception e)
         {
             ArchiveOperations.RestoreSplit(original, split);
-            try { TranscriptFiles.Save(original); }
+            try
+            {
+                if (!await SaveArchiveAndWaitAsync(original)) throw new IOException(Status);
+            }
             catch (Exception rollback) { Status = $"拆分失败，恢复存档也失败；原始 .bak 已保留。拆分错误：{e.Message}；恢复错误：{rollback.Message}"; return false; }
             Status = "拆分失败，原存档已恢复：" + e.Message; return false;
         }
+        finally { IsBusy = false; }
         Archives.Insert(0, split.ExtractedArchive);
         SelectedArchive = split.ExtractedArchive;
         completedArchiveId = completedSegmentId = null;
@@ -288,13 +335,21 @@ public partial class MainPageViewModel : ObservableObject
         Status = "本段已拆出并保存为新存档。原存档备份保留在 .bak 文件中。";
         return true;
     }
-    public void Import(string text)
+    public async Task ImportAsync(string text)
     {
         if (!CanEdit) return;
-        var archive = TranscriptFiles.Parse(text);
+        IsBusy = true;
+        Archive archive;
+        try { archive = await Task.Run(() => TranscriptFiles.Parse(text)); }
+        catch (Exception e) { Status = "存档解析失败：" + e.Message; IsBusy = false; return; }
         if (Archives.Any(a => a.Id == archive.Id)) { archive.Id = Guid.NewGuid(); archive.Title += "（导入副本）"; }
-        TranscriptFiles.Save(archive); Archives.Insert(0, archive); SelectedArchive = archive;
-        Status = "存档已导入，源文件未修改。";
+        Archives.Insert(0, archive); SelectedArchive = archive;
+        try
+        {
+            if (await SaveArchiveAndWaitAsync(archive)) Status = "存档已导入，源文件未修改。";
+            else Archives.Remove(archive);
+        }
+        finally { IsBusy = false; }
     }
     public async Task SummarizeAsync(int scope)
     {

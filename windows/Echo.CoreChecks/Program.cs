@@ -39,6 +39,10 @@ int speakerFinalized = 0; var speakerSegment = new Segment(); var speakerAssembl
 using (var speakerTurn = JsonDocument.Parse("""{"tokens":[{"text":"first speaker","is_final":true,"speaker":1,"start_ms":0,"end_ms":500},{"text":"second speaker","is_final":true,"speaker":2,"start_ms":600,"end_ms":1000},{"text":"<end>","is_final":true}]}""")) speakerAssembler.Apply(speakerTurn.RootElement);
 Check(speakerSegment.Entries.Count == 2 && speakerSegment.Entries[0].English == "first speaker" && speakerSegment.Entries[0].Speaker == "Speaker 1" && speakerSegment.Entries[1].English == "second speaker" && speakerSegment.Entries[1].Speaker == "Speaker 2" && speakerFinalized == 2, "final speaker change splits rows and finalizes each speaker turn once");
 var archive = new Archive { CreatedAt = 800000000, Summary = "已保存总结", SummarizedEntries = { [segment.Entries[0].Id] = TranscriptFiles.SummarySignature(segment.Entries[0].English) }, Segments = [segment, new Segment { StartedAt = 800000010, Entries = [new Subtitle { Start = 0, End = 1, English = "Again" }] }] };
+var snapshot = TranscriptFiles.Snapshot(archive);
+archive.Segments[0].Entries[0].English = "后续编辑";
+archive.Segments[0].Entries[0].Correction = new SubtitleCorrection { RawSource = "后来补充" };
+Check(snapshot.Segments[0].Entries[0].English == "Hello there." && snapshot.Segments[0].Entries[0].Correction is null && snapshot.SummarizedEntries.Count == 1, "background persistence snapshot is isolated from later edits and keeps archive metadata");
 string srt = TranscriptFiles.Srt(archive);
 Check(srt.Contains("00:00:10,000 --> 00:00:11,000") && srt.Contains("你好。"), "SRT preserves segment wall-clock gap and translation");
 string json = JsonSerializer.Serialize(archive, TranscriptFiles.Json);

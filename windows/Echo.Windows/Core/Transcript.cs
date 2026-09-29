@@ -165,6 +165,28 @@ public static class TranscriptFiles
 {
     public static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, PropertyNameCaseInsensitive = true, WriteIndented = true };
     public static string SummarySignature(string text) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(text)));
+    public static Archive Snapshot(Archive source) => new()
+    {
+        Id = source.Id, Title = source.Title, CreatedAt = source.CreatedAt, UpdatedAt = source.UpdatedAt,
+        Summary = source.Summary, SummarizedEntries = new(source.SummarizedEntries),
+        Segments = source.Segments.Select(segment => new Segment
+        {
+            Id = segment.Id, StartedAt = segment.StartedAt, UpdatedAt = segment.UpdatedAt,
+            Entries = segment.Entries.Select(entry => new Subtitle
+            {
+                Id = entry.Id, Start = entry.Start, End = entry.End, RecordedAt = entry.RecordedAt,
+                English = entry.English, Chinese = entry.Chinese, Speaker = entry.Speaker, Language = entry.Language,
+                Correction = entry.Correction is { } correction ? new SubtitleCorrection
+                {
+                    RawSource = correction.RawSource, RawTranslation = correction.RawTranslation,
+                    SourceLocked = correction.SourceLocked, TranslationLocked = correction.TranslationLocked,
+                    Revision = correction.Revision,
+                    History = correction.History.Select(version => new SubtitleRevision
+                    { Source = version.Source, Translation = version.Translation, Date = version.Date }).ToList()
+                } : null
+            }).ToList()
+        }).ToList()
+    };
     public static string Root => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EchoWindows");
     public static string Folder => Path.Combine(Root, "Archives");
     public static string DeletedFolder => Path.Combine(Root, "Deleted");
