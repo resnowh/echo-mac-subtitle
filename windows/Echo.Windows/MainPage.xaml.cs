@@ -150,6 +150,39 @@ public sealed partial class MainPage : Page
     }
     private async void Start_Click(object sender, RoutedEventArgs e) => await ViewModel.StartAsync(Mode.SelectedIndex, (OutputDevice.SelectedItem as AudioDevice)?.Id, (InputDevice.SelectedItem as AudioDevice)?.Id);
     private async void Stop_Click(object sender, RoutedEventArgs e) => await ViewModel.StopAsync();
+    private async void SwitchAudio_Click(object sender, RoutedEventArgs e)
+    {
+        if (!ViewModel.IsRecording) return;
+        ViewModel.RefreshDevices();
+        var choices = new List<AudioDevice> { new("", "系统默认设备") };
+        ComboBox? output = null, input = null;
+        var content = new StackPanel { Spacing = 12, MinWidth = 360 };
+        if (ViewModel.ActiveAudioMode is 0 or 2)
+        {
+            var outputChoices = new List<AudioDevice>(choices);
+            outputChoices.AddRange(ViewModel.Outputs);
+            output = new ComboBox { Header = "电脑音频来源", ItemsSource = outputChoices, DisplayMemberPath = nameof(AudioDevice.Name), HorizontalAlignment = HorizontalAlignment.Stretch };
+            output.SelectedItem = outputChoices.FirstOrDefault(d => d.Id == ViewModel.ActiveOutputId) ?? outputChoices[0];
+            content.Children.Add(output);
+        }
+        if (ViewModel.ActiveAudioMode is 1 or 2)
+        {
+            var inputChoices = new List<AudioDevice> { new("", "系统默认设备") };
+            inputChoices.AddRange(ViewModel.Inputs);
+            input = new ComboBox { Header = "麦克风", ItemsSource = inputChoices, DisplayMemberPath = nameof(AudioDevice.Name), HorizontalAlignment = HorizontalAlignment.Stretch };
+            input.SelectedItem = inputChoices.FirstOrDefault(d => d.Id == ViewModel.ActiveInputId) ?? inputChoices[0];
+            content.Children.Add(input);
+        }
+        content.Children.Add(new TextBlock { Text = "切换期间转写连接保持不变；新设备无法启动时会尝试恢复原设备。", TextWrapping = TextWrapping.Wrap, Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"] });
+        var dialog = new ContentDialog
+        {
+            Title = "切换录音设备", Content = content, PrimaryButtonText = "切换", CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot
+        };
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+            await ViewModel.SwitchAudioDevicesAsync((output?.SelectedItem as AudioDevice)?.Id is { Length: > 0 } outId ? outId : null,
+                (input?.SelectedItem as AudioDevice)?.Id is { Length: > 0 } inId ? inId : null);
+    }
     private void Refresh_Click(object sender, RoutedEventArgs e) => ViewModel.RefreshDevices();
     private void Latest_Click(object sender, RoutedEventArgs e) { if (ViewModel.Entries.Count > 0) TranscriptList.ScrollIntoView(ViewModel.Entries.Last()); }
     private async void Summary_Click(object sender, RoutedEventArgs e) => await ViewModel.SummarizeAsync(SummaryScope.SelectedIndex);

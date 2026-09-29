@@ -30,6 +30,9 @@ public partial class MainPageViewModel : ObservableObject
     public ObservableCollection<Archive> Archives { get; } = [];
     public ObservableCollection<Subtitle> Entries { get; } = [];
     public bool HasEntries => Entries.Count > 0;
+    public int ActiveAudioMode { get; private set; }
+    public string? ActiveOutputId { get; private set; }
+    public string? ActiveInputId { get; private set; }
     public ObservableCollection<AudioDevice> Outputs { get; } = [];
     public ObservableCollection<AudioDevice> Inputs { get; } = [];
     [ObservableProperty] public partial Archive? SelectedArchive { get; set; }
@@ -40,10 +43,11 @@ public partial class MainPageViewModel : ObservableObject
     [ObservableProperty] public partial bool IsSummarizing { get; set; }
     [ObservableProperty] public partial double Level { get; set; }
     public bool CanEdit => !IsBusy && !IsRecording;
+    public bool CanSwitchAudioDevices => IsRecording && !IsBusy;
     public bool CanSplitCompletedSegment => !IsBusy && !IsRecording && completedArchiveId is not null && completedSegmentId is not null;
     public bool CanDeleteSelectedArchive => CanEdit && !IsSummarizing && SelectedArchive is not null;
-    partial void OnIsBusyChanged(bool value) { OnPropertyChanged(nameof(CanEdit)); OnPropertyChanged(nameof(CanSplitCompletedSegment)); OnPropertyChanged(nameof(CanDeleteSelectedArchive)); }
-    partial void OnIsRecordingChanged(bool value) { OnPropertyChanged(nameof(CanEdit)); OnPropertyChanged(nameof(CanSplitCompletedSegment)); OnPropertyChanged(nameof(CanDeleteSelectedArchive)); }
+    partial void OnIsBusyChanged(bool value) { OnPropertyChanged(nameof(CanEdit)); OnPropertyChanged(nameof(CanSwitchAudioDevices)); OnPropertyChanged(nameof(CanSplitCompletedSegment)); OnPropertyChanged(nameof(CanDeleteSelectedArchive)); }
+    partial void OnIsRecordingChanged(bool value) { OnPropertyChanged(nameof(CanEdit)); OnPropertyChanged(nameof(CanSwitchAudioDevices)); OnPropertyChanged(nameof(CanSplitCompletedSegment)); OnPropertyChanged(nameof(CanDeleteSelectedArchive)); }
     partial void OnIsSummarizingChanged(bool value) => OnPropertyChanged(nameof(CanDeleteSelectedArchive));
     partial void OnSelectedArchiveChanged(Archive? value)
     {
@@ -275,6 +279,7 @@ public partial class MainPageViewModel : ObservableObject
             Status = "正在连接 Soniox…";
             await current.StartAsync(Config, key, mode, output, input);
             if (failure.Length > 0) throw new IOException(failure);
+            ActiveAudioMode = mode; ActiveOutputId = output; ActiveInputId = input;
             IsRecording = true; checkpoint.Start();
             Status = "正在录音 · 音频发送至 Soniox · 原始音频不落盘";
         }
@@ -284,6 +289,27 @@ public partial class MainPageViewModel : ObservableObject
             session = null; IsRecording = false; Status = "无法开始：" + e.Message; Save();
         }
         finally { IsBusy = false; }
+    }
+    public async Task SwitchAudioDevicesAsync(string? outputId, string? inputId)
+    {
+        if (!CanSwitchAudioDevices || session is null) return;
+        if (outputId == ActiveOutputId && inputId == ActiveInputId) { Status = "仍在使用当前音频设备。"; return; }
+        IsBusy = true; Status = "正在切换音频设备…";
+        bool stopAfterFailure = false;
+        try
+        {
+            await session.SwitchDevicesAsync(outputId, inputId);
+            ActiveOutputId = outputId; ActiveInputId = inputId;
+            Status = "音频设备已切换 · 转写会话保持连接";
+        }
+        catch (AudioDeviceSwitchException e)
+        {
+            Status = e.Message;
+            if (!e.CaptureRestored) { failure = e.Message; stopAfterFailure = true; }
+        }
+        catch (Exception e) { Status = "切换失败，录音仍使用原设备：" + e.Message; }
+        finally { IsBusy = false; }
+        if (stopAfterFailure) await StopAsync();
     }
     public async Task StopAsync()
     {

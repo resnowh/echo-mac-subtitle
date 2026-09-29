@@ -91,6 +91,11 @@ if (args.Contains("--audio"))
         int bytes = 0;
         for (int i = 0; i < 50; i++) { bytes += audio.ReadFrame(out _).Length; await Task.Delay(20); }
         Check(failure is null && bytes == 32000, $"audio mode {mode}: one second PCM frame contract, no capture failure");
+        string? outputId = mode is 0 or 2 ? AudioCapture.Devices(DataFlow.Render).First().Id : null;
+        string? inputId = mode is 1 or 2 ? AudioCapture.Devices(DataFlow.Capture).First().Id : null;
+        audio.Restart(mode, outputId, inputId); await Task.Delay(120); int switchedBytes = 0;
+        for (int i = 0; i < 5; i++) { switchedBytes += audio.ReadFrame(out _).Length; await Task.Delay(20); }
+        Check(failure is null && switchedBytes == 3200, $"audio mode {mode}: hot device reinitialization keeps PCM capture active");
     }
     var portProbe = new TcpListener(IPAddress.Loopback, 0); portProbe.Start();
     int port = ((IPEndPoint)portProbe.LocalEndpoint).Port; portProbe.Stop();
@@ -118,6 +123,10 @@ if (args.Contains("--audio"))
     {
         session.Message += m => receivedFinal = m.TryGetProperty("finished", out var f) && f.GetBoolean();
         await session.StartAsync(new Preferences(), "synthetic", 0, null, null);
+        bool restoredInput = false;
+        try { await session.SwitchDevicesAsync("missing-device-id", null); }
+        catch (AudioDeviceSwitchException e) { restoredInput = e.CaptureRestored; }
+        Check(restoredInput, "invalid live device switch restores capture and keeps the recognition session open");
         await Task.Delay(450); await session.StopAsync();
     }
     await server; listener.Stop();
