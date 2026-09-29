@@ -192,11 +192,25 @@ public static class TranscriptFiles
     public static string DeletedFolder => Path.Combine(Root, "Deleted");
     public static void AtomicWrite(string path, string text)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        var temp = path + ".tmp";
-        File.WriteAllText(temp, text, new UTF8Encoding(false));
-        if (File.Exists(path)) File.Replace(temp, path, path + ".bak");
-        else File.Move(temp, path);
+        string directory = Path.GetDirectoryName(Path.GetFullPath(path))!;
+        Directory.CreateDirectory(directory);
+        string temp = Path.Combine(directory, $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
+        try
+        {
+            byte[] bytes = new UTF8Encoding(false).GetBytes(text);
+            using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
+            {
+                stream.Write(bytes);
+                stream.Flush(flushToDisk: true);
+            }
+            if (File.Exists(path)) File.Replace(temp, path, path + ".bak");
+            else File.Move(temp, path);
+        }
+        finally
+        {
+            try { if (File.Exists(temp)) File.Delete(temp); }
+            catch { /* A failed cleanup must not hide the original write/replace error. */ }
+        }
     }
     public static void Save(Archive archive)
     {

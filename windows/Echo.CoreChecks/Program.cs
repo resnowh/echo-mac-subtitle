@@ -48,6 +48,22 @@ Check(srt.Contains("00:00:10,000 --> 00:00:11,000") && srt.Contains("你好。")
 string json = JsonSerializer.Serialize(archive, TranscriptFiles.Json);
 var loaded = TranscriptFiles.Parse(json);
 Check(loaded.Id == archive.Id && loaded.Segments[0].StartedAt == 800000000 && loaded.Summary == "已保存总结" && loaded.SummarizedEntries.GetValueOrDefault(segment.Entries[0].Id) == TranscriptFiles.SummarySignature("Hello there.") && json.Contains("\"english\""), "archive summary, incremental signatures, legacy JSON fields and Apple reference date round trip");
+string atomicTestRoot = Path.Combine(Path.GetTempPath(), "Echo-AtomicWrite-" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(atomicTestRoot);
+try
+{
+    string atomicPath = Path.Combine(atomicTestRoot, "archive.json");
+    TranscriptFiles.AtomicWrite(atomicPath, "旧存档");
+    TranscriptFiles.AtomicWrite(atomicPath, "新存档");
+    bool replacedSafely = File.ReadAllText(atomicPath) == "新存档" && File.ReadAllText(atomicPath + ".bak") == "旧存档"
+        && !Directory.EnumerateFiles(atomicTestRoot, "*.tmp", SearchOption.TopDirectoryOnly).Any();
+    string blockedPath = Path.Combine(atomicTestRoot, "blocked.json"); Directory.CreateDirectory(blockedPath);
+    bool failedSafely = false;
+    try { TranscriptFiles.AtomicWrite(blockedPath, "不应覆盖目录"); }
+    catch { failedSafely = Directory.Exists(blockedPath) && !Directory.EnumerateFiles(atomicTestRoot, ".blocked.json.*.tmp").Any(); }
+    Check(replacedSafely && failedSafely, "atomic archive replacement flushes data, retains the last good backup and cleans failed temporary writes");
+}
+finally { if (Directory.Exists(atomicTestRoot)) Directory.Delete(atomicTestRoot, recursive: true); }
 var splitSource = new Archive { Title = "课程", Segments = [new Segment(), new Segment { StartedAt = 800000123, Entries = [new Subtitle { English = "拆分字幕" }] }] };
 splitSource.SummarizedEntries[splitSource.Segments[1].Entries[0].Id] = TranscriptFiles.SummarySignature("拆分字幕");
 var splitResult = ArchiveOperations.SplitSegment(splitSource, splitSource.Segments[1].Id)!;
