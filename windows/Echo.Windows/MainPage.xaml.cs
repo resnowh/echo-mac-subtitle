@@ -66,6 +66,7 @@ public sealed partial class MainPage : Page
     public static Visibility VisibleWhen(bool value) => value ? Visibility.Visible : Visibility.Collapsed;
     public static Visibility HiddenWhen(bool value) => value ? Visibility.Collapsed : Visibility.Visible;
     public static bool Not(bool value) => !value;
+    public static string AccessibleText(string role, string? value) => string.IsNullOrWhiteSpace(value) ? string.Empty : $"{role}：{value}";
     private void UpdateLanguageHeaders()
     {
         SourceHeading.Text = ViewModel.Config.SourceLanguage switch { "en" => "English", "zh" => "简体中文", "ja" => "日本語", "" => "原文", var code => code };

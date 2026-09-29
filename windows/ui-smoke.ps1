@@ -13,7 +13,7 @@ Check 'Stop hidden before recording' { winapp ui wait-for StopRecording -a $AppP
 Check 'Default source is computer audio' { winapp ui wait-for InputMode -a $AppPid --value '电脑音频' -t 3000 }
 Check 'Open settings' { winapp ui invoke SettingsTab -a $AppPid }
 Check 'Key entry available' { winapp ui wait-for SonioxKey -a $AppPid -t 3000 }
-Check 'Model setting available' { winapp ui wait-for Control10 -a $AppPid -t 3000 }
+Check 'Model setting available' { winapp ui wait-for SonioxModel -a $AppPid -t 3000 }
 Check 'Return to recording' { winapp ui invoke RecordingTab -a $AppPid }
 Check 'Export menu available' { winapp ui wait-for ExportMenu -a $AppPid -t 3000 }
 Check 'Transcript list available' { winapp ui wait-for TranscriptList -a $AppPid -t 3000 }
