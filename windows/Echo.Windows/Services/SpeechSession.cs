@@ -53,6 +53,7 @@ public sealed class SpeechSession : IAsyncDisposable
         receiver = ReceiveAsync();
         capture.Failed += error => { if (!stopping) Failure?.Invoke(new AudioCaptureFailureException("音频中断：" + error.Message, error)); };
         this.mode = mode; this.outputId = outputId; this.inputId = inputId;
+        cancellationToken.ThrowIfCancellationRequested();
         capture.Start(mode, outputId, inputId);
         sender = SendAudioAsync();
     }

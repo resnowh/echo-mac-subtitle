@@ -28,6 +28,10 @@ public partial class MainPageViewModel : ObservableObject
     private Exception? failure;
     private CancellationTokenSource? recoveryCancellation;
     private Task recoveryTask = Task.CompletedTask;
+    private CancellationTokenSource? startupCancellation;
+    private readonly SleepRecoveryState sleepRecovery = new();
+    private CancellationTokenSource? wakeRecoveryCancellation;
+    private Task sleepStopTask = Task.CompletedTask;
     public Preferences Config { get; private set; } = new();
     public ObservableCollection<Archive> Archives { get; } = [];
     public ObservableCollection<Subtitle> Entries { get; } = [];
@@ -256,13 +260,19 @@ public partial class MainPageViewModel : ObservableObject
         }
         catch { /* Automatic suggestions are optional; recording and saved text remain unaffected. */ }
     }
-    public async Task StartAsync(int mode, string? output, string? input)
+    public async Task StartAsync(int mode, string? output, string? input, bool lifecycleRecovery = false)
     {
         if (!CanEdit) return;
+        if (!lifecycleRecovery)
+        {
+            CancelPendingWakeRecovery();
+        }
         IsBusy = true; failure = null;
         completedArchiveId = completedSegmentId = null; OnPropertyChanged(nameof(CanSplitCompletedSegment));
         correctionGeneration = Guid.NewGuid(); correctionScheduled.Clear();
         SpeechSession? current = null;
+        var starting = new CancellationTokenSource();
+        startupCancellation = starting;
         try
         {
             string key = Preferences.Unprotect(Config.SonioxSecret);
@@ -272,7 +282,7 @@ public partial class MainPageViewModel : ObservableObject
             assembler = new TokenAssembler(segment, entry => Entries.Add(entry), ScheduleAutomaticCorrection);
             current = CreateSpeechSession(); session = current;
             Status = "正在连接 Soniox…";
-            await current.StartAsync(Config, key, mode, output, input);
+            await current.StartAsync(Config, key, mode, output, input, starting.Token);
             if (failure is not null) throw failure;
             ActiveAudioMode = mode; ActiveOutputId = output; ActiveInputId = input;
             IsRecording = true; checkpoint.Start();
@@ -283,7 +293,11 @@ public partial class MainPageViewModel : ObservableObject
             if (current is not null) await current.DisposeAsync();
             session = null; IsRecording = false; Status = "无法开始：" + e.Message; Save();
         }
-        finally { IsBusy = false; }
+        finally
+        {
+            if (ReferenceEquals(startupCancellation, starting)) startupCancellation = null;
+            starting.Dispose(); IsBusy = false;
+        }
     }
     private SpeechSession CreateSpeechSession()
     {
@@ -399,8 +413,77 @@ public partial class MainPageViewModel : ObservableObject
         finally { IsBusy = false; }
         if (stopAfterFailure) await StopAsync();
     }
-    public async Task StopAsync()
+    public Task HandleSystemSuspendingAsync()
     {
+        bool startupInProgress = IsBusy && session is not null && !IsRecording;
+        bool shouldStop = sleepRecovery.BeginSleep(IsRecording);
+        wakeRecoveryCancellation?.Cancel();
+        if (startupInProgress)
+        {
+            startupCancellation?.Cancel();
+            Status = "系统即将睡眠，已取消尚未开始的录音连接；唤醒后不会自动启动。";
+            return Task.CompletedTask;
+        }
+        if (!shouldStop) return Task.CompletedTask;
+        Status = "系统即将睡眠，正在保存当前字幕并结束录音…";
+        Save();
+        sleepStopTask = StopForSleepAsync();
+        return sleepStopTask;
+    }
+    private async Task StopForSleepAsync()
+    {
+        try
+        {
+            if (recoveryCancellation is not null) await StopAsync(systemSleep: true);
+            for (int attempt = 0; IsBusy && IsRecording && attempt < 50; attempt++) await Task.Delay(100);
+            if (IsRecording) await StopAsync(systemSleep: true);
+        }
+        catch (Exception e) { Status = "睡眠前录音收尾未完整完成；已尝试保存最近字幕检查点：" + e.Message; }
+    }
+    public void CancelPendingWakeRecovery()
+    {
+        wakeRecoveryCancellation?.Cancel();
+        sleepRecovery.CancelByUser();
+    }
+    public void HandleSystemResuming()
+    {
+        if (!sleepRecovery.BeginWake()) return;
+        wakeRecoveryCancellation?.Cancel();
+        var cancellation = new CancellationTokenSource();
+        wakeRecoveryCancellation = cancellation;
+        Status = "系统已唤醒，等待音频设备恢复…";
+        _ = RecoverAfterWakeAsync(cancellation);
+    }
+    private async Task RecoverAfterWakeAsync(CancellationTokenSource cancellation)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(1), cancellation.Token);
+            if (!sleepRecovery.BeginRecovery()) return;
+            await sleepStopTask;
+            cancellation.Token.ThrowIfCancellationRequested();
+            if (!CanEdit) { Status = "唤醒后未能自动恢复录音，请检查设备并手动开始。"; sleepRecovery.FinishRecovery(); return; }
+            Status = "正在原存档中新建录音段并恢复…";
+            await StartAsync(ActiveAudioMode, ActiveOutputId, ActiveInputId, lifecycleRecovery: true);
+            if (IsRecording) Status = "录音已在原存档中新段恢复";
+            sleepRecovery.FinishRecovery();
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+        catch (Exception e)
+        {
+            Status = "唤醒后恢复失败，请手动开始录音：" + e.Message;
+            sleepRecovery.FinishRecovery();
+        }
+        finally
+        {
+            if (ReferenceEquals(wakeRecoveryCancellation, cancellation)) wakeRecoveryCancellation = null;
+            cancellation.Dispose();
+        }
+    }
+    public async Task StopAsync(bool systemSleep = false)
+    {
+        if (!systemSleep)
+            CancelPendingWakeRecovery();
         if (recoveryCancellation is { } recovery)
         {
             recovery.Cancel();

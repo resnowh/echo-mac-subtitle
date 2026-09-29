@@ -180,6 +180,14 @@ Check(AudioEndpointChangePolicy.FindUnavailableRoute([fixedRoute], "fixed-speake
     && AudioEndpointChangePolicy.IsFollowingDefault(defaultRoute, DataFlow.Capture, Role.Multimedia, "new-default-mic")
     && !AudioEndpointChangePolicy.IsFollowingDefault(defaultRoute, DataFlow.Capture, Role.Communications, "new-default-mic"),
     "audio endpoint policy follows multimedia defaults and reports loss of the explicitly selected endpoint");
+var sleepState = new SleepRecoveryState();
+bool endForSleep = sleepState.BeginSleep(recordingIntended: true);
+bool scheduleWake = sleepState.BeginWake(); bool beginWakeRecovery = sleepState.BeginRecovery(); sleepState.FinishRecovery();
+var stoppedBeforeSleep = new SleepRecoveryState();
+stoppedBeforeSleep.BeginSleep(recordingIntended: false); stoppedBeforeSleep.CancelByUser();
+Check(endForSleep && scheduleWake && beginWakeRecovery && !sleepState.IsRecovering
+    && !stoppedBeforeSleep.BeginWake(),
+    "sleep recovery restores only a recording that was intended before sleep and can be cancelled by the user");
 if (args.Contains("--audio"))
 {
     Console.WriteLine($"Devices: render={AudioCapture.Devices(DataFlow.Render).Count}, capture={AudioCapture.Devices(DataFlow.Capture).Count}");
