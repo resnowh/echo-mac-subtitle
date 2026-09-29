@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Diagnostics;
 using Echo_Windows.Core;
 using Echo_Windows.Services;
 using NAudio.CoreAudioApi;
@@ -147,6 +148,20 @@ Check(correctionLoaded?.RawSource == "Recognized text" && correctionLoaded.Sourc
 var chunkInput = new Subtitle { English = string.Concat(Enumerable.Repeat("汉", 300)) };
 var chunks = TranscriptTextChunks.Create([chunkInput], 128);
 Check(chunks.Count > 1 && chunks.All(c => c.Length <= 128) && chunks.Sum(c => c.Count(ch => ch == '汉')) == 300, "long transcript chunks stay bounded without dropping Unicode text");
+var twoHourArchive = new Archive { Segments = [new Segment { StartedAt = 800000000,
+    Entries = Enumerable.Range(0, 7200).Select(i => new Subtitle { Start = i, End = i + 1, English = $"Synthetic line {i}", Chinese = $"合成字幕 {i}" }).ToList() }] };
+var archiveStressTimer = Stopwatch.StartNew();
+var twoHourSnapshot = TranscriptFiles.Snapshot(twoHourArchive);
+string twoHourJson = JsonSerializer.Serialize(twoHourSnapshot, TranscriptFiles.Json);
+var twoHourLoaded = TranscriptFiles.Parse(twoHourJson);
+string twoHourSrt = TranscriptFiles.Srt(twoHourLoaded);
+archiveStressTimer.Stop();
+Console.WriteLine($"A16 synthetic 2-hour archive: entries={twoHourLoaded.Segments[0].Entries.Count}, JSON={Encoding.UTF8.GetByteCount(twoHourJson)} bytes, SRT={Encoding.UTF8.GetByteCount(twoHourSrt)} bytes, snapshot+JSON+parse+SRT={archiveStressTimer.ElapsedMilliseconds} ms");
+Check(twoHourLoaded.Segments[0].Entries.Count == 7200
+    && twoHourLoaded.Segments[0].Entries[0].English == "Synthetic line 0"
+    && twoHourLoaded.Segments[0].Entries[^1].English == "Synthetic line 7199"
+    && twoHourSrt.Contains("02:00:00,000") && twoHourSrt.Contains("Synthetic line 7199"),
+    "two-hour synthetic archive snapshot, JSON round trip and SRT export preserve all 7200 entries and the final timestamp");
 Check(Archive.AppleEpoch.AddSeconds(0).Year == 2001, "Apple date reference is not Unix time");
 Check(SpeechRetryPolicy.MaxRetries == 2 && SpeechRetryPolicy.Delay(1) == TimeSpan.FromSeconds(1) && SpeechRetryPolicy.Delay(2) == TimeSpan.FromSeconds(3)
     && SpeechRetryPolicy.IsTransient(new System.Net.WebSockets.WebSocketException())
