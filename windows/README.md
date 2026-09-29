@@ -106,3 +106,5 @@ winapp package windows/Echo.Windows/bin/x64/Release/net10.0-windows10.0.26100.0/
 2026-09-30：扩展 A02 后台本机采集验收：在当前 Windows 11 机器上检查播放、麦克风、双输入三种模式，并在单个麦克风识别会话中交替切换两个活动输入端点 20 次。临时字幕在切换前送达，最终字幕保持为单条；无效输入设备仍能回滚恢复。`Echo.CoreChecks --audio` 共 39 项通过，仅连接本机模拟 WebSocket，未保存音频、未调用云端、未启动 Echo 窗口。环境与结果底稿见 `docs/sources/windows-a02-audio-switch-2026-09-30.md`。
 
 2026-09-30：扩展 A03 可重复采样率检查，生产采集和测试共同使用 `AudioCapture.ToMono16k`。即时合成 44.1 kHz 双声道、48 kHz 单声道及 150 ms 延迟的 48 kHz 双声道输入；输出各 16,000 样本，延迟实测 2,402 样本，相对 2,400 样本目标误差 0.125 ms。Release x64 构建通过，`Echo.CoreChecks --audio` 共 41 项通过；未保存合成 PCM、未启动应用。真实双声卡时钟/相位同步仍待实测。底稿见 `docs/sources/windows-a03-resampling-2026-09-30.md`。
+
+2026-09-30：补齐 A05 建连前采集与有界缓冲。每个输入在 WebSocket 握手期间先采集，最多缓存 2.5 秒；连接后先追发送缓存帧，再恢复实时节奏。缓存超限会报明确错误并停止，避免静默缺口。后台本机测试在 1 秒握手延迟下缓存 0.98 秒，连接后 200 ms 降至 0.12 秒；3.2 秒延迟时在缓冲上限处明确失败。`Echo.CoreChecks --audio` 共 45 项通过，Release x64 构建通过、0 错误。未保存音频、未启动 Echo 窗口；其他硬件及运行中网络退化仍待验收。底稿见 `docs/sources/windows-a05-prebuffer-2026-09-30.md`。

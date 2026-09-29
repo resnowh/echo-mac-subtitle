@@ -24,6 +24,7 @@ public static class AudioEndpointChangePolicy
 
 public sealed class AudioCapture : IDisposable
 {
+    public const double PrebufferSeconds = 2.5;
     private readonly object gate = new();
     private readonly List<Source> sources = [];
     private readonly object notificationGate = new();
@@ -45,6 +46,7 @@ public sealed class AudioCapture : IDisposable
     }
     public string? ActiveOutputId { get { lock (notificationGate) return routes.FirstOrDefault(r => r.Flow == DataFlow.Render)?.ActiveId; } }
     public string? ActiveInputId { get { lock (notificationGate) return routes.FirstOrDefault(r => r.Flow == DataFlow.Capture)?.ActiveId; } }
+    public double BufferedSeconds { get { lock (gate) return sources.Count == 0 ? 0 : sources.Max(s => s.Buffer.BufferedSeconds); } }
     public bool IsFollowingDefault(DataFlow flow) { lock (notificationGate) return routes.Any(r => r.Flow == flow && r.SelectedId is null); }
     public static List<AudioDevice> Devices(DataFlow flow)
     {
@@ -74,6 +76,7 @@ public sealed class AudioCapture : IDisposable
     {
         using var enumerator = new MMDeviceEnumerator();
         disposing = false;
+        Interlocked.Exchange(ref failureRaised, 0);
         var nextRoutes = new List<AudioDeviceRoute>();
         try
         {
@@ -91,7 +94,6 @@ public sealed class AudioCapture : IDisposable
             }
             foreach (var source in sources) source.Capture.StartRecording();
             lock (notificationGate) { routes = nextRoutes; notificationsEnabled = true; }
-            Interlocked.Exchange(ref failureRaised, 0);
         }
         catch { DisposeSourcesLocked(); throw; }
     }
@@ -131,16 +133,20 @@ public sealed class AudioCapture : IDisposable
 
     private void ReportDeviceFailure(string message)
     {
-        if (Interlocked.Exchange(ref failureRaised, 1) == 0)
-            Failed?.Invoke(new IOException(message + "录音已停止，已收到的字幕会保存；选择可用设备后重新开始。"));
+        ReportCaptureFailure(new IOException(message + "录音已停止，已收到的字幕会保存；选择可用设备后重新开始。"));
+    }
+
+    private void ReportCaptureFailure(Exception error)
+    {
+        if (Interlocked.Exchange(ref failureRaised, 1) == 0) Failed?.Invoke(error);
     }
     private void Add(WasapiCapture capture)
     {
-        var buffer = new BufferedWaveProvider(capture.WaveFormat, TimeSpan.FromSeconds(2)) { ReadFully = true, DiscardOnBufferOverflow = false };
-        var source = new Source(capture, buffer, ToMono16k(buffer.ToSampleProvider()));
+        var buffer = new BoundedAudioPrebuffer(capture.WaveFormat, PrebufferSeconds);
+        var source = new Source(capture, buffer, ToMono16k(buffer.Samples));
         sources.Add(source);
-        source.DataHandler = (_, e) => { if (source.Stopping) return; try { buffer.AddSamples(e.Buffer, 0, e.BytesRecorded); } catch (Exception error) { if (!source.Stopping) Failed?.Invoke(error); } };
-        source.StoppedHandler = (_, e) => { if (!source.Stopping && !disposing) Failed?.Invoke(e.Exception ?? new IOException("音频设备停止采集。")); };
+        source.DataHandler = (_, e) => { if (source.Stopping) return; try { buffer.AddSamples(e.Buffer, 0, e.BytesRecorded); } catch (Exception error) { if (!source.Stopping) ReportCaptureFailure(error); } };
+        source.StoppedHandler = (_, e) => { if (!source.Stopping && !disposing) ReportCaptureFailure(e.Exception ?? new IOException("音频设备停止采集。")); };
         capture.DataAvailable += source.DataHandler;
         capture.RecordingStopped += source.StoppedHandler;
     }
@@ -186,7 +192,7 @@ public sealed class AudioCapture : IDisposable
             foreach (var source in sources) { source.Stopping = true; try { source.Capture.StopRecording(); } catch { } }
         }
     }
-    public int TailFrames { get { lock (gate) return sources.Count == 0 ? 0 : Math.Min(102, (int)Math.Ceiling(sources.Max(s => s.Buffer.BufferedDuration.TotalSeconds) * 50) + 2); } }
+    public int TailFrames { get { lock (gate) return sources.Count == 0 ? 0 : Math.Min((int)Math.Ceiling(PrebufferSeconds * 50) + 2, (int)Math.Ceiling(sources.Max(s => s.Buffer.BufferedSeconds) * 50) + 2); } }
     private void DisposeSourcesLocked()
     {
         disposing = true;
@@ -201,10 +207,10 @@ public sealed class AudioCapture : IDisposable
         }
         sources.Clear();
     }
-    private sealed class Source(WasapiCapture capture, BufferedWaveProvider buffer, ISampleProvider resampled)
+    private sealed class Source(WasapiCapture capture, BoundedAudioPrebuffer buffer, ISampleProvider resampled)
     {
         public WasapiCapture Capture { get; } = capture;
-        public BufferedWaveProvider Buffer { get; } = buffer;
+        public BoundedAudioPrebuffer Buffer { get; } = buffer;
         public ISampleProvider Resampled { get; } = resampled;
         public ClockDriftController Drift { get; } = new();
         public float[] InputFrame { get; } = new float[320 + ClockDriftController.MaximumFrameAdjustment];
@@ -214,7 +220,7 @@ public sealed class AudioCapture : IDisposable
         public EventHandler<StoppedEventArgs> StoppedHandler = null!;
         public void ReadOutputFrame()
         {
-            int inputFrames = Drift.InputFramesFor(OutputFrame.Length, Buffer.BufferedDuration.TotalSeconds);
+            int inputFrames = Drift.InputFramesFor(OutputFrame.Length, Buffer.BufferedSeconds);
             var input = InputFrame.AsSpan(0, inputFrames);
             int read = Resampled.Read(input);
             if (read < inputFrames) input[read..].Clear();
@@ -245,4 +251,34 @@ public sealed class AudioCapture : IDisposable
             return frames;
         }
     }
+}
+
+public sealed class BoundedAudioPrebuffer
+{
+    private readonly BufferedWaveProvider buffer;
+    public double CapacitySeconds { get; }
+    public double BufferedSeconds => buffer.BufferedDuration.TotalSeconds;
+    public WaveFormat WaveFormat => buffer.WaveFormat;
+    public ISampleProvider Samples => buffer.ToSampleProvider();
+    public BoundedAudioPrebuffer(WaveFormat format, double capacitySeconds = AudioCapture.PrebufferSeconds)
+    {
+        CapacitySeconds = Math.Max(0.02, capacitySeconds);
+        buffer = new BufferedWaveProvider(format, TimeSpan.FromSeconds(CapacitySeconds)) { ReadFully = true, DiscardOnBufferOverflow = false };
+    }
+    public void AddSamples(byte[] data, int offset, int count)
+    {
+        try { buffer.AddSamples(data, offset, count); }
+        catch (InvalidOperationException error) when (error.Message == "Buffer full")
+        {
+            throw new AudioPrebufferOverflowException(CapacitySeconds, error);
+        }
+    }
+}
+
+public sealed class AudioPrebufferOverflowException : IOException
+{
+    public double CapacitySeconds { get; }
+    public AudioPrebufferOverflowException(double capacitySeconds, Exception innerException)
+        : base($"音频预缓冲达到 {capacitySeconds:0.0} 秒上限；连接延迟过长，录音将停止以避免静默丢失音频。请检查网络后重试。", innerException)
+        => CapacitySeconds = capacitySeconds;
 }

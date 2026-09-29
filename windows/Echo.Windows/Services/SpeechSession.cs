@@ -10,52 +10,84 @@ namespace Echo_Windows.Services;
 public sealed class SpeechSession : IAsyncDisposable
 {
     private readonly Uri endpoint;
-    public SpeechSession() : this(new Uri("wss://stt-rt.soniox.com/transcribe-websocket")) { }
-    internal SpeechSession(Uri endpoint) { this.endpoint = endpoint; }
+    private readonly bool captureEnabled;
+    public SpeechSession() : this(new Uri("wss://stt-rt.soniox.com/transcribe-websocket"), captureEnabled: true) { }
+    internal SpeechSession(Uri endpoint, bool captureEnabled = false) { this.endpoint = endpoint; this.captureEnabled = captureEnabled; }
     private readonly ClientWebSocket socket = new();
     private readonly CancellationTokenSource lifetime = new();
     private readonly CancellationTokenSource audioStop = new();
     private readonly AudioCapture capture = new();
+    private readonly TaskCompletionSource<Exception> captureFailureSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly SemaphoreSlim audioGate = new(1, 1);
     private readonly TaskCompletionSource finished = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private Task receiver = Task.CompletedTask, sender = Task.CompletedTask;
     private int mode;
     private int defaultFlowsPending, defaultSwitchRunning;
     private string? outputId, inputId;
+    private Exception? captureFailure;
     public event Action<JsonElement>? Message;
     public event Action<double>? Level;
     public event Action<Exception>? Failure;
     public event Action<string>? Status;
     private bool stopping;
+    private bool audioTransportReady;
+    public double BufferedAudioSeconds => capture.BufferedSeconds;
     public async Task StartAsync(Preferences config, string key, int mode, string? outputId, string? inputId, CancellationToken cancellationToken = default)
     {
         using var connectTimeout = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, cancellationToken);
         connectTimeout.CancelAfter(TimeSpan.FromSeconds(20));
-        try { await socket.ConnectAsync(endpoint, connectTimeout.Token); }
-        catch (WebSocketException e)
-        {
-            int? status = ReadHandshakeStatus(e);
-            if (status is null) throw;
-            throw new SpeechServiceException($"转写服务拒绝连接（HTTP {status}）。", e, status is 408 or >= 500 and <= 599);
-        }
-        catch (OperationCanceledException e) when (!lifetime.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
-        {
-            throw new TimeoutException("连接转写服务超时。", e);
-        }
-        var request = new Dictionary<string, object> {
-            ["api_key"] = key, ["model"] = config.SonioxModel, ["audio_format"] = "pcm_s16le", ["sample_rate"] = 16000, ["num_channels"] = 1,
-            ["enable_endpoint_detection"] = true, ["max_endpoint_delay_ms"] = 900, ["enable_language_identification"] = true, ["enable_speaker_diarization"] = config.Speakers
-        };
-        capture.DefaultDeviceChanged += QueueDefaultDeviceChange;
-        if (!string.IsNullOrWhiteSpace(config.SourceLanguage)) { request["language_hints"] = new[] { config.SourceLanguage }; request["language_hints_strict"] = config.Strict; }
-        if (config.Translate) request["translation"] = new { type = "one_way", target_language = config.TargetLanguage };
-        await socket.SendAsync(JsonSerializer.SerializeToUtf8Bytes(request).AsMemory(), WebSocketMessageType.Text, true, connectTimeout.Token);
-        receiver = ReceiveAsync();
-        capture.Failed += error => { if (!stopping) Failure?.Invoke(new AudioCaptureFailureException("音频中断：" + error.Message, error)); };
         this.mode = mode; this.outputId = outputId; this.inputId = inputId;
-        cancellationToken.ThrowIfCancellationRequested();
-        capture.Start(mode, outputId, inputId);
-        sender = SendAudioAsync();
+        capture.DefaultDeviceChanged += QueueDefaultDeviceChange;
+        capture.Failed += error =>
+        {
+            var reported = new AudioCaptureFailureException(error is AudioPrebufferOverflowException ? error.Message : "音频中断：" + error.Message, error);
+            if (Interlocked.CompareExchange(ref captureFailure, reported, null) is null) captureFailureSignal.TrySetResult(reported);
+            if (!stopping) Failure?.Invoke(reported);
+        };
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (captureEnabled) capture.Start(mode, outputId, inputId);
+            Task connection = socket.ConnectAsync(endpoint, connectTimeout.Token);
+            Task completed = await Task.WhenAny(connection, captureFailureSignal.Task);
+            if (completed == captureFailureSignal.Task)
+            {
+                connectTimeout.Cancel();
+                try { await connection; } catch { }
+                throw await captureFailureSignal.Task;
+            }
+            try { await connection; }
+            catch (WebSocketException e)
+            {
+                int? status = ReadHandshakeStatus(e);
+                if (status is null) throw;
+                throw new SpeechServiceException($"转写服务拒绝连接（HTTP {status}）。", e, status is 408 or >= 500 and <= 599);
+            }
+            catch (OperationCanceledException e) when (!lifetime.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+            {
+                if (Volatile.Read(ref captureFailure) is { } error) throw error;
+                throw new TimeoutException("连接转写服务超时。", e);
+            }
+            var request = new Dictionary<string, object> {
+                ["api_key"] = key, ["model"] = config.SonioxModel, ["audio_format"] = "pcm_s16le", ["sample_rate"] = 16000, ["num_channels"] = 1,
+                ["enable_endpoint_detection"] = true, ["max_endpoint_delay_ms"] = 900, ["enable_language_identification"] = true, ["enable_speaker_diarization"] = config.Speakers
+            };
+            if (!string.IsNullOrWhiteSpace(config.SourceLanguage)) { request["language_hints"] = new[] { config.SourceLanguage }; request["language_hints_strict"] = config.Strict; }
+            if (config.Translate) request["translation"] = new { type = "one_way", target_language = config.TargetLanguage };
+            await socket.SendAsync(JsonSerializer.SerializeToUtf8Bytes(request).AsMemory(), WebSocketMessageType.Text, true, connectTimeout.Token);
+            receiver = ReceiveAsync();
+            if (Volatile.Read(ref captureFailure) is { } captureError) throw captureError;
+            sender = SendAudioAsync();
+            Volatile.Write(ref audioTransportReady, true);
+            if (Volatile.Read(ref defaultFlowsPending) != 0 && Interlocked.CompareExchange(ref defaultSwitchRunning, 1, 0) == 0)
+                _ = Task.Run(FollowDefaultDeviceAsync);
+        }
+        catch
+        {
+            Volatile.Write(ref audioTransportReady, false);
+            capture.StopInputs(); socket.Abort();
+            throw;
+        }
     }
     private int? ReadHandshakeStatus(WebSocketException error)
     {
@@ -96,6 +128,7 @@ public sealed class SpeechSession : IAsyncDisposable
     private void QueueDefaultDeviceChange(DataFlow flow)
     {
         Interlocked.Or(ref defaultFlowsPending, flow == DataFlow.Render ? 1 : 2);
+        if (!Volatile.Read(ref audioTransportReady)) return;
         if (Interlocked.CompareExchange(ref defaultSwitchRunning, 1, 0) == 0) _ = Task.Run(FollowDefaultDeviceAsync);
     }
     private async Task FollowDefaultDeviceAsync()
@@ -129,7 +162,7 @@ public sealed class SpeechSession : IAsyncDisposable
         finally
         {
             Interlocked.Exchange(ref defaultSwitchRunning, 0);
-            if (Volatile.Read(ref defaultFlowsPending) != 0 && !stopping
+            if (Volatile.Read(ref defaultFlowsPending) != 0 && !stopping && Volatile.Read(ref audioTransportReady)
                 && Interlocked.CompareExchange(ref defaultSwitchRunning, 1, 0) == 0)
                 _ = Task.Run(FollowDefaultDeviceAsync);
         }
@@ -149,24 +182,29 @@ public sealed class SpeechSession : IAsyncDisposable
         {
             // Allow a small capture lead. Only bounded memory buffers are used; no audio file is written.
             await Task.Delay(100, audioStop.Token);
-            using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(20));
             int frames = 0;
+            // Catch up the bounded pre-connect audio burst before switching to real-time pacing.
+            while (capture.BufferedSeconds > 0.08)
+                await SendCaptureFrameAsync(++frames);
+            using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(20));
             while (await timer.WaitForNextTickAsync(audioStop.Token))
-            {
-                await audioGate.WaitAsync(audioStop.Token);
-                try
-                {
-                    var bytes = capture.ReadFrame(out var level);
-                    if (++frames % 5 == 0) Level?.Invoke(level);
-                    using var timeout = CancellationTokenSource.CreateLinkedTokenSource(audioStop.Token, lifetime.Token);
-                    timeout.CancelAfter(TimeSpan.FromSeconds(5));
-                    await socket.SendAsync(bytes.AsMemory(), WebSocketMessageType.Binary, true, timeout.Token);
-                }
-                finally { audioGate.Release(); }
-            }
+                await SendCaptureFrameAsync(++frames);
         }
         catch (OperationCanceledException) when (audioStop.IsCancellationRequested || lifetime.IsCancellationRequested) { }
         catch (Exception e) { if (!stopping) Failure?.Invoke(e); }
+    }
+    private async Task SendCaptureFrameAsync(int frameNumber)
+    {
+        await audioGate.WaitAsync(audioStop.Token);
+        try
+        {
+            var bytes = capture.ReadFrame(out var level);
+            if (frameNumber % 5 == 0) Level?.Invoke(level);
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(audioStop.Token, lifetime.Token);
+            timeout.CancelAfter(TimeSpan.FromSeconds(5));
+            await socket.SendAsync(bytes.AsMemory(), WebSocketMessageType.Binary, true, timeout.Token);
+        }
+        finally { audioGate.Release(); }
     }
     private async Task ReceiveAsync()
     {
@@ -196,6 +234,7 @@ public sealed class SpeechSession : IAsyncDisposable
     }
     public async Task StopAsync()
     {
+        Volatile.Write(ref audioTransportReady, false);
         stopping = true; audioStop.Cancel(); await sender;
         capture.StopInputs();
         // The capture lead is drained before the end marker, preserving the final spoken frame.
@@ -212,6 +251,7 @@ public sealed class SpeechSession : IAsyncDisposable
     }
     public async ValueTask DisposeAsync()
     {
+        Volatile.Write(ref audioTransportReady, false);
         stopping = true; audioStop.Cancel(); lifetime.Cancel(); socket.Abort();
         try { await Task.WhenAll(sender, receiver); } catch { }
         capture.Dispose(); socket.Dispose(); audioGate.Dispose(); audioStop.Dispose(); lifetime.Dispose();

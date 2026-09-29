@@ -281,7 +281,7 @@ public partial class MainPageViewModel : ObservableObject
             segment = new Segment(); SelectedArchive.Segments.Add(segment);
             assembler = new TokenAssembler(segment, entry => Entries.Add(entry), ScheduleAutomaticCorrection);
             current = CreateSpeechSession(); session = current;
-            Status = "正在连接 Soniox…";
+            Status = "正在采集音频并连接 Soniox…";
             await current.StartAsync(Config, key, mode, output, input, starting.Token);
             if (failure is not null) throw failure;
             ActiveAudioMode = mode; ActiveOutputId = output; ActiveInputId = input;

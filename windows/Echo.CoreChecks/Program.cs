@@ -125,7 +125,7 @@ async Task<bool> CheckRejectedHandshakeAsync(int statusCode)
         var context = await rejectedListener.GetContextAsync().WaitAsync(timeout.Token);
         context.Response.StatusCode = statusCode; context.Response.Close();
     }, timeout.Token);
-    await using var rejectedSession = new SpeechSession(new Uri($"ws://127.0.0.1:{statusPort}/"));
+    await using var rejectedSession = new SpeechSession(new Uri($"ws://127.0.0.1:{statusPort}/"), captureEnabled: false);
     try { await rejectedSession.StartAsync(new Preferences(), "synthetic", 0, null, null); }
     catch (SpeechServiceException error)
     {
@@ -150,7 +150,7 @@ async Task<bool> CheckConnectCancellationAsync()
         context.Response.StatusCode = 503; context.Response.Close();
     }, serverTimeout.Token);
     using var stop = new CancellationTokenSource(TimeSpan.FromMilliseconds(80));
-    await using var canceledSession = new SpeechSession(new Uri($"ws://127.0.0.1:{statusPort}/"));
+    await using var canceledSession = new SpeechSession(new Uri($"ws://127.0.0.1:{statusPort}/"), captureEnabled: false);
     try { await canceledSession.StartAsync(new Preferences(), "synthetic", 0, null, null, stop.Token); }
     catch (OperationCanceledException) { await rejectLater; return true; }
     catch { await rejectLater; return false; }
@@ -184,6 +184,14 @@ int firstDelayedTone = delayed480.FindIndex(sample => sample > 0.1f);
 Console.WriteLine($"A03 delayed source: expected onset=2400 samples, measured={firstDelayedTone}");
 Check(firstDelayedTone is >= 1600 and <= 3200,
     "a 150 ms later-starting 48 kHz source retains its offset within the 50 ms timeline tolerance");
+var boundedPrebuffer = new BoundedAudioPrebuffer(new WaveFormat(16000, 16, 1));
+int fullPrebufferBytes = (int)(boundedPrebuffer.CapacitySeconds * boundedPrebuffer.WaveFormat.AverageBytesPerSecond);
+boundedPrebuffer.AddSamples(new byte[fullPrebufferBytes], 0, fullPrebufferBytes);
+bool overflowReported = false;
+try { boundedPrebuffer.AddSamples(new byte[640], 0, 640); }
+catch (AudioPrebufferOverflowException e) { overflowReported = e.CapacitySeconds == AudioCapture.PrebufferSeconds && e.Message.Contains("避免静默丢失音频"); }
+Check(overflowReported && boundedPrebuffer.BufferedSeconds <= AudioCapture.PrebufferSeconds,
+    "pre-connect audio storage is capped at 2.5 seconds and overrun becomes an explicit failure");
 (double Min, double Max) SimulateHour(double clockPpm)
 {
     var controller = new ClockDriftController(); double bufferedFrames = 16000 * ClockDriftController.TargetBufferSeconds;
@@ -243,6 +251,7 @@ if (args.Contains("--audio"))
     var server = Task.Run(async () =>
     {
         var context = await listener.GetContextAsync().WaitAsync(timeout.Token);
+        await Task.Delay(TimeSpan.FromSeconds(1), timeout.Token);
         using var socket = (await context.AcceptWebSocketAsync(null)).WebSocket;
         var packet = new byte[65536];
         var configResult = await socket.ReceiveAsync(new ArraySegment<byte>(packet), timeout.Token);
@@ -259,7 +268,7 @@ if (args.Contains("--audio"))
         byte[] final = Encoding.UTF8.GetBytes("""{"tokens":[{"text":"Before and after.","is_final":true,"start_ms":0,"end_ms":500}],"finished":true}""");
         await socket.SendAsync(final.AsMemory(), WebSocketMessageType.Text, true, timeout.Token);
     }, timeout.Token);
-    await using (var session = new SpeechSession(new Uri($"ws://127.0.0.1:{port}/")))
+    await using (var session = new SpeechSession(new Uri($"ws://127.0.0.1:{port}/"), captureEnabled: true))
     {
         session.Message += m =>
         {
@@ -268,6 +277,12 @@ if (args.Contains("--audio"))
             receivedFinal = m.TryGetProperty("finished", out var f) && f.GetBoolean();
         };
         await session.StartAsync(new Preferences(), "synthetic", 1, null, null);
+        double bufferedAtReady = session.BufferedAudioSeconds;
+        Check(bufferedAtReady >= 0.7, $"capture buffers audio while the WebSocket connects ({bufferedAtReady:0.00} seconds available)");
+        await Task.Delay(TimeSpan.FromMilliseconds(200));
+        double bufferedAfterCatchUp = session.BufferedAudioSeconds;
+        Console.WriteLine($"A05 catch-up buffer: at connection={bufferedAtReady:0.00}s, after 200 ms={bufferedAfterCatchUp:0.00}s");
+        Check(bufferedAfterCatchUp < bufferedAtReady - 0.25, "the sender catches up pre-connect audio instead of preserving a permanent subtitle delay");
         bool restoredInput = false;
         try { await session.SwitchDevicesAsync(null, "missing-device-id"); }
         catch (AudioDeviceSwitchException e) { restoredInput = e.CaptureRestored; }
@@ -285,6 +300,27 @@ if (args.Contains("--audio"))
     }
     await server; listener.Stop();
     Check(validConfig && receivedAudio > 0 && receivedFinal && switchedSegment.Entries.Count == 1 && switchedSegment.Entries[0].English == "Before and after.", "local WebSocket: 20 input switches preserve the session and subtitle while final PCM and end marker complete");
+
+    var delayedPortProbe = new TcpListener(IPAddress.Loopback, 0); delayedPortProbe.Start();
+    int delayedPort = ((IPEndPoint)delayedPortProbe.LocalEndpoint).Port; delayedPortProbe.Stop();
+    using var delayedListener = new HttpListener(); delayedListener.Prefixes.Add($"http://127.0.0.1:{delayedPort}/"); delayedListener.Start();
+    using var delayedTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(12));
+    var delayedServer = Task.Run(async () =>
+    {
+        var context = await delayedListener.GetContextAsync().WaitAsync(delayedTimeout.Token);
+        await Task.Delay(TimeSpan.FromSeconds(3.2), delayedTimeout.Token);
+        try { context.Response.StatusCode = 503; context.Response.Close(); }
+        catch (HttpListenerException) { }
+    }, delayedTimeout.Token);
+    Exception? overflowFailure = null;
+    await using (var slowSession = new SpeechSession(new Uri($"ws://127.0.0.1:{delayedPort}/"), captureEnabled: true))
+    {
+        try { await slowSession.StartAsync(new Preferences(), "synthetic", 1, null, null); }
+        catch (Exception e) { overflowFailure = e; }
+    }
+    await delayedServer; delayedListener.Stop();
+    Check(overflowFailure is AudioCaptureFailureException && overflowFailure.Message.Contains("2.5 秒上限"),
+        "a WebSocket handshake slower than the 2.5-second prebuffer fails visibly instead of silently dropping captured audio");
 }
 Console.WriteLine($"Completed {passed} checks. No cloud calls; no audio was saved.");
 
