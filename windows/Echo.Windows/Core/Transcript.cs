@@ -117,6 +117,23 @@ public static class TranscriptTextChunks
     }
 }
 
+public static class TranscriptSummarySelection
+{
+    public static List<Subtitle> Select(Archive archive, int scope)
+    {
+        IEnumerable<Subtitle> entries = scope switch
+        {
+            0 or 2 => archive.Segments.SelectMany(s => s.Entries),
+            1 => archive.Segments.LastOrDefault()?.Entries ?? [],
+            _ => throw new ArgumentOutOfRangeException(nameof(scope))
+        };
+        entries = entries.Where(e => !string.IsNullOrWhiteSpace(e.English));
+        if (scope == 0)
+            entries = entries.Where(e => archive.SummarizedEntries.GetValueOrDefault(e.Id) != TranscriptFiles.SummarySignature(e.English));
+        return entries.ToList();
+    }
+}
+
 public sealed class Segment
 {
     public Guid Id { get; set; } = Guid.NewGuid();

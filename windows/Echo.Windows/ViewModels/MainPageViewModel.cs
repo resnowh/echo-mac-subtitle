@@ -576,8 +576,7 @@ public partial class MainPageViewModel : ObservableObject
         {
             string key = Preferences.Unprotect(Config.DeepSeekSecret);
             if (key.Length == 0) throw new InvalidOperationException("请先在设置中填写 DeepSeek API Key。");
-            var source = (scope == 1 ? SelectedArchive.Segments.LastOrDefault()?.Entries ?? [] : SelectedArchive.Segments.SelectMany(s => s.Entries).ToList())
-                .Where(e => !string.IsNullOrWhiteSpace(e.English)).Where(e => scope != 0 || requestedArchive.SummarizedEntries.GetValueOrDefault(e.Id) != TranscriptFiles.SummarySignature(e.English)).ToList();
+            var source = TranscriptSummarySelection.Select(requestedArchive, scope);
             if (source.Count == 0) throw new InvalidOperationException("没有可总结的新文字。");
             var submitted = source.ToDictionary(e => e.Id, e => e.English);
             var chunks = TranscriptTextChunks.Create(source);

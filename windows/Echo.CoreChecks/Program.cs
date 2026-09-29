@@ -65,6 +65,24 @@ Check(metadataLoaded.Segments[0].Entries[0].Speaker == "Speaker 2" && metadataLo
 string json = JsonSerializer.Serialize(archive, TranscriptFiles.Json);
 var loaded = TranscriptFiles.Parse(json);
 Check(loaded.Id == archive.Id && loaded.Segments[0].StartedAt == 800000000 && loaded.Summary == "已保存总结" && loaded.SummarizedEntries.GetValueOrDefault(segment.Entries[0].Id) == TranscriptFiles.SummarySignature("Hello there.") && json.Contains("\"english\""), "archive summary, incremental signatures, legacy JSON fields and Apple reference date round trip");
+var summaryUnchanged = new Subtitle { English = "unchanged" };
+var summaryEdited = new Subtitle { English = "edited" };
+var summaryNew = new Subtitle { English = "new" };
+var summaryLast = new Subtitle { English = "last segment" };
+var summaryArchive = new Archive { Segments = [
+    new Segment { Entries = [summaryUnchanged, summaryEdited, summaryNew] },
+    new Segment { Entries = [summaryLast] }
+] };
+summaryArchive.SummarizedEntries[summaryUnchanged.Id] = TranscriptFiles.SummarySignature(summaryUnchanged.English);
+summaryArchive.SummarizedEntries[summaryEdited.Id] = TranscriptFiles.SummarySignature("before edit");
+summaryArchive.SummarizedEntries[summaryLast.Id] = TranscriptFiles.SummarySignature(summaryLast.English);
+var incrementalSummary = TranscriptSummarySelection.Select(summaryArchive, 0);
+var currentSegmentSummary = TranscriptSummarySelection.Select(summaryArchive, 1);
+var completeSummary = TranscriptSummarySelection.Select(summaryArchive, 2);
+Check(incrementalSummary.Select(e => e.English).SequenceEqual(["edited", "new"])
+    && currentSegmentSummary.Select(e => e.English).SequenceEqual(["last segment"])
+    && completeSummary.Count == 4,
+    "summary selection excludes unchanged entries incrementally while current-segment and whole-archive scopes stay distinct");
 var legacyId = Guid.NewGuid(); var legacySegmentId = Guid.NewGuid(); var legacyEntryId = Guid.NewGuid();
 double legacyCreated = (DateTimeOffset.Parse("2024-01-01T00:00:00Z") - Archive.AppleEpoch).TotalSeconds;
 double legacySegmentStart = (DateTimeOffset.Parse("2024-01-01T23:59:59Z") - Archive.AppleEpoch).TotalSeconds;

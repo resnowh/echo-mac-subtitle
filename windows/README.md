@@ -116,3 +116,5 @@ winapp package windows/Echo.Windows/bin/x64/Release/net10.0-windows10.0.26100.0/
 2026-09-30：扩展 A08 跨段 SRT 时间轴回归：合成 Archive 故意按倒序放置两个录音段，并让第二个时间段覆盖第一条字幕的结束时间。SRT 仍按段开始时间排序，并将重叠 cue 起点推进到前一 cue 的结束处；断言完整校验 `00:00:00–00:00:05`、`00:00:05–00:00:08`。最新 `Echo.CoreChecks --audio` 全套 48 项通过；本项仅使用合成字幕文本，未写真实音频或启动应用。大存档导出性能和实际播放器兼容仍待验证。底稿见 `docs/sources/windows-a08-archive-export-2026-09-30.md`。
 
 2026-09-30：补齐 A09 旧版字段与跨日时间回归。构造缺少 speaker/language 的旧 JSON，确认字段保持 null、不推断语种；段落从 2024-01-01 23:59:59 UTC 开始、字幕起点为 2 秒，解析后仍对应 2024-01-02 00:00:01 UTC，SRT 则以该档最早字幕为 0 秒正确导出。全套 `Echo.CoreChecks --audio` 共 49 项通过；仅使用合成 JSON、未写真实录音或启动应用。通过静态检查确认导入以 JSON 文本解析并写入应用自己的档案路径，但本轮没有比较源文件导入前后的字节哈希。底稿见 `docs/sources/windows-a09-legacy-dates-2026-09-30.md`。
+
+2026-09-30：补齐 A10 三种总结范围的可重复选择测试，并将纯选择逻辑用于生产总结流程。增量模式排除签名未变的旧条目、包含被修改和新加入的文字；当前段仅取末段；全文范围包含两段所有条目。既有 Unicode 长文分块检查仍通过。Release x64 构建通过，0 错误、10 条 NAudio 弃用警告；`Echo.CoreChecks --audio` 共 50 项通过。未配置或调用 DeepSeek、未启动窗口。真实总结响应、超大存档完整请求及总结期间录音并行仍需后续验收。底稿见 `docs/sources/windows-a10-summary-selection-2026-09-30.md`。
