@@ -81,3 +81,5 @@ winapp package windows/Echo.Windows/bin/x64/Release/net10.0-windows10.0.26100.0/
 
 
 最新自签名包的 SHA-256：`0131219EEAC805FE5C6E502F85AF931A06B76686695B561F75EAD43E45763C98`。开发机通过包身份运行与设置面板滚动检查已通过；跨机器安装仍待验证。
+
+2026-09-29 同步：当前分支已合入 `origin/main` 至 `c7b9e37`，包含 Mac 端新增的字幕响应优化、可撤销手动编辑、可选 AI 校对建议及语义边界拆分。此次合并未改动 Windows 代码或测试包。Windows 版尚未提供逐条字幕编辑、撤销和 AI 校对建议，因此与最新 Mac 版仍有功能差距。
