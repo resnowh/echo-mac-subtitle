@@ -20,10 +20,12 @@ public sealed class SpeechSession : IAsyncDisposable
     private readonly TaskCompletionSource finished = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private Task receiver = Task.CompletedTask, sender = Task.CompletedTask;
     private int mode;
+    private int defaultFlowsPending, defaultSwitchRunning;
     private string? outputId, inputId;
     public event Action<JsonElement>? Message;
     public event Action<double>? Level;
     public event Action<Exception>? Failure;
+    public event Action<string>? Status;
     private bool stopping;
     public async Task StartAsync(Preferences config, string key, int mode, string? outputId, string? inputId, CancellationToken cancellationToken = default)
     {
@@ -44,6 +46,7 @@ public sealed class SpeechSession : IAsyncDisposable
             ["api_key"] = key, ["model"] = config.SonioxModel, ["audio_format"] = "pcm_s16le", ["sample_rate"] = 16000, ["num_channels"] = 1,
             ["enable_endpoint_detection"] = true, ["max_endpoint_delay_ms"] = 900, ["enable_language_identification"] = true, ["enable_speaker_diarization"] = config.Speakers
         };
+        capture.DefaultDeviceChanged += QueueDefaultDeviceChange;
         if (!string.IsNullOrWhiteSpace(config.SourceLanguage)) { request["language_hints"] = new[] { config.SourceLanguage }; request["language_hints_strict"] = config.Strict; }
         if (config.Translate) request["translation"] = new { type = "one_way", target_language = config.TargetLanguage };
         await socket.SendAsync(JsonSerializer.SerializeToUtf8Bytes(request).AsMemory(), WebSocketMessageType.Text, true, connectTimeout.Token);
@@ -60,11 +63,11 @@ public sealed class SpeechSession : IAsyncDisposable
         var match = Regex.Match(error.Message, @"status code\s+'(?<status>[1-5]\d{2})'", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         return match.Success && int.TryParse(match.Groups["status"].Value, out int messageStatus) ? messageStatus : null;
     }
-    public async Task SwitchDevicesAsync(string? newOutputId, string? newInputId)
+    public async Task SwitchDevicesAsync(string? newOutputId, string? newInputId, bool forceRestart = false)
     {
         if (stopping) throw new InvalidOperationException("录音正在停止，暂时不能切换设备。");
-        if (newOutputId == outputId && newInputId == inputId) return;
-        string? oldOutputId = outputId, oldInputId = inputId;
+        if (!forceRestart && newOutputId == outputId && newInputId == inputId) return;
+        string? oldOutputId = capture.ActiveOutputId ?? outputId, oldInputId = capture.ActiveInputId ?? inputId;
         await audioGate.WaitAsync(audioStop.Token);
         try
         {
@@ -88,6 +91,47 @@ public sealed class SpeechSession : IAsyncDisposable
             }
         }
         finally { audioGate.Release(); }
+    }
+    private void QueueDefaultDeviceChange(DataFlow flow)
+    {
+        Interlocked.Or(ref defaultFlowsPending, flow == DataFlow.Render ? 1 : 2);
+        if (Interlocked.CompareExchange(ref defaultSwitchRunning, 1, 0) == 0) _ = Task.Run(FollowDefaultDeviceAsync);
+    }
+    private async Task FollowDefaultDeviceAsync()
+    {
+        try
+        {
+            while (true)
+            {
+                int pending = Interlocked.Exchange(ref defaultFlowsPending, 0);
+                if (pending == 0 || stopping) return;
+                bool shouldRefresh = (pending & 1) != 0 && capture.IsFollowingDefault(DataFlow.Render)
+                    || (pending & 2) != 0 && capture.IsFollowingDefault(DataFlow.Capture);
+                if (!shouldRefresh) continue;
+                Status?.Invoke("系统默认音频设备已变化，正在切换采集设备…");
+                try
+                {
+                    await SwitchDevicesAsync(outputId, inputId, forceRestart: true);
+                    Status?.Invoke("已跟随系统默认音频设备切换；转写会话保持连接。");
+                }
+                catch (AudioDeviceSwitchException e) when (e.CaptureRestored)
+                {
+                    Status?.Invoke(e.Message + "当前仍使用原设备；可刷新设备列表后手动切换。");
+                }
+                catch (Exception e)
+                {
+                    if (!stopping) Failure?.Invoke(new AudioCaptureFailureException("跟随系统默认设备失败：" + e.Message, e));
+                    return;
+                }
+            }
+        }
+        finally
+        {
+            Interlocked.Exchange(ref defaultSwitchRunning, 0);
+            if (Volatile.Read(ref defaultFlowsPending) != 0 && !stopping
+                && Interlocked.CompareExchange(ref defaultSwitchRunning, 1, 0) == 0)
+                _ = Task.Run(FollowDefaultDeviceAsync);
+        }
     }
     private async Task SendCaptureTailAsync()
     {

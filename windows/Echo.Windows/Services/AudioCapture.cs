@@ -9,12 +9,43 @@ public sealed record AudioDevice(string Id, string Name)
     public override string ToString() => Name;
 }
 
+public sealed record AudioDeviceRoute(DataFlow Flow, string? SelectedId, string ActiveId, string Name);
+
+public static class AudioEndpointChangePolicy
+{
+    public static AudioDeviceRoute? FindUnavailableRoute(IEnumerable<AudioDeviceRoute> routes, string deviceId, DeviceState state)
+        => state == DeviceState.Active ? null : routes.FirstOrDefault(route => route.ActiveId == deviceId);
+
+    public static bool IsFollowingDefault(AudioDeviceRoute route, DataFlow flow, Role role, string? newDefaultId)
+        => role == Role.Multimedia && route.Flow == flow && route.SelectedId is null && route.ActiveId != newDefaultId;
+
+    public static bool ShouldRefreshDefaultAfterUnavailable(AudioDeviceRoute route) => route.SelectedId is null;
+}
+
 public sealed class AudioCapture : IDisposable
 {
     private readonly object gate = new();
     private readonly List<Source> sources = [];
+    private readonly object notificationGate = new();
+    private readonly MMDeviceEnumerator notificationEnumerator = new();
+    private readonly MMDeviceNotificationClient notificationClient;
+    private List<AudioDeviceRoute> routes = [];
+    private bool notificationsEnabled;
+    private bool notificationDisposed;
+    private int failureRaised;
     private bool disposing;
     public event Action<Exception>? Failed;
+    public event Action<DataFlow>? DefaultDeviceChanged;
+    public AudioCapture()
+    {
+        notificationClient = notificationEnumerator.CreateNotificationClient(useSynchronizationContext: false);
+        notificationClient.DeviceStateChanged += OnDeviceStateChanged;
+        notificationClient.DeviceRemoved += OnDeviceRemoved;
+        notificationClient.DefaultDeviceChanged += OnDefaultDeviceChanged;
+    }
+    public string? ActiveOutputId { get { lock (notificationGate) return routes.FirstOrDefault(r => r.Flow == DataFlow.Render)?.ActiveId; } }
+    public string? ActiveInputId { get { lock (notificationGate) return routes.FirstOrDefault(r => r.Flow == DataFlow.Capture)?.ActiveId; } }
+    public bool IsFollowingDefault(DataFlow flow) { lock (notificationGate) return routes.Any(r => r.Flow == flow && r.SelectedId is null); }
     public static List<AudioDevice> Devices(DataFlow flow)
     {
         using var enumerator = new MMDeviceEnumerator();
@@ -37,13 +68,65 @@ public sealed class AudioCapture : IDisposable
     {
         using var enumerator = new MMDeviceEnumerator();
         disposing = false;
+        var nextRoutes = new List<AudioDeviceRoute>();
         try
         {
-            if (mode is 0 or 2) Add(new WasapiLoopbackCapture(outputId is null ? enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia) : enumerator.GetDevice(outputId)));
-            if (mode is 1 or 2) Add(new WasapiCapture(inputId is null ? enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Multimedia) : enumerator.GetDevice(inputId)));
+            if (mode is 0 or 2)
+            {
+                var device = outputId is null ? enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia) : enumerator.GetDevice(outputId);
+                nextRoutes.Add(new(DataFlow.Render, outputId, device.ID, device.FriendlyName));
+                Add(new WasapiLoopbackCapture(device));
+            }
+            if (mode is 1 or 2)
+            {
+                var device = inputId is null ? enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Multimedia) : enumerator.GetDevice(inputId);
+                nextRoutes.Add(new(DataFlow.Capture, inputId, device.ID, device.FriendlyName));
+                Add(new WasapiCapture(device));
+            }
             foreach (var source in sources) source.Capture.StartRecording();
+            lock (notificationGate) { routes = nextRoutes; notificationsEnabled = true; }
+            Interlocked.Exchange(ref failureRaised, 0);
         }
         catch { DisposeSourcesLocked(); throw; }
+    }
+
+    private void OnDeviceStateChanged(object? sender, DeviceStateChangedEventArgs e)
+    {
+        AudioDeviceRoute? route;
+        lock (notificationGate)
+            route = notificationsEnabled ? AudioEndpointChangePolicy.FindUnavailableRoute(routes, e.DeviceId, e.NewState) : null;
+        if (route is null) return;
+        if (AudioEndpointChangePolicy.ShouldRefreshDefaultAfterUnavailable(route)) DefaultDeviceChanged?.Invoke(route.Flow);
+        else ReportDeviceFailure($"音频设备“{route.Name}”已停用或断开。");
+    }
+
+    private void OnDeviceRemoved(object? sender, DeviceNotificationEventArgs e)
+    {
+        AudioDeviceRoute? route;
+        lock (notificationGate) route = notificationsEnabled ? routes.FirstOrDefault(r => r.ActiveId == e.DeviceId) : null;
+        if (route is null) return;
+        if (AudioEndpointChangePolicy.ShouldRefreshDefaultAfterUnavailable(route)) DefaultDeviceChanged?.Invoke(route.Flow);
+        else ReportDeviceFailure($"音频设备“{route.Name}”已移除。");
+    }
+
+    private void OnDefaultDeviceChanged(object? sender, DefaultDeviceChangedEventArgs e)
+    {
+        bool following;
+        lock (notificationGate)
+            following = notificationsEnabled && routes.Any(route => AudioEndpointChangePolicy.IsFollowingDefault(route, e.Flow, e.Role, e.DeviceId));
+        if (!following) return;
+        if (string.IsNullOrWhiteSpace(e.DeviceId))
+        {
+            ReportDeviceFailure($"系统已取消默认{(e.Flow == DataFlow.Render ? "播放设备" : "录音设备")}，无法继续采集。");
+            return;
+        }
+        DefaultDeviceChanged?.Invoke(e.Flow);
+    }
+
+    private void ReportDeviceFailure(string message)
+    {
+        if (Interlocked.Exchange(ref failureRaised, 1) == 0)
+            Failed?.Invoke(new IOException(message + "录音已停止，已收到的字幕会保存；选择可用设备后重新开始。"));
     }
     private void Add(WasapiCapture capture)
     {
@@ -80,13 +163,23 @@ public sealed class AudioCapture : IDisposable
     }
     public void Dispose()
     {
-        lock (gate) DisposeSourcesLocked();
+        lock (gate)
+        {
+            DisposeSourcesLocked();
+            if (!notificationDisposed)
+            {
+                notificationDisposed = true;
+                notificationClient.Dispose();
+                notificationEnumerator.Dispose();
+            }
+        }
     }
     public void StopInputs()
     {
         lock (gate)
         {
             disposing = true;
+            lock (notificationGate) notificationsEnabled = false;
             foreach (var source in sources) { source.Stopping = true; try { source.Capture.StopRecording(); } catch { } }
         }
     }
@@ -94,6 +187,7 @@ public sealed class AudioCapture : IDisposable
     private void DisposeSourcesLocked()
     {
         disposing = true;
+        lock (notificationGate) { notificationsEnabled = false; routes = []; }
         foreach (var source in sources)
         {
             source.Stopping = true;

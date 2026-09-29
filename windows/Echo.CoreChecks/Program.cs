@@ -170,6 +170,16 @@ Check(neutralFrames == 320 && highBufferFrames > 320 && lowBufferFrames < 320
 var fastClock = SimulateHour(500); var slowClock = SimulateHour(-500);
 Check(fastClock.Min > 0 && fastClock.Max < 16000 && slowClock.Min > 0 && slowClock.Max < 16000,
     "one-hour simulated independent capture clocks at plus/minus 500 ppm keep queues inside the one-second safety bound");
+var fixedRoute = new AudioDeviceRoute(DataFlow.Render, "fixed-speaker", "fixed-speaker", "USB Speaker");
+var defaultRoute = new AudioDeviceRoute(DataFlow.Capture, null, "old-default-mic", "Built-in Microphone");
+Check(AudioEndpointChangePolicy.FindUnavailableRoute([fixedRoute], "fixed-speaker", DeviceState.Unplugged)?.Name == "USB Speaker"
+    && AudioEndpointChangePolicy.FindUnavailableRoute([fixedRoute], "fixed-speaker", DeviceState.Active) is null
+    && !AudioEndpointChangePolicy.ShouldRefreshDefaultAfterUnavailable(fixedRoute)
+    && AudioEndpointChangePolicy.ShouldRefreshDefaultAfterUnavailable(defaultRoute)
+    && !AudioEndpointChangePolicy.IsFollowingDefault(fixedRoute, DataFlow.Render, Role.Multimedia, "new-default-speaker")
+    && AudioEndpointChangePolicy.IsFollowingDefault(defaultRoute, DataFlow.Capture, Role.Multimedia, "new-default-mic")
+    && !AudioEndpointChangePolicy.IsFollowingDefault(defaultRoute, DataFlow.Capture, Role.Communications, "new-default-mic"),
+    "audio endpoint policy follows multimedia defaults and reports loss of the explicitly selected endpoint");
 if (args.Contains("--audio"))
 {
     Console.WriteLine($"Devices: render={AudioCapture.Devices(DataFlow.Render).Count}, capture={AudioCapture.Devices(DataFlow.Capture).Count}");

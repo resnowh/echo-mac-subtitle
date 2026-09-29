@@ -290,6 +290,7 @@ public partial class MainPageViewModel : ObservableObject
         var current = new SpeechSession();
         current.Message += json => ui.TryEnqueue(() => { if (ReferenceEquals(session, current)) assembler?.Apply(json); });
         current.Level += value => ui.TryEnqueue(() => { if (ReferenceEquals(session, current)) Level = Math.Min(100, value * 100); });
+        current.Status += status => ui.TryEnqueue(() => { if (ReferenceEquals(session, current)) Status = status; });
         current.Failure += error => ui.TryEnqueue(() => HandleSessionFailure(current, error));
         return current;
     }
