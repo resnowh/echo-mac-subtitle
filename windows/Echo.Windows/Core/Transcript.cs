@@ -183,7 +183,13 @@ public static class ArchiveOperations
 
 public static class TranscriptFiles
 {
-    public static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, PropertyNameCaseInsensitive = true, WriteIndented = true };
+    public static readonly JsonSerializerOptions Json = CreateJsonOptions();
+    private static JsonSerializerOptions CreateJsonOptions()
+    {
+        var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, PropertyNameCaseInsensitive = true, WriteIndented = true };
+        options.Converters.Add(new AppleDateTimeOffsetJsonConverter());
+        return options;
+    }
     public static string SummarySignature(string text) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(text)));
     public static Archive Snapshot(Archive source) => new()
     {
@@ -274,29 +280,44 @@ public static class TranscriptFiles
     }
     public static string Srt(Archive archive)
     {
-        var all = archive.Segments.OrderBy(s => s.StartedAt).SelectMany(s => s.Entries.Select(e => (e, at: e.RecordedAt ?? s.StartedAt + e.Start)))
-            .Where(x => !string.IsNullOrWhiteSpace(x.e.English + x.e.Chinese)).ToList();
+        var all = archive.Segments.OrderBy(s => s.StartedAt).SelectMany(s => s.Entries.Select(e => (e, at: e.RecordedAt ?? s.StartedAt + e.Start))).ToList();
         if (all.Count == 0) return "";
         double origin = all.Min(x => x.at), last = 0;
+        var exportEntries = all.Where(x => !string.IsNullOrWhiteSpace(x.e.English)).ToList();
+        if (exportEntries.Count == 0) return "";
         var result = new StringBuilder(); int index = 1;
-        foreach (var (e, at) in all)
+        foreach (var (e, at) in exportEntries)
         {
             double start = Math.Max(last, at - origin), end = start + Math.Max(.5, e.End - e.Start);
+            if (index > 1) result.AppendLine();
             result.AppendLine((index++).ToString(CultureInfo.InvariantCulture));
             result.AppendLine($"{Stamp(start)} --> {Stamp(end)}");
-            if (!string.IsNullOrWhiteSpace(e.Speaker)) result.Append($"[{e.Speaker}] ");
-            if (!string.IsNullOrWhiteSpace(e.Language)) result.Append($"[{e.Language}] ");
-            if (!string.IsNullOrWhiteSpace(e.English)) result.AppendLine(e.English.Trim());
+            if (!string.IsNullOrWhiteSpace(e.Speaker)) result.AppendLine($"[{e.Speaker}]");
+            result.AppendLine(e.English.Trim());
             if (!string.IsNullOrWhiteSpace(e.Chinese)) result.AppendLine(e.Chinese.Trim());
-            result.AppendLine(); last = end;
+            last = end;
         }
         return result.ToString();
     }
     private static string Stamp(double seconds)
     {
-        var t = TimeSpan.FromMilliseconds(Math.Round(seconds * 1000));
+        var t = TimeSpan.FromMilliseconds(Math.Truncate(seconds * 1000));
         return $"{(int)t.TotalHours:00}:{t.Minutes:00}:{t.Seconds:00},{t.Milliseconds:000}";
     }
+}
+
+public sealed class AppleDateTimeOffsetJsonConverter : JsonConverter<DateTimeOffset>
+{
+    public override DateTimeOffset Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.Number) return Archive.AppleEpoch.AddSeconds(reader.GetDouble());
+        if (reader.TokenType == JsonTokenType.String)
+            return DateTimeOffset.Parse(reader.GetString()!, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+        throw new JsonException("Date must be an Apple epoch number or an ISO-8601 string.");
+    }
+
+    public override void Write(Utf8JsonWriter writer, DateTimeOffset value, JsonSerializerOptions options)
+        => writer.WriteNumberValue((value - Archive.AppleEpoch).TotalSeconds);
 }
 
 // Final tokens append exactly once; provisional tokens are replaced on each response.

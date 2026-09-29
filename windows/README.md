@@ -50,15 +50,15 @@ NuGet 版本记录在 `packages.lock.json`。正式 CI 可用 `dotnet restore --
 
 ## 测试签名安装包
 
-本地交付位置：`windows/artifacts/Echo-Windows-x64-mac-ui-preview.msix`，约 117 MiB，包含运行时。附带 `Echo-preview.cer` 公钥证书。**这是自签名测试包，不是公众发行证书，也不是商店上架版本。**
+本地交付位置：`windows/artifacts/Echo-Windows-x64-a17-20260930.msix`，约 117 MiB，包含运行时。附带 `Echo-preview.cer` 公钥证书。**这是自签名测试包，不是公众发行证书，也不是商店上架版本。**
 
-其他测试机器需要先审查并信任该测试发布者证书，再安装 MSIX；普通用户直接双击可能被不受信任证书拦截。当前机器已通过开发注册启动，尚未用另一台干净机器验证此 MSIX 的安装。不要把本机的 `.pfx` 私钥发给测试用户或提交到 Git。安装包和私钥均被 Git 忽略。
+其他测试机器需要先审查并信任该测试发布者证书，再安装 MSIX；普通用户直接双击可能被不受信任证书拦截。此前候选包曾通过开发注册启动；当前 A17 预览包没有安装或启动，`Get-AuthenticodeSignature` 显示证书链终止于未受信任根。尚未用另一台干净机器验证安装。不要把本机的 `.pfx` 私钥发给测试用户或提交到 Git。安装包和私钥均被 Git 忽略。
 
 可复现打包命令（已构建并通过 `winapp run` 生成 AppX 目录后）：
 
 ```powershell
 winapp cert generate --manifest windows/Echo.Windows/Package.appxmanifest --output windows/artifacts/Echo-preview.pfx --export-cer
-winapp package windows/Echo.Windows/bin/x64/Release/net10.0-windows10.0.26100.0/win-x64/AppX --output windows/artifacts/Echo-Windows-x64-mac-ui-preview.msix --cert windows/artifacts/Echo-preview.pfx
+winapp package windows/Echo.Windows/bin/x64/Release/net10.0-windows10.0.26100.0/win-x64/AppX --output windows/artifacts/Echo-Windows-x64-a17-20260930.msix --cert windows/artifacts/Echo-preview.pfx
 ```
 
 生产发布仍需确定发布者身份、正式代码签名或商店发行、安装升级测试、隐私政策及长时间稳定性验证。
@@ -83,7 +83,7 @@ winapp package windows/Echo.Windows/bin/x64/Release/net10.0-windows10.0.26100.0/
 2026-09-29：进一步参照 macOS/EchoMacApp.swift 和 TranscriptViews.swift，完成双栏字幕表头、逐行分隔、底部录音/存档/波形三行操作、顶部主题切换及设置覆盖面板。Release 构建与 9 项 UI 冒烟检查通过；截图保留在工作区 docs/sources/windows-mac-ui-*.png。
 
 
-最新自签名包的 SHA-256：`0131219EEAC805FE5C6E502F85AF931A06B76686695B561F75EAD43E45763C98`。开发机通过包身份运行与设置面板滚动检查已通过；跨机器安装仍待验证。
+当前 A17 自签名预览包 SHA-256：`7C6313A7BE226365215D9E5A9B246515FB21F0CF4341B546E7E350209946FB35`。Windows 当前将证书链判为未信任根；本轮没有安装或启动该包，跨机器安装仍待验证。旧候选包哈希保留在 `docs/sources/windows-a18-msix-preview-2026-09-30.md`。
 
 2026-09-29 同步并补齐：当前分支已合入 `origin/main` 至 `c7b9e37`，包含 Mac 端新增的字幕响应优化、可撤销手动编辑、可选 AI 校对建议及语义边界拆分。Windows 已增加逐条字幕编辑、撤销、查看原始识别稿、手动/可选自动 AI 校对、重新翻译及校对术语设置。自动校对默认关闭；开启后在分句或说话人切换边界排队生成建议，仍需人工应用。人工修改按字段锁定，后续识别不会覆盖锁定字段；字幕发生变化时旧建议会失效。最终识别 token 的说话人变化会拆成独立字幕行。校对数据使用 Mac 兼容字段；总结保存在当前存档的可选 `summary` 字段，增量总结签名也随存档保存，长文字稿按不超过 18,000 字符的块顺序总结。Release x64 后台构建通过，0 错误；核心检查覆盖说话人分行、单次分句回调、校对锁定、撤销、存档总结往返与 Unicode 分块。未启动应用窗口。仍待 Mac 实机双向存档验证与跨机器安装验证。
 
@@ -109,7 +109,7 @@ winapp package windows/Echo.Windows/bin/x64/Release/net10.0-windows10.0.26100.0/
 
 2026-09-30：补齐 A05 建连前采集与有界缓冲。每个输入在 WebSocket 握手期间先采集，最多缓存 2.5 秒；连接后先追发送缓存帧，再恢复实时节奏。缓存超限会报明确错误并停止，避免静默缺口。后台本机测试在 1 秒握手延迟下缓存 0.98 秒，连接后 200 ms 降至约 0.11～0.12 秒；3.2 秒延迟时在缓冲上限处明确失败。A06 完成后的 `Echo.CoreChecks --audio` 共 46 项通过，Release x64 构建通过。未保存音频、未启动 Echo 窗口；其他硬件及运行中网络退化仍待验收。底稿见 `docs/sources/windows-a05-prebuffer-2026-09-30.md`。
 
-2026-09-30：补齐 A06 识别语言元数据在字幕行和 SRT 中的展示。字幕行现在订阅语言属性变更，并在有检测值时显示语言代码；SRT 在英文字幕前写入 `[Speaker N] [语言代码]`。合成最终 token 覆盖 Speaker 变化与 en/ja 语言绑定，Archive JSON 往返保留 Speaker/语言，SRT 断言 `[Speaker 2] [fr] bonjour`。Release x64 构建通过，`Echo.CoreChecks --audio` 共 46 项通过；XAML 由构建编译但没有启动窗口。没有保存真实语音或调用云服务；服务字段兼容及实际视觉排版待验证。底稿见 `docs/sources/windows-a06-speaker-language-2026-09-30.md`。
+2026-09-30：补齐 A06 识别语言元数据在字幕行和 Archive 中的保留。字幕行订阅语言属性变更，并在有检测值时显示语言代码；A17 对齐后 SRT 采用 Mac 的说话人独占行格式，检测语言仍保存在 Archive 但不写入 SRT。合成最终 token 覆盖 Speaker 变化与 en/ja 绑定；Archive JSON 往返保留 Speaker/语言。底稿见 `docs/sources/windows-a06-speaker-language-2026-09-30.md`。
 
 2026-09-30：补齐 A07 停止收尾超时提示。会话正常停止等待服务端最终识别结果；若 8 秒内未收到结果，返回明确“最后识别结果超时，最后结果可能不完整”异常，界面继续保存已收到文字并提示不完整。后台本机模拟 WebSocket 分别验证正常最终响应和收到结束标记后故意不回最终结果的超时路径；全套 `Echo.CoreChecks --audio` 共 47 项通过，Release x64 构建通过、0 错误。未启动 Echo 窗口、未调用云服务、未保存音频。真实网络延迟分布待后续观测。底稿见 `docs/sources/windows-a07-stop-final-2026-09-30.md`。
 
@@ -127,4 +127,6 @@ winapp package windows/Echo.Windows/bin/x64/Release/net10.0-windows10.0.26100.0/
 
 2026-09-30：为当前 Release x64 构建生成自签名预览 MSIX `windows/artifacts/Echo-Windows-x64-20260930.msix`。WinApp CLI 0.6.1；包身份版本 1.0.0.0、架构 x64；签名发布者与清单 `CN=AppPublisher` 匹配，包内有 `AppxSignature.p7x`。SHA-256 与文件大小见 `docs/sources/windows-a18-msix-preview-2026-09-30.md`。Windows 证书链状态为未受信任根，因此该包只用于后续显式信任后的预览安装；本轮未安装、未导入/信任证书、未启动应用。正式证书、时间戳、干净机器安装升级和回退仍待完成。
 
-2026-09-30：扩展 A16 两小时规模数据路径检查：即时合成 7,200 条双语字幕（每秒一条），执行 Archive 快照、JSON 序列化/解析和完整 SRT 导出。2,501,561-byte JSON 与 565,473-byte SRT 共保留全部 7,200 条，尾部时间码到 02:00:00；内存流水线用时 71 ms。最新 `Echo.CoreChecks --audio` 共 54 项通过。未进行磁盘 I/O、UI 渲染、真实录音、内存曲线或两小时运行；见 `docs/sources/windows-a16-two-hour-archive-2026-09-30.md`。
+2026-09-30：A17 对照 macOS `TranscriptArchiveStore`、`TranscriptModels` 与 `SRTExporter`，修正 Windows SRT 的说话人位置、英文条目筛选、全条目零点和毫秒截断；校对历史 `Date` 写为 Apple epoch 秒，读取时兼容旧 ISO-8601 Windows 日期。Swift Codable 形状样本、Windows JSON 往返及同格式 SRT 断言通过；Release x64 构建 0 错误、10 条既有警告，`Echo.CoreChecks --audio` 共 56 项通过。当前机器没有 Swift/macOS runtime；未实际运行 Mac 生成/读取同一存档。为新代码另生成自签名预览包 `windows/artifacts/Echo-Windows-x64-a17-20260930.msix`，哈希与签名状态见 A18/A17 底稿。未安装或启动应用，未导入证书。
+
+2026-09-30：扩展 A16 两小时规模数据路径检查：即时合成 7,200 条双语字幕（每秒一条），执行 Archive 快照、JSON 序列化/解析和完整 SRT 导出。2,501,561-byte JSON 与 565,473-byte SRT 共保留全部 7,200 条，尾部时间码到 02:00:00；内存流水线用时 71 ms。A16 当时的全套 `Echo.CoreChecks --audio` 共 54 项通过；A17 对齐后全套升至 56 项。未进行磁盘 I/O、UI 渲染、真实录音、内存曲线或两小时运行；见 `docs/sources/windows-a16-two-hour-archive-2026-09-30.md`。

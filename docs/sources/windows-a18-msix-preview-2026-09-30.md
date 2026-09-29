@@ -18,12 +18,22 @@
 - 签名者 `CN=AppPublisher`，证书 thumbprint `ADDF31C7C19756CF27C37A6D72FBC5FAA3D95B69`，与清单 Publisher 匹配。
 - Windows `Get-AuthenticodeSignature` 返回 `UnknownError`，说明证书链终止于不受信任的根。该结果不能作为当前机器或其他机器已信任此发布者的证据。
 
+## A17 当前候选包
+
+2026-09-30 为 A17 的 Archive/SRT 兼容改动重新构建并另存新包，未覆盖上面的旧候选：
+
+- 路径：`windows/artifacts/Echo-Windows-x64-a17-20260930.msix`
+- 大小：122,703,308 bytes
+- SHA-256：`7C6313A7BE226365215D9E5A9B246515FB21F0CF4341B546E7E350209946FB35`
+- Identity/版本/架构/Publisher：与上一包相同（`B7582E49-F75A-4EFA-950C-C6754B9E496E` / `1.0.0.0` / `x64` / `CN=AppPublisher`）。
+- 签名者 thumbprint 仍为 `ADDF31C7C19756CF27C37A6D72FBC5FAA3D95B69`，包内有 `AppxSignature.p7x`；Windows 状态仍为 `UnknownError`，原因仍是不受信任根。
+
 ## 边界与未完成验收
 
 - 使用的是已有本地测试证书，不是正式个人/组织代码签名证书；本轮没有安装/信任该证书，没有安装或启动 MSIX，也未修改系统证书信任存储。
 - 没有可信时间戳；正式分发前必须用长期有效的发布身份重新签名并带可信时间戳。
 - 未在干净机器安装、升级、启动、填写 API Key、读取旧档或卸载回退。A18 仍未通过。
-- 预览包与私钥均保留在 `windows/artifacts` 忽略目录，不提交到 Git；哈希及可复核元数据写入本底稿。
+- 旧版与 A17 预览包、私钥均保留在 `windows/artifacts` 忽略目录，不提交到 Git；哈希及可复核元数据写入本底稿。
 
 ## 数据留存
 

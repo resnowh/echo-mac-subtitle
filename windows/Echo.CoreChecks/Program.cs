@@ -60,9 +60,11 @@ var metadataArchive = new Archive { Segments = [new Segment { StartedAt = 800000
 string metadataJson = JsonSerializer.Serialize(metadataArchive, TranscriptFiles.Json);
 var metadataLoaded = TranscriptFiles.Parse(metadataJson);
 string metadataSrt = TranscriptFiles.Srt(metadataLoaded);
+string normalizedMetadataSrt = metadataSrt.Replace("\r\n", "\n");
 Check(metadataLoaded.Segments[0].Entries[0].Speaker == "Speaker 2" && metadataLoaded.Segments[0].Entries[0].Language == "fr"
-    && metadataSrt.Contains("[Speaker 2] [fr] bonjour") && metadataArchive.Segments[0].Entries[0].HasLanguage,
-    "anonymous speaker and detected language survive archive round trip, remain available to the subtitle view, and export in SRT");
+    && normalizedMetadataSrt.Contains("[Speaker 2]\nbonjour") && !normalizedMetadataSrt.Contains("[fr]")
+    && metadataArchive.Segments[0].Entries[0].HasLanguage,
+    "anonymous speaker and detected language survive archive round trip, while SRT keeps the Mac speaker-line format");
 string json = JsonSerializer.Serialize(archive, TranscriptFiles.Json);
 var loaded = TranscriptFiles.Parse(json);
 Check(loaded.Id == archive.Id && loaded.Segments[0].StartedAt == 800000000 && loaded.Summary == "已保存总结" && loaded.SummarizedEntries.GetValueOrDefault(segment.Entries[0].Id) == TranscriptFiles.SummarySignature("Hello there.") && json.Contains("\"english\""), "archive summary, incremental signatures, legacy JSON fields and Apple reference date round trip");
@@ -99,6 +101,22 @@ Check(legacySubtitle.Language is null && legacySubtitle.Speaker is null && legac
     && legacyArchive.Segments[0].StartedAt + legacySubtitle.Start == (DateTimeOffset.Parse("2024-01-02T00:00:01Z") - Archive.AppleEpoch).TotalSeconds
     && legacySrt.Contains("00:00:00,000 --> 00:00:01,000") && !legacySrt.Contains("[en]"),
     "legacy archive without language or speaker loads without inferred metadata and retains its UTC cross-midnight timestamp through SRT export");
+const string macArchiveFixture = """
+{"id":"11111111-1111-1111-1111-111111111111","title":"Mac Codable fixture","createdAt":0,"updatedAt":1,"segments":[{"id":"22222222-2222-2222-2222-222222222222","startedAt":0,"updatedAt":1,"entries":[{"id":"33333333-3333-3333-3333-333333333333","start":0,"end":1,"recordedAt":0,"english":"","chinese":"译文先到","speaker":null,"language":null,"correction":null},{"id":"44444444-4444-4444-4444-444444444444","start":2.3456,"end":3.5801,"recordedAt":2.3456,"english":"Hello","chinese":"你好","speaker":"Speaker 1","language":"en","correction":{"rawSource":"Recognized","rawTranslation":"识别译文","sourceLocked":true,"translationLocked":false,"revision":"55555555-5555-5555-5555-555555555555","history":[{"source":"Earlier","translation":"之前","date":0}]}}]}]}
+""";
+var macParsed = TranscriptFiles.Parse(macArchiveFixture);
+string macWindowsSrt = TranscriptFiles.Srt(macParsed).Replace("\r\n", "\n");
+var macRoundTrip = TranscriptFiles.Parse(JsonSerializer.Serialize(TranscriptFiles.Snapshot(macParsed), TranscriptFiles.Json));
+string macReferenceSrt = "1\n00:00:02,345 --> 00:00:03,580\n[Speaker 1]\nHello\n你好\n";
+Check(macParsed.CreatedAt == 0 && macParsed.Segments[0].StartedAt == 0
+    && macRoundTrip.Id == Guid.Parse("11111111-1111-1111-1111-111111111111")
+    && macRoundTrip.Segments[0].Entries[1].RecordedAt == 2.3456
+    && macRoundTrip.Segments[0].Entries[1].Correction?.History[0].Date == Archive.AppleEpoch
+    && macWindowsSrt == macReferenceSrt,
+    "Swift Codable-shaped archive preserves Apple epoch and correction history, and Windows SRT matches Mac speaker, offset, and millisecond formatting");
+var legacyIsoRevisionDate = JsonSerializer.Deserialize<DateTimeOffset>("\"2026-09-30T00:00:00+00:00\"", TranscriptFiles.Json);
+Check(legacyIsoRevisionDate == new DateTimeOffset(2026, 9, 30, 0, 0, 0, TimeSpan.Zero),
+    "Windows correction history still reads existing ISO-8601 revision dates after enabling Apple epoch dates");
 string atomicTestRoot = Path.Combine(Path.GetTempPath(), "Echo-AtomicWrite-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(atomicTestRoot);
 try
