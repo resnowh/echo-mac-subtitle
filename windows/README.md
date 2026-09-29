@@ -46,7 +46,7 @@ dotnet run --project windows/Echo.CoreChecks -c Release -- --audio
 ./windows/ui-smoke.ps1 -AppPid <运行进程号> -ResultsPath <结果JSON路径>
 ```
 
-NuGet 版本记录在 `packages.lock.json`。正式 CI 可用 `dotnet restore --locked-mode`。构建当前仍有 NAudio 旧采集接口弃用警告，迁移新接口前保留本机已验证的调用路径。
+NuGet 版本记录在 `packages.lock.json`。GitHub Actions 在 Windows runner 上以 `dotnet restore --locked-mode` 还原依赖，运行不访问云端且不打开音频设备的核心检查，并构建 Release x64；该任务不签名、不安装、不启动应用。构建当前仍有 NAudio 旧采集接口弃用警告，迁移新接口前保留本机已验证的调用路径。
 
 ## 测试签名安装包
 
