@@ -74,6 +74,46 @@ public sealed class SubtitleRevision
 
 public sealed record CorrectionSuggestion(string Source, string Translation, string Reason, bool Uncertain);
 
+public static class TranscriptTextChunks
+{
+    public static IReadOnlyList<string> Create(IEnumerable<Subtitle> entries, int maxCharacters = 18000)
+    {
+        if (maxCharacters < 128) throw new ArgumentOutOfRangeException(nameof(maxCharacters));
+        var chunks = new List<string>(); var current = new StringBuilder();
+        void Flush()
+        {
+            if (current.Length == 0) return;
+            chunks.Add(current.ToString()); current.Clear();
+        }
+        foreach (var entry in entries)
+        {
+            string prefix = $"[{entry.TimeLabel}] {entry.Speaker} ";
+            if (prefix.Length + entry.English.Length + 1 <= maxCharacters)
+            {
+                if (current.Length + prefix.Length + entry.English.Length + 1 > maxCharacters) Flush();
+                current.Append(prefix).AppendLine(entry.English);
+                continue;
+            }
+            Flush();
+            int bodyLimit = Math.Max(1, maxCharacters - prefix.Length - 1);
+            var part = new StringBuilder();
+            var elements = StringInfo.GetTextElementEnumerator(entry.English);
+            while (elements.MoveNext())
+            {
+                string element = (string)elements.Current!;
+                if (part.Length + element.Length > bodyLimit)
+                {
+                    chunks.Add(prefix + part + "\n"); part.Clear();
+                }
+                part.Append(element);
+            }
+            if (part.Length > 0) chunks.Add(prefix + part + "\n");
+        }
+        Flush();
+        return chunks;
+    }
+}
+
 public sealed class Segment
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -91,6 +131,7 @@ public sealed class Archive
     public double CreatedAt { get; set; } = Now;
     public double UpdatedAt { get; set; } = Now;
     public string? Summary { get; set; }
+    public Dictionary<Guid, string> SummarizedEntries { get; set; } = [];
     public List<Segment> Segments { get; set; } = [];
     public override string ToString() => Title;
 }
@@ -98,6 +139,7 @@ public sealed class Archive
 public static class TranscriptFiles
 {
     public static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, PropertyNameCaseInsensitive = true, WriteIndented = true };
+    public static string SummarySignature(string text) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(text)));
     public static string Root => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EchoWindows");
     public static string Folder => Path.Combine(Root, "Archives");
     public static void AtomicWrite(string path, string text)
@@ -120,6 +162,7 @@ public static class TranscriptFiles
         if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("id", out _) || !root.TryGetProperty("segments", out _) || !root.TryGetProperty("createdAt", out _)) throw new InvalidDataException("不是 Echo 存档：缺少 id、segments 或 createdAt。");
         var a = JsonSerializer.Deserialize<Archive>(text, Json) ?? throw new InvalidDataException("存档为空。");
         if (a.Id == Guid.Empty || a.Segments is null || a.Segments.Any(s => s is null || s.Entries is null)) throw new InvalidDataException("存档结构无效。");
+        a.SummarizedEntries ??= [];
         bool ValidDate(double time) => double.IsFinite(time) && time >= -63082281600 && time <= 252423993599;
         if (!ValidDate(a.CreatedAt) || !ValidDate(a.UpdatedAt)) throw new InvalidDataException("存档日期无效。");
         var ids = new HashSet<Guid>();
