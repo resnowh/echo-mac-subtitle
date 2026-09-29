@@ -144,6 +144,32 @@ try
     Check(replacedSafely && failedSafely && replacementFailureSafe, "atomic archive replacement flushes data, preserves the last good file and backup on replace failure, and cleans temporary writes");
 }
 finally { if (Directory.Exists(atomicTestRoot)) Directory.Delete(atomicTestRoot, recursive: true); }
+var firstSaveStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+var releaseFirstSave = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+var saveAttempts = new List<int>(); var durableSaves = new List<int>();
+async Task PersistCheckpoint(int value)
+{
+    saveAttempts.Add(value);
+    if (value == 1)
+    {
+        firstSaveStarted.TrySetResult();
+        await releaseFirstSave.Task;
+        throw new IOException("simulated disk write failure");
+    }
+    durableSaves.Add(value);
+}
+var saveQueue = new OrderedPersistenceQueue<int>(PersistCheckpoint);
+Task failedCheckpoint = saveQueue.Enqueue(1);
+await firstSaveStarted.Task;
+Task recoveredCheckpoint = saveQueue.Enqueue(2);
+bool laterCheckpointWaited = saveAttempts.SequenceEqual([1]);
+releaseFirstSave.TrySetResult();
+bool firstCheckpointFailed = false;
+try { await failedCheckpoint; } catch (IOException) { firstCheckpointFailed = true; }
+await recoveredCheckpoint;
+await saveQueue.FlushAsync();
+Check(laterCheckpointWaited && firstCheckpointFailed && saveAttempts.SequenceEqual([1, 2]) && durableSaves.SequenceEqual([2]),
+    "serialized archive checkpoints recover after a failed write and flush waits for the latest durable snapshot");
 var splitSource = new Archive { Title = "课程", Segments = [new Segment(), new Segment { StartedAt = 800000123, Entries = [new Subtitle { English = "拆分字幕" }] }] };
 splitSource.SummarizedEntries[splitSource.Segments[1].Entries[0].Id] = TranscriptFiles.SummarySignature("拆分字幕");
 var splitResult = ArchiveOperations.SplitSegment(splitSource, splitSource.Segments[1].Id)!;

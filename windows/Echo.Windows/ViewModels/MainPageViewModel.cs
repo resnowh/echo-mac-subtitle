@@ -18,7 +18,7 @@ public partial class MainPageViewModel : ObservableObject
     private TokenAssembler? assembler;
     private readonly DispatcherQueueTimer checkpoint;
     private readonly HttpClient http = new() { Timeout = TimeSpan.FromSeconds(90) };
-    private Task saveTail = Task.CompletedTask;
+    private readonly OrderedPersistenceQueue<Archive> saves = new(snapshot => Task.Run(() => TranscriptFiles.Save(snapshot)));
     private readonly SubtitleCorrectionService corrections = new();
     private readonly SemaphoreSlim correctionQueue = new(1, 1);
     private readonly HashSet<Guid> correctionScheduled = [];
@@ -160,14 +160,7 @@ public partial class MainPageViewModel : ObservableObject
     {
         archive.UpdatedAt = Archive.Now;
         var snapshot = TranscriptFiles.Snapshot(archive);
-        Task previous = saveTail;
-        saveTail = PersistAfterAsync(previous, snapshot);
-        return saveTail;
-    }
-    private static async Task PersistAfterAsync(Task previous, Archive snapshot)
-    {
-        try { await previous; } catch { /* A failed older checkpoint must not block a newer full snapshot. */ }
-        await Task.Run(() => TranscriptFiles.Save(snapshot));
+        return saves.Enqueue(snapshot);
     }
     private async Task ReportSaveFailureAsync(Task pending)
     {
@@ -182,7 +175,7 @@ public partial class MainPageViewModel : ObservableObject
     public async Task<bool> FlushPendingSavesAsync()
     {
         if (SelectedArchive is not null && !await SaveArchiveAndWaitAsync(SelectedArchive)) return false;
-        try { await saveTail; return true; }
+        try { await saves.FlushAsync(); return true; }
         catch (Exception e) { Status = "存档尚未保存，请导出备份：" + e.Message; return false; }
     }
     public void SaveCorrection(Subtitle entry, string source, string translation)
