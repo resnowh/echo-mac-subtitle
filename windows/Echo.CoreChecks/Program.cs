@@ -44,6 +44,12 @@ Check(srt.Contains("00:00:10,000 --> 00:00:11,000") && srt.Contains("你好。")
 string json = JsonSerializer.Serialize(archive, TranscriptFiles.Json);
 var loaded = TranscriptFiles.Parse(json);
 Check(loaded.Id == archive.Id && loaded.Segments[0].StartedAt == 800000000 && loaded.Summary == "已保存总结" && loaded.SummarizedEntries.GetValueOrDefault(segment.Entries[0].Id) == TranscriptFiles.SummarySignature("Hello there.") && json.Contains("\"english\""), "archive summary, incremental signatures, legacy JSON fields and Apple reference date round trip");
+var splitSource = new Archive { Title = "课程", Segments = [new Segment(), new Segment { StartedAt = 800000123, Entries = [new Subtitle { English = "拆分字幕" }] }] };
+splitSource.SummarizedEntries[splitSource.Segments[1].Entries[0].Id] = TranscriptFiles.SummarySignature("拆分字幕");
+var splitResult = ArchiveOperations.SplitSegment(splitSource, splitSource.Segments[1].Id)!;
+Check(splitSource.Segments.Count == 1 && splitResult.ExtractedArchive.Title == "课程 - 本段" && splitResult.ExtractedArchive.Segments[0].Entries[0].English == "拆分字幕" && splitSource.SummarizedEntries.Count == 0, "splitting moves a completed segment and preserves its text in a separate archive");
+ArchiveOperations.RestoreSplit(splitSource, splitResult);
+Check(splitSource.Segments.Count == 2 && splitSource.Segments[1].Entries[0].English == "拆分字幕" && splitSource.SummarizedEntries.Count == 1, "split rollback restores the original segment order and incremental summary state");
 var correctionLoaded = TranscriptFiles.Parse(correctionSnapshot).Segments[0].Entries[0].Correction;
 Check(correctionLoaded?.RawSource == "Recognized text" && correctionLoaded.SourceLocked && correctionLoaded.History.Count == 1 && correctionSnapshot.Contains("\"rawSource\""), "correction source, lock and undo history survive Mac-compatible archive round trip");
 var chunkInput = new Subtitle { English = string.Concat(Enumerable.Repeat("汉", 300)) };

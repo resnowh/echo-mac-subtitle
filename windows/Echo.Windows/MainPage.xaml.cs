@@ -107,6 +107,16 @@ public sealed partial class MainPage : Page
         RecordingPanel.IsHitTestVisible = true;
     }
     private void New_Click(object sender, RoutedEventArgs e) => ViewModel.NewArchive();
+    private async void SplitSegment_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new ContentDialog
+        {
+            Title = "拆出刚完成的录音段？",
+            Content = "这会把刚完成的录音段移入一个新存档，并从原存档移除。原存档写入时会保留 .bak 备份。",
+            PrimaryButtonText = "拆出本段", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Close, XamlRoot = XamlRoot
+        };
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary) ViewModel.SplitCompletedSegment();
+    }
     private async void RenameArchive_Click(object sender, RoutedEventArgs e)
     {
         if (ViewModel.SelectedArchive is not { } archive) { ViewModel.Status = "请先选择一个存档。"; return; }

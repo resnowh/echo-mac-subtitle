@@ -136,6 +136,31 @@ public sealed class Archive
     public override string ToString() => Title;
 }
 
+public sealed record ArchiveSegmentSplit(Archive ExtractedArchive, Segment Segment, int OriginalIndex,
+    Dictionary<Guid, string> RemovedSummarySignatures);
+
+public static class ArchiveOperations
+{
+    public static ArchiveSegmentSplit? SplitSegment(Archive source, Guid segmentId)
+    {
+        int index = source.Segments.FindIndex(s => s.Id == segmentId);
+        if (index < 0) return null;
+        var segment = source.Segments[index];
+        source.Segments.RemoveAt(index);
+        var signatures = new Dictionary<Guid, string>();
+        foreach (var entry in segment.Entries)
+            if (source.SummarizedEntries.Remove(entry.Id, out var signature)) signatures[entry.Id] = signature;
+        var extracted = new Archive { Title = $"{source.Title} - 本段", CreatedAt = segment.StartedAt, Segments = [segment] };
+        return new ArchiveSegmentSplit(extracted, segment, index, signatures);
+    }
+
+    public static void RestoreSplit(Archive source, ArchiveSegmentSplit split)
+    {
+        source.Segments.Insert(Math.Clamp(split.OriginalIndex, 0, source.Segments.Count), split.Segment);
+        foreach (var signature in split.RemovedSummarySignatures) source.SummarizedEntries[signature.Key] = signature.Value;
+    }
+}
+
 public static class TranscriptFiles
 {
     public static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, PropertyNameCaseInsensitive = true, WriteIndented = true };

@@ -23,6 +23,7 @@ public partial class MainPageViewModel : ObservableObject
     private readonly HashSet<Guid> correctionScheduled = [];
     private Guid correctionGeneration = Guid.NewGuid();
     private readonly Dictionary<Guid, string> correctionStatuses = [];
+    private Guid? completedArchiveId, completedSegmentId;
     private string failure = "";
     public Preferences Config { get; private set; } = new();
     public ObservableCollection<Archive> Archives { get; } = [];
@@ -38,8 +39,9 @@ public partial class MainPageViewModel : ObservableObject
     [ObservableProperty] public partial bool IsSummarizing { get; set; }
     [ObservableProperty] public partial double Level { get; set; }
     public bool CanEdit => !IsBusy && !IsRecording;
-    partial void OnIsBusyChanged(bool value) => OnPropertyChanged(nameof(CanEdit));
-    partial void OnIsRecordingChanged(bool value) => OnPropertyChanged(nameof(CanEdit));
+    public bool CanSplitCompletedSegment => !IsBusy && !IsRecording && completedArchiveId is not null && completedSegmentId is not null;
+    partial void OnIsBusyChanged(bool value) { OnPropertyChanged(nameof(CanEdit)); OnPropertyChanged(nameof(CanSplitCompletedSegment)); }
+    partial void OnIsRecordingChanged(bool value) { OnPropertyChanged(nameof(CanEdit)); OnPropertyChanged(nameof(CanSplitCompletedSegment)); }
     partial void OnSelectedArchiveChanged(Archive? value)
     {
         correctionGeneration = Guid.NewGuid(); correctionScheduled.Clear();
@@ -179,6 +181,7 @@ public partial class MainPageViewModel : ObservableObject
     {
         if (!CanEdit) return;
         IsBusy = true; failure = "";
+        completedArchiveId = completedSegmentId = null; OnPropertyChanged(nameof(CanSplitCompletedSegment));
         correctionGeneration = Guid.NewGuid(); correctionScheduled.Clear();
         SpeechSession? current = null;
         try
@@ -230,6 +233,8 @@ public partial class MainPageViewModel : ObservableObject
                 try
                 {
                     TranscriptFiles.Save(SelectedArchive);
+                    completedArchiveId = SelectedArchive.Id; completedSegmentId = segment.Id;
+                    OnPropertyChanged(nameof(CanSplitCompletedSegment));
                     var single = new Archive { Segments = [segment] };
                     TranscriptFiles.AtomicWrite(Path.Combine(TranscriptFiles.Root, "Exports", $"Echo-{DateTime.Now:yyyyMMdd-HHmmss}-{segment.Id.ToString()[..8]}.srt"), TranscriptFiles.Srt(single));
                     Status = warning.Length > 0 ? warning + " 已保留收到的文字。" : "录音已保存 · 单段 SRT 已写入数据目录的 Exports 文件夹";
@@ -238,6 +243,32 @@ public partial class MainPageViewModel : ObservableObject
             }
             IsBusy = false;
         }
+    }
+    public bool SplitCompletedSegment()
+    {
+        if (!CanSplitCompletedSegment || completedArchiveId is not Guid archiveId || completedSegmentId is not Guid segmentId) return false;
+        var original = Archives.FirstOrDefault(a => a.Id == archiveId);
+        if (original is null) return false;
+        var split = ArchiveOperations.SplitSegment(original, segmentId);
+        if (split is null) return false;
+        try
+        {
+            TranscriptFiles.Save(original);
+            TranscriptFiles.Save(split.ExtractedArchive);
+        }
+        catch (Exception e)
+        {
+            ArchiveOperations.RestoreSplit(original, split);
+            try { TranscriptFiles.Save(original); }
+            catch (Exception rollback) { Status = $"拆分失败，恢复存档也失败；原始 .bak 已保留。拆分错误：{e.Message}；恢复错误：{rollback.Message}"; return false; }
+            Status = "拆分失败，原存档已恢复：" + e.Message; return false;
+        }
+        Archives.Insert(0, split.ExtractedArchive);
+        SelectedArchive = split.ExtractedArchive;
+        completedArchiveId = completedSegmentId = null;
+        OnPropertyChanged(nameof(CanSplitCompletedSegment));
+        Status = "本段已拆出并保存为新存档。原存档备份保留在 .bak 文件中。";
+        return true;
     }
     public void Import(string text)
     {
