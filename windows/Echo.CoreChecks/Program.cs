@@ -9,6 +9,8 @@ using System.Net;
 using System.Net.Sockets;
 using System.Net.WebSockets;
 using System.Text;
+using System.Security.AccessControl;
+using System.Security.Principal;
 
 if (args.Length == 4 && args[0] == "--atomic-write-crash-child")
 {
@@ -190,6 +192,33 @@ try
         "forced writer exit before atomic replace preserves the previous archive and the next save removes only the dead process temp file");
 }
 finally { if (Directory.Exists(crashTestRoot)) Directory.Delete(crashTestRoot, recursive: true); }
+string aclTestRoot = Path.Combine(Path.GetTempPath(), "Echo-AclWrite-" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(aclTestRoot);
+try
+{
+    var aclDirectory = new DirectoryInfo(aclTestRoot);
+    string aclArchive = Path.Combine(aclTestRoot, "denied.json");
+    TranscriptFiles.AtomicWrite(aclArchive, "权限拒绝前的完整存档");
+    DirectorySecurity originalSecurity = aclDirectory.GetAccessControl();
+    try
+    {
+        var denyCreate = new FileSystemAccessRule(WindowsIdentity.GetCurrent().User!, FileSystemRights.CreateFiles,
+            AccessControlType.Deny);
+        var deniedSecurity = aclDirectory.GetAccessControl();
+        deniedSecurity.AddAccessRule(denyCreate);
+        aclDirectory.SetAccessControl(deniedSecurity);
+        bool replacementDeniedSafely = false;
+        try { TranscriptFiles.AtomicWrite(aclArchive, "不应替换的新存档"); }
+        catch (UnauthorizedAccessException)
+        {
+            replacementDeniedSafely = File.ReadAllText(aclArchive) == "权限拒绝前的完整存档"
+                && !Directory.EnumerateFiles(aclTestRoot, ".denied.json.*.tmp", SearchOption.TopDirectoryOnly).Any();
+        }
+        Check(replacementDeniedSafely, "ACL denial while creating an archive temp file preserves the previous archive without leaving a partial temp file");
+    }
+    finally { aclDirectory.SetAccessControl(originalSecurity); }
+}
+finally { if (Directory.Exists(aclTestRoot)) Directory.Delete(aclTestRoot, recursive: true); }
 var firstSaveStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 var releaseFirstSave = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 var saveAttempts = new List<int>(); var durableSaves = new List<int>();
