@@ -107,6 +107,17 @@ public sealed partial class MainPage : Page
         RecordingPanel.IsHitTestVisible = true;
     }
     private void New_Click(object sender, RoutedEventArgs e) => ViewModel.NewArchive();
+    private async void DeleteArchive_Click(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.SelectedArchive is not { } archive) return;
+        var dialog = new ContentDialog
+        {
+            Title = "将存档移入回收区？",
+            Content = $"“{archive.Title}”及其中的字幕和总结会从列表移除，并保留在本地 Deleted 文件夹。可把 JSON 文件移回 Archives 文件夹恢复。",
+            PrimaryButtonText = "移入回收区", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Close, XamlRoot = XamlRoot
+        };
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary) ViewModel.MoveSelectedArchiveToDeleted();
+    }
     private async void SplitSegment_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new ContentDialog

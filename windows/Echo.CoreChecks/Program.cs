@@ -50,6 +50,17 @@ var splitResult = ArchiveOperations.SplitSegment(splitSource, splitSource.Segmen
 Check(splitSource.Segments.Count == 1 && splitResult.ExtractedArchive.Title == "课程 - 本段" && splitResult.ExtractedArchive.Segments[0].Entries[0].English == "拆分字幕" && splitSource.SummarizedEntries.Count == 0, "splitting moves a completed segment and preserves its text in a separate archive");
 ArchiveOperations.RestoreSplit(splitSource, splitResult);
 Check(splitSource.Segments.Count == 2 && splitSource.Segments[1].Entries[0].English == "拆分字幕" && splitSource.SummarizedEntries.Count == 1, "split rollback restores the original segment order and incremental summary state");
+string trashTestRoot = Path.Combine(Path.GetTempPath(), "Echo-CoreChecks-" + Guid.NewGuid().ToString("N"));
+string trashArchives = Path.Combine(trashTestRoot, "Archives"), trashDeleted = Path.Combine(trashTestRoot, "Deleted");
+Directory.CreateDirectory(trashArchives);
+var trashArchive = new Archive(); string trashSource = Path.Combine(trashArchives, $"{trashArchive.Id}.json");
+File.WriteAllText(trashSource, "archive contents"); File.WriteAllText(trashSource + ".bak", "previous archive");
+try
+{
+    string movedArchive = TranscriptFiles.MoveToDeleted(trashArchive, trashArchives, trashDeleted);
+    Check(!File.Exists(trashSource) && File.ReadAllText(movedArchive) == "archive contents" && File.ReadAllText(movedArchive + ".bak") == "previous archive", "moving an archive to recycle area preserves both JSON and backup contents");
+}
+finally { if (Directory.Exists(trashTestRoot)) Directory.Delete(trashTestRoot, recursive: true); }
 var correctionLoaded = TranscriptFiles.Parse(correctionSnapshot).Segments[0].Entries[0].Correction;
 Check(correctionLoaded?.RawSource == "Recognized text" && correctionLoaded.SourceLocked && correctionLoaded.History.Count == 1 && correctionSnapshot.Contains("\"rawSource\""), "correction source, lock and undo history survive Mac-compatible archive round trip");
 var chunkInput = new Subtitle { English = string.Concat(Enumerable.Repeat("汉", 300)) };

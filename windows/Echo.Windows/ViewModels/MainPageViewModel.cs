@@ -40,10 +40,13 @@ public partial class MainPageViewModel : ObservableObject
     [ObservableProperty] public partial double Level { get; set; }
     public bool CanEdit => !IsBusy && !IsRecording;
     public bool CanSplitCompletedSegment => !IsBusy && !IsRecording && completedArchiveId is not null && completedSegmentId is not null;
-    partial void OnIsBusyChanged(bool value) { OnPropertyChanged(nameof(CanEdit)); OnPropertyChanged(nameof(CanSplitCompletedSegment)); }
-    partial void OnIsRecordingChanged(bool value) { OnPropertyChanged(nameof(CanEdit)); OnPropertyChanged(nameof(CanSplitCompletedSegment)); }
+    public bool CanDeleteSelectedArchive => CanEdit && !IsSummarizing && SelectedArchive is not null;
+    partial void OnIsBusyChanged(bool value) { OnPropertyChanged(nameof(CanEdit)); OnPropertyChanged(nameof(CanSplitCompletedSegment)); OnPropertyChanged(nameof(CanDeleteSelectedArchive)); }
+    partial void OnIsRecordingChanged(bool value) { OnPropertyChanged(nameof(CanEdit)); OnPropertyChanged(nameof(CanSplitCompletedSegment)); OnPropertyChanged(nameof(CanDeleteSelectedArchive)); }
+    partial void OnIsSummarizingChanged(bool value) => OnPropertyChanged(nameof(CanDeleteSelectedArchive));
     partial void OnSelectedArchiveChanged(Archive? value)
     {
+        OnPropertyChanged(nameof(CanDeleteSelectedArchive));
         correctionGeneration = Guid.NewGuid(); correctionScheduled.Clear();
         Entries.Clear(); correctionSuggestions.Clear(); correctionStatuses.Clear();
         if (value is not null) foreach (var entry in value.Segments.OrderBy(s => s.StartedAt).SelectMany(s => s.Entries)) Entries.Add(entry);
@@ -95,6 +98,21 @@ public partial class MainPageViewModel : ObservableObject
         if (Save()) { Status = "存档名称已更新。"; return true; }
         archive.Title = previous;
         return false;
+    }
+    public bool MoveSelectedArchiveToDeleted()
+    {
+        if (!CanDeleteSelectedArchive || SelectedArchive is not { } archive) return false;
+        try
+        {
+            TranscriptFiles.Save(archive);
+            string path = TranscriptFiles.MoveToDeleted(archive);
+            Archives.Remove(archive);
+            if (completedArchiveId == archive.Id) { completedArchiveId = completedSegmentId = null; OnPropertyChanged(nameof(CanSplitCompletedSegment)); }
+            if (ReferenceEquals(SelectedArchive, archive)) SelectedArchive = Archives.OrderByDescending(a => a.UpdatedAt).FirstOrDefault();
+            Status = $"存档已移入回收区：{path}。需要恢复时，把 JSON 文件移回 Archives 文件夹。";
+            return true;
+        }
+        catch (Exception e) { Status = "未能移入回收区，存档仍保留：" + e.Message; return false; }
     }
     public bool Save()
     {

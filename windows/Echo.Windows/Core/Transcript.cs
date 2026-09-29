@@ -167,6 +167,7 @@ public static class TranscriptFiles
     public static string SummarySignature(string text) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(text)));
     public static string Root => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EchoWindows");
     public static string Folder => Path.Combine(Root, "Archives");
+    public static string DeletedFolder => Path.Combine(Root, "Deleted");
     public static void AtomicWrite(string path, string text)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -179,6 +180,19 @@ public static class TranscriptFiles
     {
         archive.UpdatedAt = Archive.Now;
         AtomicWrite(Path.Combine(Folder, $"{archive.Id}.json"), JsonSerializer.Serialize(archive, Json));
+    }
+    public static string MoveToDeleted(Archive archive) => MoveToDeleted(archive, Folder, DeletedFolder);
+    public static string MoveToDeleted(Archive archive, string archivesFolder, string deletedFolder)
+    {
+        string source = Path.Combine(archivesFolder, $"{archive.Id}.json");
+        if (!File.Exists(source)) throw new FileNotFoundException("找不到待移入回收区的存档文件。", source);
+        Directory.CreateDirectory(deletedFolder);
+        string destination = Path.Combine(deletedFolder, $"{archive.Id}-{DateTime.UtcNow:yyyyMMddHHmmssfff}.json");
+        string backup = source + ".bak", destinationBackup = destination + ".bak";
+        File.Move(source, destination);
+        try { if (File.Exists(backup)) File.Move(backup, destinationBackup); }
+        catch { File.Move(destination, source); throw; }
+        return destination;
     }
     public static Archive Parse(string text)
     {
