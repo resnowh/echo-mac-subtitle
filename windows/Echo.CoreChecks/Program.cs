@@ -129,6 +129,31 @@ async Task<bool> CheckConnectCancellationAsync()
     await rejectLater; return false;
 }
 Check(await CheckConnectCancellationAsync(), "user cancellation during reconnect is not mistaken for a connection timeout");
+var drift = new ClockDriftController();
+int neutralFrames = drift.InputFramesFor(320, ClockDriftController.TargetBufferSeconds);
+int highBufferFrames = drift.InputFramesFor(320, 0.30);
+var longDrift = new ClockDriftController(); int adjustedFrameTotal = 0;
+for (int i = 0; i < 10000; i++) adjustedFrameTotal += longDrift.InputFramesFor(320, 0.30);
+var lowBuffer = new ClockDriftController(); int lowBufferFrames = lowBuffer.InputFramesFor(320, 0.01);
+Check(neutralFrames == 320 && highBufferFrames > 320 && lowBufferFrames < 320
+    && longDrift.LastRatio <= 1.005 && longDrift.LastRatio >= 0.995
+    && Math.Abs(adjustedFrameTotal - 320 * 10000 * longDrift.LastRatio) < 4,
+    "dual-input drift correction responds to buffer direction, stays bounded and preserves fractional frame adjustments");
+(double Min, double Max) SimulateHour(double clockPpm)
+{
+    var controller = new ClockDriftController(); double bufferedFrames = 16000 * ClockDriftController.TargetBufferSeconds;
+    double minimum = bufferedFrames, maximum = bufferedFrames;
+    for (int i = 0; i < 180000; i++)
+    {
+        bufferedFrames += 320 * (1 + clockPpm / 1_000_000);
+        bufferedFrames -= controller.InputFramesFor(320, bufferedFrames / 16000.0);
+        minimum = Math.Min(minimum, bufferedFrames); maximum = Math.Max(maximum, bufferedFrames);
+    }
+    return (minimum, maximum);
+}
+var fastClock = SimulateHour(500); var slowClock = SimulateHour(-500);
+Check(fastClock.Min > 0 && fastClock.Max < 16000 && slowClock.Min > 0 && slowClock.Max < 16000,
+    "one-hour simulated independent capture clocks at plus/minus 500 ppm keep queues inside the one-second safety bound");
 if (args.Contains("--audio"))
 {
     Console.WriteLine($"Devices: render={AudioCapture.Devices(DataFlow.Render).Count}, capture={AudioCapture.Devices(DataFlow.Capture).Count}");

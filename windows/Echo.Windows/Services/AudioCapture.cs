@@ -65,8 +65,8 @@ public sealed class AudioCapture : IDisposable
             var mixed = new float[320];
             foreach (var s in sources)
             {
-                var part = new float[320]; int count = s.Resampled.Read(part.AsSpan());
-                for (int i = 0; i < count; i++) mixed[i] += part[i] / sources.Count;
+                s.ReadOutputFrame();
+                for (int i = 0; i < mixed.Length; i++) mixed[i] += s.OutputFrame[i] / sources.Count;
             }
             level = mixed.Max(x => Math.Abs(x));
             var bytes = new byte[640];
@@ -109,9 +109,28 @@ public sealed class AudioCapture : IDisposable
         public WasapiCapture Capture { get; } = capture;
         public BufferedWaveProvider Buffer { get; } = buffer;
         public ISampleProvider Resampled { get; } = resampled;
+        public ClockDriftController Drift { get; } = new();
+        public float[] InputFrame { get; } = new float[320 + ClockDriftController.MaximumFrameAdjustment];
+        public float[] OutputFrame { get; } = new float[320];
         public volatile bool Stopping;
         public EventHandler<WaveInEventArgs> DataHandler = null!;
         public EventHandler<StoppedEventArgs> StoppedHandler = null!;
+        public void ReadOutputFrame()
+        {
+            int inputFrames = Drift.InputFramesFor(OutputFrame.Length, Buffer.BufferedDuration.TotalSeconds);
+            var input = InputFrame.AsSpan(0, inputFrames);
+            int read = Resampled.Read(input);
+            if (read < inputFrames) input[read..].Clear();
+            double sourceStride = (double)(inputFrames - 1) / (OutputFrame.Length - 1);
+            for (int i = 0; i < OutputFrame.Length; i++)
+            {
+                double position = i * sourceStride;
+                int left = (int)position;
+                int right = Math.Min(left + 1, inputFrames - 1);
+                float fraction = (float)(position - left);
+                OutputFrame[i] = input[left] + (input[right] - input[left]) * fraction;
+            }
+        }
     }
     private sealed class AverageChannels(ISampleProvider input) : ISampleProvider
     {
