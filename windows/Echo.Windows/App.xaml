@@ -26,11 +26,11 @@
                     <SolidColorBrush x:Key="EchoScrimBrush" Color="#99000000"/>
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="HighContrast">
-                    <SolidColorBrush x:Key="EchoCanvasBrush" Color="{ThemeResource SystemColorWindowColor}"/>
-                    <SolidColorBrush x:Key="EchoAccentBrush" Color="{ThemeResource SystemColorHighlightColor}"/>
-                    <SolidColorBrush x:Key="EchoSoftAccentBrush" Color="{ThemeResource SystemColorWindowColor}"/>
-                    <SolidColorBrush x:Key="EchoAccentForegroundBrush" Color="{ThemeResource SystemColorHighlightTextColor}"/>
-                    <SolidColorBrush x:Key="EchoScrimBrush" Color="#99000000"/>
+                    <StaticResource x:Key="EchoCanvasBrush" ResourceKey="SystemColorWindowColorBrush"/>
+                    <StaticResource x:Key="EchoAccentBrush" ResourceKey="SystemColorHighlightColorBrush"/>
+                    <StaticResource x:Key="EchoSoftAccentBrush" ResourceKey="SystemColorWindowColorBrush"/>
+                    <StaticResource x:Key="EchoAccentForegroundBrush" ResourceKey="SystemColorHighlightTextColorBrush"/>
+                    <StaticResource x:Key="EchoScrimBrush" ResourceKey="SystemColorWindowColorBrush"/>
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
         </ResourceDictionary>

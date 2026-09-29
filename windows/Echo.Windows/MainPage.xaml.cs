@@ -31,7 +31,7 @@ public sealed partial class MainPage : Page
         try { SonioxKey.Password = Preferences.Unprotect(c.SonioxSecret); DeepSeekKey.Password = Preferences.Unprotect(c.DeepSeekSecret); }
         catch { ViewModel.Status = "密钥无法解密，请重新输入并保存。"; }
         ThemeChoice.SelectedIndex = c.Theme == "Light" ? 1 : c.Theme == "Dark" ? 2 : 0;
-        RequestedTheme = Enum.TryParse<ElementTheme>(c.Theme, out var theme) ? theme : ElementTheme.Default;
+        if (c.Theme is "Light" or "Dark") RequestedTheme = Enum.Parse<ElementTheme>(c.Theme);
         Loaded += async (_, _) =>
         {
             ApplyWindowTheme();
@@ -94,24 +94,33 @@ public sealed partial class MainPage : Page
     {
         ThemeChoice.SelectedIndex = (ThemeChoice.SelectedIndex + 1) % 3;
         ViewModel.Config.Theme = ThemeChoice.SelectedIndex == 1 ? "Light" : ThemeChoice.SelectedIndex == 2 ? "Dark" : "Default";
-        RequestedTheme = Enum.Parse<ElementTheme>(ViewModel.Config.Theme);
         ApplyWindowTheme();
         UpdateAudioDisplay();
         ViewModel.Config.Save();
     }
     private void ApplyWindowTheme()
     {
+        if (ViewModel.Config.Theme == "Default")
+        {
+            ClearValue(FrameworkElement.RequestedThemeProperty);
+            if (App.Window?.Content is FrameworkElement systemRoot) systemRoot.ClearValue(FrameworkElement.RequestedThemeProperty);
+            return;
+        }
+        RequestedTheme = Enum.Parse<ElementTheme>(ViewModel.Config.Theme);
         if (App.Window?.Content is FrameworkElement root) root.RequestedTheme = RequestedTheme;
     }
     private void Settings_Click(object sender, RoutedEventArgs e)
     {
-        RecordingPanel.IsHitTestVisible = false;
+        RecordingPanel.Visibility = Visibility.Collapsed;
         SettingsOverlay.Visibility = Visibility.Visible;
+        if (ViewModel.CanEdit) SonioxKey.Focus(FocusState.Programmatic);
+        else BackSettingsButton.Focus(FocusState.Programmatic);
     }
     private void Back_Click(object sender, RoutedEventArgs e)
     {
         SettingsOverlay.Visibility = Visibility.Collapsed;
-        RecordingPanel.IsHitTestVisible = true;
+        RecordingPanel.Visibility = Visibility.Visible;
+        SettingsButton.Focus(FocusState.Programmatic);
     }
     private void New_Click(object sender, RoutedEventArgs e) => ViewModel.NewArchive();
     private async void DeleteArchive_Click(object sender, RoutedEventArgs e)
@@ -264,7 +273,7 @@ public sealed partial class MainPage : Page
             c.Translate = Translate.IsOn; c.Strict = Strict.IsOn; c.Speakers = Speakers.IsOn;
             c.AutoCorrectionEnabled = AutoCorrection.IsOn;
             c.Theme = ThemeChoice.SelectedIndex == 1 ? "Light" : ThemeChoice.SelectedIndex == 2 ? "Dark" : "Default";
-            c.Save(); RequestedTheme = Enum.Parse<ElementTheme>(c.Theme);
+            c.Save();
             ApplyWindowTheme();
             UpdateAudioDisplay();
             UpdateLanguageHeaders();
