@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Text;
@@ -217,10 +218,14 @@ public static class TranscriptFiles
     public static string Folder => Path.Combine(Root, "Archives");
     public static string DeletedFolder => Path.Combine(Root, "Deleted");
     public static void AtomicWrite(string path, string text)
+        => AtomicWrite(path, text, afterFlushBeforeReplace: null);
+
+    internal static void AtomicWrite(string path, string text, Action? afterFlushBeforeReplace)
     {
         string directory = Path.GetDirectoryName(Path.GetFullPath(path))!;
         Directory.CreateDirectory(directory);
-        string temp = Path.Combine(directory, $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
+        CleanupAbandonedWrites(directory, Path.GetFileName(path));
+        string temp = Path.Combine(directory, $".{Path.GetFileName(path)}.{Environment.ProcessId}.{Guid.NewGuid():N}.tmp");
         try
         {
             byte[] bytes = new UTF8Encoding(false).GetBytes(text);
@@ -229,6 +234,7 @@ public static class TranscriptFiles
                 stream.Write(bytes);
                 stream.Flush(flushToDisk: true);
             }
+            afterFlushBeforeReplace?.Invoke();
             if (File.Exists(path)) File.Replace(temp, path, path + ".bak");
             else File.Move(temp, path);
         }
@@ -237,6 +243,29 @@ public static class TranscriptFiles
             try { if (File.Exists(temp)) File.Delete(temp); }
             catch { /* A failed cleanup must not hide the original write/replace error. */ }
         }
+    }
+    private static void CleanupAbandonedWrites(string directory, string fileName)
+    {
+        string prefix = $".{fileName}.";
+        foreach (string candidate in Directory.EnumerateFiles(directory, $"{prefix}*.tmp", SearchOption.TopDirectoryOnly))
+        {
+            string suffix = Path.GetFileName(candidate)[prefix.Length..];
+            string processIdText = suffix.Split('.', 2)[0];
+            if (!int.TryParse(processIdText, out int processId) || IsProcessRunning(processId)) continue;
+            try { File.Delete(candidate); }
+            catch { /* Keep an orphan if access is denied; the current checkpoint may still proceed. */ }
+        }
+    }
+    private static bool IsProcessRunning(int processId)
+    {
+        try
+        {
+            using var process = Process.GetProcessById(processId);
+            return !process.HasExited;
+        }
+        catch (ArgumentException) { return false; }
+        catch (InvalidOperationException) { return false; }
+        catch { return true; } // If liveness is uncertain, preserve the candidate file.
     }
     public static void Save(Archive archive)
     {

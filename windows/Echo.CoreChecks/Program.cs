@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Diagnostics;
+using System.Reflection;
 using Echo_Windows.Core;
 using Echo_Windows.Services;
 using NAudio.CoreAudioApi;
@@ -8,6 +9,16 @@ using System.Net;
 using System.Net.Sockets;
 using System.Net.WebSockets;
 using System.Text;
+
+if (args.Length == 4 && args[0] == "--atomic-write-crash-child")
+{
+    TranscriptFiles.AtomicWrite(args[1], args[2], () =>
+    {
+        File.WriteAllText(args[3], "flush-complete");
+        Thread.Sleep(Timeout.Infinite);
+    });
+    return;
+}
 
 int passed = 0;
 void Check(bool condition, string name) { if (!condition) throw new Exception("FAIL: " + name); Console.WriteLine("PASS: " + name); passed++; }
@@ -144,6 +155,41 @@ try
     Check(replacedSafely && failedSafely && replacementFailureSafe, "atomic archive replacement flushes data, preserves the last good file and backup on replace failure, and cleans temporary writes");
 }
 finally { if (Directory.Exists(atomicTestRoot)) Directory.Delete(atomicTestRoot, recursive: true); }
+string crashTestRoot = Path.Combine(Path.GetTempPath(), "Echo-CrashWrite-" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(crashTestRoot);
+try
+{
+    string crashArchive = Path.Combine(crashTestRoot, "crash.json"), readyMarker = Path.Combine(crashTestRoot, "ready.marker");
+    TranscriptFiles.AtomicWrite(crashArchive, "强退前的完整存档");
+    string processPath = Environment.ProcessPath ?? throw new InvalidOperationException("Current process path is unavailable.");
+    var childInfo = new ProcessStartInfo(processPath) { UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden };
+    if (Path.GetFileNameWithoutExtension(processPath).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
+        childInfo.ArgumentList.Add(Assembly.GetEntryAssembly()?.Location ?? throw new InvalidOperationException("Entry assembly path is unavailable."));
+    childInfo.ArgumentList.Add("--atomic-write-crash-child");
+    childInfo.ArgumentList.Add(crashArchive);
+    childInfo.ArgumentList.Add("替换后内容");
+    childInfo.ArgumentList.Add(readyMarker);
+    using var child = Process.Start(childInfo) ?? throw new InvalidOperationException("Unable to start the CoreChecks crash helper.");
+    try
+    {
+        DateTime deadline = DateTime.UtcNow.AddSeconds(10);
+        while (!File.Exists(readyMarker) && !child.HasExited && DateTime.UtcNow < deadline) await Task.Delay(20);
+    }
+    finally
+    {
+        if (!child.HasExited) { child.Kill(entireProcessTree: true); child.WaitForExit(10_000); }
+    }
+    bool reachedFlushBoundary = File.Exists(readyMarker);
+    bool previousSnapshotSurvived = File.ReadAllText(crashArchive) == "强退前的完整存档";
+    bool orphanedWriteExists = Directory.EnumerateFiles(crashTestRoot, ".crash.json.*.tmp", SearchOption.TopDirectoryOnly).Any();
+    TranscriptFiles.AtomicWrite(crashArchive, "恢复后的完整存档");
+    bool recoveredWithoutOrphan = File.ReadAllText(crashArchive) == "恢复后的完整存档"
+        && File.ReadAllText(crashArchive + ".bak") == "强退前的完整存档"
+        && !Directory.EnumerateFiles(crashTestRoot, ".crash.json.*.tmp", SearchOption.TopDirectoryOnly).Any();
+    Check(reachedFlushBoundary && previousSnapshotSurvived && orphanedWriteExists && recoveredWithoutOrphan,
+        "forced writer exit before atomic replace preserves the previous archive and the next save removes only the dead process temp file");
+}
+finally { if (Directory.Exists(crashTestRoot)) Directory.Delete(crashTestRoot, recursive: true); }
 var firstSaveStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 var releaseFirstSave = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 var saveAttempts = new List<int>(); var durableSaves = new List<int>();
