@@ -65,6 +65,21 @@ Check(metadataLoaded.Segments[0].Entries[0].Speaker == "Speaker 2" && metadataLo
 string json = JsonSerializer.Serialize(archive, TranscriptFiles.Json);
 var loaded = TranscriptFiles.Parse(json);
 Check(loaded.Id == archive.Id && loaded.Segments[0].StartedAt == 800000000 && loaded.Summary == "已保存总结" && loaded.SummarizedEntries.GetValueOrDefault(segment.Entries[0].Id) == TranscriptFiles.SummarySignature("Hello there.") && json.Contains("\"english\""), "archive summary, incremental signatures, legacy JSON fields and Apple reference date round trip");
+var legacyId = Guid.NewGuid(); var legacySegmentId = Guid.NewGuid(); var legacyEntryId = Guid.NewGuid();
+double legacyCreated = (DateTimeOffset.Parse("2024-01-01T00:00:00Z") - Archive.AppleEpoch).TotalSeconds;
+double legacySegmentStart = (DateTimeOffset.Parse("2024-01-01T23:59:59Z") - Archive.AppleEpoch).TotalSeconds;
+string legacyJson = JsonSerializer.Serialize(new
+{
+    id = legacyId, title = "旧格式跨日存档", createdAt = legacyCreated, updatedAt = legacyCreated,
+    segments = new[] { new { id = legacySegmentId, startedAt = legacySegmentStart, updatedAt = legacySegmentStart,
+        entries = new[] { new { id = legacyEntryId, start = 2d, end = 3d, english = "跨日旧档", chinese = "跨日字幕" } } } }
+}, TranscriptFiles.Json);
+var legacyArchive = TranscriptFiles.Parse(legacyJson); var legacySubtitle = legacyArchive.Segments[0].Entries[0];
+string legacySrt = TranscriptFiles.Srt(legacyArchive);
+Check(legacySubtitle.Language is null && legacySubtitle.Speaker is null && legacyArchive.Segments[0].StartedAt == legacySegmentStart
+    && legacyArchive.Segments[0].StartedAt + legacySubtitle.Start == (DateTimeOffset.Parse("2024-01-02T00:00:01Z") - Archive.AppleEpoch).TotalSeconds
+    && legacySrt.Contains("00:00:00,000 --> 00:00:01,000") && !legacySrt.Contains("[en]"),
+    "legacy archive without language or speaker loads without inferred metadata and retains its UTC cross-midnight timestamp through SRT export");
 string atomicTestRoot = Path.Combine(Path.GetTempPath(), "Echo-AtomicWrite-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(atomicTestRoot);
 try
