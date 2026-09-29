@@ -3,6 +3,7 @@ using Echo_Windows.Services;
 using Echo_Windows.ViewModels;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
@@ -106,6 +107,19 @@ public sealed partial class MainPage : Page
         RecordingPanel.IsHitTestVisible = true;
     }
     private void New_Click(object sender, RoutedEventArgs e) => ViewModel.NewArchive();
+    private async void RenameArchive_Click(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.SelectedArchive is not { } archive) { ViewModel.Status = "请先选择一个存档。"; return; }
+        var name = new TextBox { Header = "存档名称", Text = archive.Title, MaxLength = 80 };
+        AutomationProperties.SetName(name, "存档名称"); AutomationProperties.SetAutomationId(name, "RenameArchiveName");
+        var dialog = new ContentDialog { Title = "重命名存档", Content = name, PrimaryButtonText = "保存", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot };
+        dialog.PrimaryButtonClick += (_, args) =>
+        {
+            if (string.IsNullOrWhiteSpace(name.Text)) { args.Cancel = true; ViewModel.Status = "存档名称不能为空。"; }
+        };
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary && ViewModel.RenameSelectedArchive(name.Text))
+            ArchiveTitle.Text = ViewModel.SelectedArchive?.Title ?? "新的录音";
+    }
     private async void Start_Click(object sender, RoutedEventArgs e) => await ViewModel.StartAsync(Mode.SelectedIndex, (OutputDevice.SelectedItem as AudioDevice)?.Id, (InputDevice.SelectedItem as AudioDevice)?.Id);
     private async void Stop_Click(object sender, RoutedEventArgs e) => await ViewModel.StopAsync();
     private void Refresh_Click(object sender, RoutedEventArgs e) => ViewModel.RefreshDevices();

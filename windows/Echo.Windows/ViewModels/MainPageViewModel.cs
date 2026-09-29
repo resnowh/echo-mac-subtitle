@@ -83,6 +83,17 @@ public partial class MainPageViewModel : ObservableObject
         if (!CanEdit) return;
         var a = new Archive(); Archives.Insert(0, a); SelectedArchive = a; Save();
     }
+    public bool RenameSelectedArchive(string title)
+    {
+        if (!CanEdit || SelectedArchive is null) return false;
+        title = title.Trim();
+        if (title.Length is 0 or > 80) { Status = "存档名称需为 1 到 80 个字符。"; return false; }
+        var archive = SelectedArchive; string previous = archive.Title;
+        archive.Title = title;
+        if (Save()) { Status = "存档名称已更新。"; return true; }
+        archive.Title = previous;
+        return false;
+    }
     public bool Save()
     {
         if (SelectedArchive is null) return false;
