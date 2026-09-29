@@ -38,12 +38,12 @@ Check(finalizedCount == 1, "transcript final boundary triggers a single opt-in c
 int speakerFinalized = 0; var speakerSegment = new Segment(); var speakerAssembler = new TokenAssembler(speakerSegment, _ => { }, _ => speakerFinalized++);
 using (var speakerTurn = JsonDocument.Parse("""{"tokens":[{"text":"first speaker","is_final":true,"speaker":1,"start_ms":0,"end_ms":500},{"text":"second speaker","is_final":true,"speaker":2,"start_ms":600,"end_ms":1000},{"text":"<end>","is_final":true}]}""")) speakerAssembler.Apply(speakerTurn.RootElement);
 Check(speakerSegment.Entries.Count == 2 && speakerSegment.Entries[0].English == "first speaker" && speakerSegment.Entries[0].Speaker == "Speaker 1" && speakerSegment.Entries[1].English == "second speaker" && speakerSegment.Entries[1].Speaker == "Speaker 2" && speakerFinalized == 2, "final speaker change splits rows and finalizes each speaker turn once");
-var archive = new Archive { CreatedAt = 800000000, Segments = [segment, new Segment { StartedAt = 800000010, Entries = [new Subtitle { Start = 0, End = 1, English = "Again" }] }] };
+var archive = new Archive { CreatedAt = 800000000, Summary = "已保存总结", Segments = [segment, new Segment { StartedAt = 800000010, Entries = [new Subtitle { Start = 0, End = 1, English = "Again" }] }] };
 string srt = TranscriptFiles.Srt(archive);
 Check(srt.Contains("00:00:10,000 --> 00:00:11,000") && srt.Contains("你好。"), "SRT preserves segment wall-clock gap and translation");
 string json = JsonSerializer.Serialize(archive, TranscriptFiles.Json);
 var loaded = TranscriptFiles.Parse(json);
-Check(loaded.Id == archive.Id && loaded.Segments[0].StartedAt == 800000000 && json.Contains("\"english\""), "legacy JSON field names, UUID and Apple reference date round trip");
+Check(loaded.Id == archive.Id && loaded.Segments[0].StartedAt == 800000000 && loaded.Summary == "已保存总结" && json.Contains("\"english\""), "archive summary, legacy JSON fields, UUID and Apple reference date round trip");
 var correctionLoaded = TranscriptFiles.Parse(correctionSnapshot).Segments[0].Entries[0].Correction;
 Check(correctionLoaded?.RawSource == "Recognized text" && correctionLoaded.SourceLocked && correctionLoaded.History.Count == 1 && correctionSnapshot.Contains("\"rawSource\""), "correction source, lock and undo history survive Mac-compatible archive round trip");
 Check(Archive.AppleEpoch.AddSeconds(0).Year == 2001, "Apple date reference is not Unix time");

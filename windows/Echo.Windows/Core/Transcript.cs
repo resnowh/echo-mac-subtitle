@@ -90,6 +90,7 @@ public sealed class Archive
     public string Title { get; set; } = $"录音 {DateTime.Now:MM-dd HH:mm}";
     public double CreatedAt { get; set; } = Now;
     public double UpdatedAt { get; set; } = Now;
+    public string? Summary { get; set; }
     public List<Segment> Segments { get; set; } = [];
     public override string ToString() => Title;
 }

@@ -46,7 +46,7 @@ public partial class MainPageViewModel : ObservableObject
         correctionGeneration = Guid.NewGuid(); correctionScheduled.Clear();
         Entries.Clear(); summarized.Clear(); correctionSuggestions.Clear(); correctionStatuses.Clear();
         if (value is not null) foreach (var entry in value.Segments.OrderBy(s => s.StartedAt).SelectMany(s => s.Entries)) Entries.Add(entry);
-        Summary = "可总结新增内容、当前录音段或整个存档。";
+        Summary = value?.Summary ?? "可总结新增内容、当前录音段或整个存档。";
     }
     public MainPageViewModel()
     {
@@ -84,28 +84,25 @@ public partial class MainPageViewModel : ObservableObject
         if (!CanEdit) return;
         var a = new Archive(); Archives.Insert(0, a); SelectedArchive = a; Save();
     }
-    public void Save()
+    public bool Save()
     {
-        if (SelectedArchive is null) return;
-        try { TranscriptFiles.Save(SelectedArchive); }
-        catch (Exception e) { Status = "存档尚未保存，请导出备份：" + e.Message; }
+        if (SelectedArchive is null) return false;
+        try { TranscriptFiles.Save(SelectedArchive); return true; }
+        catch (Exception e) { Status = "存档尚未保存，请导出备份：" + e.Message; return false; }
     }
     public void SaveCorrection(Subtitle entry, string source, string translation)
     {
         entry.Edit(source, translation);
         if (entry.Correction is null) return;
         correctionSuggestions.Remove(entry.Id);
-        Save();
-        if (Status.StartsWith("存档尚未保存")) return;
+        if (!Save()) return;
         Status = "字幕已纠正；已修改字段会保留人工选择。";
-        if (!string.IsNullOrWhiteSpace(Summary) && Summary != "录音后可生成总结。只有点击总结时，文字稿才会发送到 DeepSeek。")
-            Summary = "文字稿已纠正；已有总结未改动，可重新生成。";
     }
     public void UndoCorrection(Subtitle entry)
     {
         if (!entry.UndoCorrection()) return;
-        correctionSuggestions.Remove(entry.Id); Save();
-        if (Status.StartsWith("存档尚未保存")) return;
+        correctionSuggestions.Remove(entry.Id);
+        if (!Save()) return;
         Status = "已撤销上次纠正；当前文字保留为人工选择。";
     }
     private readonly Dictionary<Guid, (string Source, string Translation, Guid Revision, CorrectionSuggestion Suggestion)> correctionSuggestions = [];
@@ -266,8 +263,9 @@ public partial class MainPageViewModel : ObservableObject
             using var result = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
             if (!ReferenceEquals(SelectedArchive, requestedArchive)) { Status = "总结完成，但当前存档已切换，请回到原存档重新生成。"; return; }
             Summary = result.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString() ?? "未返回总结。";
+            requestedArchive.Summary = Summary;
             foreach (var e in submitted) summarized[e.Key] = e.Value;
-            Status = "总结已生成（当前窗口展示，关闭前可复制保存）";
+            if (Save()) Status = "总结已生成并保存在当前存档中。";
         }
         catch (Exception e) { Status = "总结失败：" + e.Message; }
         finally { IsSummarizing = false; }
