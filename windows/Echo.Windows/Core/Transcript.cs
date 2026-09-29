@@ -1,0 +1,180 @@
+using System.Collections.ObjectModel;
+using System.Globalization;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using CommunityToolkit.Mvvm.ComponentModel;
+
+namespace Echo_Windows.Core;
+
+public partial class Subtitle : ObservableObject
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public double Start { get; set; }
+    public double End { get; set; }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TimeLabel))]
+    public partial double? RecordedAt { get; set; }
+    [ObservableProperty] public partial string English { get; set; } = "";
+    [ObservableProperty] public partial string Chinese { get; set; } = "";
+    [ObservableProperty] public partial string? Speaker { get; set; }
+    public string? Language { get; set; }
+    [JsonIgnore] public string TimeLabel => RecordedAt is double t
+        ? Archive.AppleEpoch.AddSeconds(t).ToLocalTime().ToString("HH:mm:ss") : TimeSpan.FromSeconds(Start).ToString(@"hh\:mm\:ss");
+}
+
+public sealed class Segment
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public double StartedAt { get; set; } = Archive.Now;
+    public double UpdatedAt { get; set; } = Archive.Now;
+    public List<Subtitle> Entries { get; set; } = [];
+}
+
+public sealed class Archive
+{
+    public static readonly DateTimeOffset AppleEpoch = new(2001, 1, 1, 0, 0, 0, TimeSpan.Zero);
+    public static double Now => (DateTimeOffset.UtcNow - AppleEpoch).TotalSeconds;
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Title { get; set; } = $"录音 {DateTime.Now:MM-dd HH:mm}";
+    public double CreatedAt { get; set; } = Now;
+    public double UpdatedAt { get; set; } = Now;
+    public List<Segment> Segments { get; set; } = [];
+    public override string ToString() => Title;
+}
+
+public static class TranscriptFiles
+{
+    public static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, PropertyNameCaseInsensitive = true, WriteIndented = true };
+    public static string Root => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EchoWindows");
+    public static string Folder => Path.Combine(Root, "Archives");
+    public static void AtomicWrite(string path, string text)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var temp = path + ".tmp";
+        File.WriteAllText(temp, text, new UTF8Encoding(false));
+        if (File.Exists(path)) File.Replace(temp, path, path + ".bak");
+        else File.Move(temp, path);
+    }
+    public static void Save(Archive archive)
+    {
+        archive.UpdatedAt = Archive.Now;
+        AtomicWrite(Path.Combine(Folder, $"{archive.Id}.json"), JsonSerializer.Serialize(archive, Json));
+    }
+    public static Archive Parse(string text)
+    {
+        using var document = JsonDocument.Parse(text);
+        var root = document.RootElement;
+        if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("id", out _) || !root.TryGetProperty("segments", out _) || !root.TryGetProperty("createdAt", out _)) throw new InvalidDataException("不是 Echo 存档：缺少 id、segments 或 createdAt。");
+        var a = JsonSerializer.Deserialize<Archive>(text, Json) ?? throw new InvalidDataException("存档为空。");
+        if (a.Id == Guid.Empty || a.Segments is null || a.Segments.Any(s => s is null || s.Entries is null)) throw new InvalidDataException("存档结构无效。");
+        bool ValidDate(double time) => double.IsFinite(time) && time >= -63082281600 && time <= 252423993599;
+        if (!ValidDate(a.CreatedAt) || !ValidDate(a.UpdatedAt)) throw new InvalidDataException("存档日期无效。");
+        var ids = new HashSet<Guid>();
+        foreach (var s in a.Segments)
+        {
+            if (!ValidDate(s.StartedAt) || !ValidDate(s.UpdatedAt)) throw new InvalidDataException("录音段日期无效。");
+            foreach (var e in s.Entries)
+            {
+                if (e is null || !ids.Add(e.Id) || e.Id == Guid.Empty) throw new InvalidDataException("字幕编号为空或重复。");
+                if (!double.IsFinite(e.Start) || !double.IsFinite(e.End) || e.Start < 0 || e.End < e.Start || !ValidDate(s.StartedAt + e.End) || (e.RecordedAt is double at && !ValidDate(at))) throw new InvalidDataException("字幕时间无效。");
+            }
+        }
+        return a;
+    }
+    public static string Srt(Archive archive)
+    {
+        var all = archive.Segments.OrderBy(s => s.StartedAt).SelectMany(s => s.Entries.Select(e => (e, at: e.RecordedAt ?? s.StartedAt + e.Start)))
+            .Where(x => !string.IsNullOrWhiteSpace(x.e.English + x.e.Chinese)).ToList();
+        if (all.Count == 0) return "";
+        double origin = all.Min(x => x.at), last = 0;
+        var result = new StringBuilder(); int index = 1;
+        foreach (var (e, at) in all)
+        {
+            double start = Math.Max(last, at - origin), end = start + Math.Max(.5, e.End - e.Start);
+            result.AppendLine((index++).ToString(CultureInfo.InvariantCulture));
+            result.AppendLine($"{Stamp(start)} --> {Stamp(end)}");
+            if (!string.IsNullOrWhiteSpace(e.Speaker)) result.Append($"[{e.Speaker}] ");
+            if (!string.IsNullOrWhiteSpace(e.English)) result.AppendLine(e.English.Trim());
+            if (!string.IsNullOrWhiteSpace(e.Chinese)) result.AppendLine(e.Chinese.Trim());
+            result.AppendLine(); last = end;
+        }
+        return result.ToString();
+    }
+    private static string Stamp(double seconds)
+    {
+        var t = TimeSpan.FromMilliseconds(Math.Round(seconds * 1000));
+        return $"{(int)t.TotalHours:00}:{t.Minutes:00}:{t.Seconds:00},{t.Milliseconds:000}";
+    }
+}
+
+// Final tokens append exactly once; provisional tokens are replaced on each response.
+// Source and translation have independent endpoint cursors, so delayed translations do not target the next source row.
+public sealed class TokenAssembler(Segment segment, Action<Subtitle> added)
+{
+    private int sourceCursor, translationCursor;
+    private readonly Dictionary<int, string> sourceFinal = [], translationFinal = [];
+    private readonly HashSet<int> previousProvisional = [];
+    private Subtitle Row(int index)
+    {
+        while (segment.Entries.Count <= index)
+        {
+            var previous = segment.Entries.LastOrDefault();
+            var e = new Subtitle { Start = previous?.End ?? 0, End = previous?.End ?? 0, RecordedAt = segment.StartedAt + (previous?.End ?? 0) };
+            segment.Entries.Add(e); added(e);
+        }
+        return segment.Entries[index];
+    }
+    public void Apply(JsonElement message)
+    {
+        // Clear only provisional display text; committed history is never removed.
+        foreach (int i in previousProvisional)
+        {
+            segment.Entries[i].English = sourceFinal.GetValueOrDefault(i, "");
+            segment.Entries[i].Chinese = translationFinal.GetValueOrDefault(i, "");
+        }
+        previousProvisional.Clear();
+        if (!message.TryGetProperty("tokens", out var tokens)) return;
+        int provisionalSource = sourceCursor, provisionalTranslation = translationCursor;
+        foreach (var token in tokens.EnumerateArray())
+        {
+            string text = token.TryGetProperty("text", out var tv) ? tv.GetString() ?? "" : "";
+            bool translation = token.TryGetProperty("translation_status", out var tr) && tr.GetString() == "translation";
+            bool final = token.TryGetProperty("is_final", out var f) && f.GetBoolean();
+            if (text is "<end>" or "<fin>")
+            {
+                string markerLane = token.TryGetProperty("translation_status", out var marker) ? marker.GetString() ?? "" : "";
+                if (markerLane is "" or "none")
+                {
+                    // The normal untagged endpoint finalizes the complete bilingual utterance.
+                    if (final) sourceCursor = translationCursor = Math.Max(sourceCursor, translationCursor) + 1;
+                    provisionalSource = provisionalTranslation = Math.Max(provisionalSource, provisionalTranslation) + 1;
+                }
+                else
+                {
+                    if (final) { if (translation) translationCursor++; else sourceCursor++; }
+                    if (translation) provisionalTranslation++; else provisionalSource++;
+                }
+                continue;
+            }
+            if (text.Length == 0 || text.StartsWith('<')) continue;
+            int index = translation ? (final ? translationCursor : provisionalTranslation) : (final ? sourceCursor : provisionalSource);
+            var row = Row(index);
+            if (!translation)
+            {
+                if (token.TryGetProperty("start_ms", out var start) && row.English.Length == 0) { row.Start = start.GetDouble() / 1000; row.RecordedAt = segment.StartedAt + row.Start; }
+                if (token.TryGetProperty("end_ms", out var end)) row.End = Math.Max(row.Start, end.GetDouble() / 1000);
+                if (token.TryGetProperty("speaker", out var speaker)) row.Speaker = "Speaker " + speaker.ToString();
+                if (token.TryGetProperty("language", out var lang)) row.Language = lang.GetString();
+            }
+            if (final)
+            {
+                var dict = translation ? translationFinal : sourceFinal;
+                dict[index] = dict.GetValueOrDefault(index, "") + text;
+            }
+            else previousProvisional.Add(index);
+            if (translation) row.Chinese += text; else row.English += text;
+        }
+        segment.UpdatedAt = Archive.Now;
+    }
+}

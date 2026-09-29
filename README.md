@@ -33,7 +33,7 @@ Echo 是一个原生 macOS 实时字幕应用。它从话筒或 Mac 正在播放
 - 使用电脑音频需要允许 Echo 访问“屏幕与系统音频录制”。
 - AI 总结还需要单独填写 DeepSeek API Key。
 
-Echo 当前只支持 macOS。项目没有 Windows 版本，也没有现成 GitHub Release 安装包或 Apple notarization。
+macOS 仍是优先维护的平台；Windows 原生预览版位于 [windows/](windows/README.md)，已在 Windows 11 x64 开发机构建并运行。下文功能说明针对 macOS；Windows 首版范围与验证限制请见单独说明。项目尚无公开 GitHub Release 安装包或 Apple notarization。
 
 ## 使用方法
 

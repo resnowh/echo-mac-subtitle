@@ -1,2 +1,9 @@
 .DS_Store
 macOS/**/xcuserdata/
+windows/**/bin/
+windows/**/obj/
+windows/**/AppPackages/
+windows/**/.vs/
+windows/**/.winapp/
+windows/**/*.pfx
+windows/artifacts/

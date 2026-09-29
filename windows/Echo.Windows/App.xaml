@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Application
+    x:Class="Echo_Windows.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Echo_Windows">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+                <!-- Other merged dictionaries here -->
+            </ResourceDictionary.MergedDictionaries>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="EchoCanvasBrush" Color="#202222"/>
+                    <SolidColorBrush x:Key="EchoAccentBrush" Color="#94D9BD"/>
+                    <SolidColorBrush x:Key="EchoSoftAccentBrush" Color="#293D35"/>
+                    <SolidColorBrush x:Key="EchoAccentForegroundBrush" Color="#142B21"/>
+                    <SolidColorBrush x:Key="EchoScrimBrush" Color="#99000000"/>
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="EchoCanvasBrush" Color="#FAFBF9"/>
+                    <SolidColorBrush x:Key="EchoAccentBrush" Color="#27664F"/>
+                    <SolidColorBrush x:Key="EchoSoftAccentBrush" Color="#E4EFE7"/>
+                    <SolidColorBrush x:Key="EchoAccentForegroundBrush" Color="#FFFFFF"/>
+                    <SolidColorBrush x:Key="EchoScrimBrush" Color="#99000000"/>
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="HighContrast">
+                    <SolidColorBrush x:Key="EchoCanvasBrush" Color="{ThemeResource SystemColorWindowColor}"/>
+                    <SolidColorBrush x:Key="EchoAccentBrush" Color="{ThemeResource SystemColorHighlightColor}"/>
+                    <SolidColorBrush x:Key="EchoSoftAccentBrush" Color="{ThemeResource SystemColorWindowColor}"/>
+                    <SolidColorBrush x:Key="EchoAccentForegroundBrush" Color="{ThemeResource SystemColorHighlightTextColor}"/>
+                    <SolidColorBrush x:Key="EchoScrimBrush" Color="#99000000"/>
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>
