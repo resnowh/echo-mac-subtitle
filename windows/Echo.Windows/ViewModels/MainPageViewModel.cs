@@ -64,15 +64,30 @@ public partial class MainPageViewModel : ObservableObject
             if (!string.IsNullOrWhiteSpace(Config.SonioxSecret)) Status = "准备就绪";
         }
         catch (Exception e) { Status = "设置读取失败，可重新填写：" + e.Message; }
-        Directory.CreateDirectory(TranscriptFiles.Folder);
-        int unreadable = 0;
-        foreach (var file in Directory.EnumerateFiles(TranscriptFiles.Folder, "*.json"))
+    }
+    public async Task LoadArchivesAsync()
+    {
+        if (IsBusy || Archives.Count > 0) return;
+        string readyStatus = Status;
+        IsBusy = true; Status = "正在读取本地存档…";
+        try
         {
-            try { Archives.Add(TranscriptFiles.Parse(File.ReadAllText(file))); } catch { unreadable++; }
+            var result = await Task.Run(() =>
+            {
+                Directory.CreateDirectory(TranscriptFiles.Folder);
+                var archives = new List<Archive>(); int unreadable = 0;
+                foreach (var file in Directory.EnumerateFiles(TranscriptFiles.Folder, "*.json"))
+                {
+                    try { archives.Add(TranscriptFiles.Parse(File.ReadAllText(file))); } catch { unreadable++; }
+                }
+                return (Archives: archives, Unreadable: unreadable);
+            });
+            foreach (var archive in result.Archives) Archives.Add(archive);
+            SelectedArchive = Archives.OrderByDescending(a => a.UpdatedAt).FirstOrDefault();
+            Status = result.Unreadable > 0 ? $"有 {result.Unreadable} 份存档无法读取，原文件已保留。" : readyStatus;
         }
-        if (unreadable > 0) Status = $"有 {unreadable} 份存档无法读取，原文件已保留。";
-        RefreshDevices();
-        SelectedArchive = Archives.OrderByDescending(a => a.UpdatedAt).FirstOrDefault();
+        catch (Exception e) { Status = "本地存档读取失败，原文件已保留：" + e.Message; }
+        finally { IsBusy = false; RefreshDevices(); }
     }
     public void RefreshDevices()
     {

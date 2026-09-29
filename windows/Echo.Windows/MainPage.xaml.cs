@@ -17,6 +17,7 @@ public sealed partial class MainPage : Page
 {
     private readonly List<Border> waveform = [];
     private int waveformFrame;
+    private bool initialized;
     public MainPageViewModel ViewModel { get; } = new();
     public MainPage()
     {
@@ -31,7 +32,13 @@ public sealed partial class MainPage : Page
         catch { ViewModel.Status = "密钥无法解密，请重新输入并保存。"; }
         ThemeChoice.SelectedIndex = c.Theme == "Light" ? 1 : c.Theme == "Dark" ? 2 : 0;
         RequestedTheme = Enum.TryParse<ElementTheme>(c.Theme, out var theme) ? theme : ElementTheme.Default;
-        Loaded += (_, _) => ApplyWindowTheme();
+        Loaded += async (_, _) =>
+        {
+            ApplyWindowTheme();
+            if (initialized) return;
+            initialized = true;
+            await ViewModel.LoadArchivesAsync();
+        };
         ViewModel.Entries.CollectionChanged += (_, _) => EmptyHint.Visibility = ViewModel.Entries.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         EmptyHint.Visibility = ViewModel.Entries.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         for (int i = 0; i < 64; i++)
