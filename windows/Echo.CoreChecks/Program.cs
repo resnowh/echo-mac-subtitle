@@ -220,6 +220,8 @@ if (args.Contains("--audio"))
     using var listener = new HttpListener(); listener.Prefixes.Add($"http://127.0.0.1:{port}/"); listener.Start();
     using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
     int receivedAudio = 0; bool validConfig = false, receivedFinal = false;
+    var provisionalApplied = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    var switchedSegment = new Segment(); var switchedAssembler = new TokenAssembler(switchedSegment, _ => { });
     var server = Task.Run(async () =>
     {
         var context = await listener.GetContextAsync().WaitAsync(timeout.Token);
@@ -228,26 +230,42 @@ if (args.Contains("--audio"))
         var configResult = await socket.ReceiveAsync(new ArraySegment<byte>(packet), timeout.Token);
         using var config = JsonDocument.Parse(packet.AsMemory(0, configResult.Count));
         validConfig = configResult.MessageType == WebSocketMessageType.Text && config.RootElement.GetProperty("sample_rate").GetInt32() == 16000 && config.RootElement.GetProperty("api_key").GetString() == "synthetic";
+        byte[] provisional = Encoding.UTF8.GetBytes("""{"tokens":[{"text":"Before","is_final":false,"start_ms":0,"end_ms":250}]}""");
+        await socket.SendAsync(provisional.AsMemory(), WebSocketMessageType.Text, true, timeout.Token);
         while (true)
         {
             var result = await socket.ReceiveAsync(new ArraySegment<byte>(packet), timeout.Token);
             if (result.Count == 0) break;
             receivedAudio += result.Count;
         }
-        byte[] final = Encoding.UTF8.GetBytes("""{"tokens":[{"text":"Final tail.","is_final":true,"start_ms":0,"end_ms":500}],"finished":true}""");
+        byte[] final = Encoding.UTF8.GetBytes("""{"tokens":[{"text":"Before and after.","is_final":true,"start_ms":0,"end_ms":500}],"finished":true}""");
         await socket.SendAsync(final.AsMemory(), WebSocketMessageType.Text, true, timeout.Token);
     }, timeout.Token);
     await using (var session = new SpeechSession(new Uri($"ws://127.0.0.1:{port}/")))
     {
-        session.Message += m => receivedFinal = m.TryGetProperty("finished", out var f) && f.GetBoolean();
-        await session.StartAsync(new Preferences(), "synthetic", 0, null, null);
+        session.Message += m =>
+        {
+            switchedAssembler.Apply(m);
+            if (m.TryGetProperty("tokens", out var tokens) && tokens.EnumerateArray().Any(t => t.TryGetProperty("is_final", out var finalToken) && !finalToken.GetBoolean())) provisionalApplied.TrySetResult();
+            receivedFinal = m.TryGetProperty("finished", out var f) && f.GetBoolean();
+        };
+        await session.StartAsync(new Preferences(), "synthetic", 1, null, null);
         bool restoredInput = false;
-        try { await session.SwitchDevicesAsync("missing-device-id", null); }
+        try { await session.SwitchDevicesAsync(null, "missing-device-id"); }
         catch (AudioDeviceSwitchException e) { restoredInput = e.CaptureRestored; }
         Check(restoredInput, "invalid live device switch restores capture and keeps the recognition session open");
+        await provisionalApplied.Task.WaitAsync(timeout.Token);
+        string[] inputIds = AudioCapture.Devices(DataFlow.Capture).Select(d => d.Id).ToArray();
+        int successfulSwitches = 0;
+        for (int i = 0; i < 20; i++)
+        {
+            await session.SwitchDevicesAsync(null, inputIds[i % inputIds.Length]);
+            successfulSwitches++;
+        }
+        Check(successfulSwitches == 20, "live microphone capture switches among active inputs 20 times in one recognition session");
         await Task.Delay(450); await session.StopAsync();
     }
     await server; listener.Stop();
-    Check(validConfig && receivedAudio > 0 && receivedFinal, "local WebSocket: config, binary PCM, end marker, final result before stop completes");
+    Check(validConfig && receivedAudio > 0 && receivedFinal && switchedSegment.Entries.Count == 1 && switchedSegment.Entries[0].English == "Before and after.", "local WebSocket: 20 input switches preserve the session and subtitle while final PCM and end marker complete");
 }
 Console.WriteLine($"Completed {passed} checks. No cloud calls; no audio was saved.");
