@@ -21,4 +21,6 @@
 
 `dotnet restore windows/Echo.CoreChecks/Echo.CoreChecks.csproj --locked-mode` 后运行 `dotnet run --project windows/Echo.CoreChecks -c Release --no-restore`，共 44 项检查通过。Release + `win-x64` 锁定还原及 Release x64 build 通过，0 错误、5 条既有 NAudio 弃用警告。
 
+提交后的 [GitHub Actions 运行 36611067984](https://github.com/resnowh/echo-mac-subtitle/actions/runs/36611067984) 通过：Windows 锁定还原、44 项核心检查与 Release x64 build 成功，Mac Debug/Release build 也成功。
+
 本项验证的是队列调度与错误隔离，不模拟磁盘空间耗尽、ACL 拒绝、断电或强制结束进程。没有打开 Echo 窗口、写入用户档案、保存音频或调用云服务。
