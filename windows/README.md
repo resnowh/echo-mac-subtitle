@@ -18,6 +18,7 @@
 - DeepSeek 总结新增内容、当前段、全存档；结果可选中复制。
 - 浅色/深色/系统主题、窗口置顶、录音波形、重复启动保护。
 - API Key 用 Windows DPAPI 当前用户加密；不保存原始音频。
+- 字幕逐条手动纠正、撤销及原始识别稿保留；可按需请求 DeepSeek 校对/重新翻译建议，并编辑后再应用。
 
 数据目录：`%LOCALAPPDATA%\EchoWindows`。安装方式可能使系统对路径重定向，以应用“打开数据目录”按钮打开的位置为准。
 
@@ -74,7 +75,7 @@ winapp package windows/Echo.Windows/bin/x64/Release/net10.0-windows10.0.26100.0/
 - 自动存档序列化在 UI 线程，超长存档的界面延迟尚未压力测试。
 - 界面当前以简体中文为主，尚未完成完整本地化与高对比/屏幕阅读器验收。
 
-代码位于 `feature/windows-preview` 本地分支。本次实现尚未推送 GitHub；先前方案文档已在主分支发布。
+代码维护在 `feature/windows-preview` 分支；先前方案文档已在主分支发布。
 
 
 2026-09-29：进一步参照 macOS/EchoMacApp.swift 和 TranscriptViews.swift，完成双栏字幕表头、逐行分隔、底部录音/存档/波形三行操作、顶部主题切换及设置覆盖面板。Release 构建与 9 项 UI 冒烟检查通过；截图保留在工作区 docs/sources/windows-mac-ui-*.png。
@@ -82,4 +83,4 @@ winapp package windows/Echo.Windows/bin/x64/Release/net10.0-windows10.0.26100.0/
 
 最新自签名包的 SHA-256：`0131219EEAC805FE5C6E502F85AF931A06B76686695B561F75EAD43E45763C98`。开发机通过包身份运行与设置面板滚动检查已通过；跨机器安装仍待验证。
 
-2026-09-29 同步：当前分支已合入 `origin/main` 至 `c7b9e37`，包含 Mac 端新增的字幕响应优化、可撤销手动编辑、可选 AI 校对建议及语义边界拆分。此次合并未改动 Windows 代码或测试包。Windows 版尚未提供逐条字幕编辑、撤销和 AI 校对建议，因此与最新 Mac 版仍有功能差距。
+2026-09-29 同步并补齐：当前分支已合入 `origin/main` 至 `c7b9e37`，包含 Mac 端新增的字幕响应优化、可撤销手动编辑、可选 AI 校对建议及语义边界拆分。Windows 已增加逐条字幕编辑、撤销、查看原始识别稿、手动请求 AI 校对/重新翻译及校对术语设置。人工修改按字段锁定，后续识别不会覆盖锁定字段；AI 建议需手动应用，且字幕发生变化时旧建议会失效。校对数据使用 `correction.rawSource/rawTranslation/sourceLocked/translationLocked/revision/history` 字段，与 Mac 存档字段兼容。Release x64 后台构建通过，0 错误、8 条既有 NAudio 过时 API 警告；14 项核心检查通过，包含校对锁定、撤销和存档往返。未启动应用窗口。自动 AI 校对、Mac 实机双向存档验证与跨机器安装仍待处理。

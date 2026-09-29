@@ -19,6 +19,7 @@ public partial class MainPageViewModel : ObservableObject
     private readonly DispatcherQueueTimer checkpoint;
     private readonly HttpClient http = new() { Timeout = TimeSpan.FromSeconds(90) };
     private readonly Dictionary<Guid, string> summarized = [];
+    private readonly SubtitleCorrectionService corrections = new();
     private string failure = "";
     public Preferences Config { get; private set; } = new();
     public ObservableCollection<Archive> Archives { get; } = [];
@@ -38,7 +39,7 @@ public partial class MainPageViewModel : ObservableObject
     partial void OnIsRecordingChanged(bool value) => OnPropertyChanged(nameof(CanEdit));
     partial void OnSelectedArchiveChanged(Archive? value)
     {
-        Entries.Clear(); summarized.Clear();
+        Entries.Clear(); summarized.Clear(); correctionSuggestions.Clear();
         if (value is not null) foreach (var entry in value.Segments.OrderBy(s => s.StartedAt).SelectMany(s => s.Entries)) Entries.Add(entry);
         Summary = "可总结新增内容、当前录音段或整个存档。";
     }
@@ -83,6 +84,53 @@ public partial class MainPageViewModel : ObservableObject
         if (SelectedArchive is null) return;
         try { TranscriptFiles.Save(SelectedArchive); }
         catch (Exception e) { Status = "存档尚未保存，请导出备份：" + e.Message; }
+    }
+    public void SaveCorrection(Subtitle entry, string source, string translation)
+    {
+        entry.Edit(source, translation);
+        if (entry.Correction is null) return;
+        correctionSuggestions.Remove(entry.Id);
+        Save();
+        if (Status.StartsWith("存档尚未保存")) return;
+        Status = "字幕已纠正；已修改字段会保留人工选择。";
+        if (!string.IsNullOrWhiteSpace(Summary) && Summary != "录音后可生成总结。只有点击总结时，文字稿才会发送到 DeepSeek。")
+            Summary = "文字稿已纠正；已有总结未改动，可重新生成。";
+    }
+    public void UndoCorrection(Subtitle entry)
+    {
+        if (!entry.UndoCorrection()) return;
+        correctionSuggestions.Remove(entry.Id); Save();
+        if (Status.StartsWith("存档尚未保存")) return;
+        Status = "已撤销上次纠正；当前文字保留为人工选择。";
+    }
+    private readonly Dictionary<Guid, (string Source, string Translation, Guid Revision, CorrectionSuggestion Suggestion)> correctionSuggestions = [];
+    public CorrectionSuggestion? GetSuggestion(Subtitle entry)
+    {
+        if (!correctionSuggestions.TryGetValue(entry.Id, out var item)) return null;
+        return item.Source == entry.English && item.Translation == entry.Chinese
+            && item.Revision == (entry.Correction?.Revision ?? Guid.Empty) ? item.Suggestion : null;
+    }
+    public async Task<CorrectionSuggestion?> RequestCorrectionAsync(Subtitle entry, bool translateOnly = false)
+    {
+        try
+        {
+            string key = Preferences.Unprotect(Config.DeepSeekSecret).Trim();
+            if (key.Length == 0) throw new InvalidOperationException("请先在设置中填写 DeepSeek API Key。");
+            if (entry.English.Length is 0 or > 4000 || entry.Chinese.Length > 4000) throw new InvalidOperationException("本条文字为空或过长，无法请求校对。");
+            string source = entry.English, translation = entry.Chinese; Guid revision = entry.Correction?.Revision ?? Guid.Empty;
+            int index = Entries.IndexOf(entry);
+            string context = string.Join("\n", Entries.Skip(Math.Max(0, index - 2)).Take(5).Select(e => e.English));
+            Status = translateOnly ? "正在请求重新翻译…" : "正在请求 AI 校对建议…";
+            var suggestion = await corrections.SuggestAsync(key, Config.DeepSeekModel, source, translation, context,
+                Config.CorrectionTerms, Config.Translate ? Config.TargetLanguage : "none", CancellationToken.None);
+            if (!Entries.Contains(entry) || entry.English != source || entry.Chinese != translation || (entry.Correction?.Revision ?? Guid.Empty) != revision)
+                throw new InvalidOperationException("字幕在请求期间已变化，旧建议已忽略。");
+            if (translateOnly && suggestion.Source != source) throw new InvalidDataException("重新翻译返回了不同原文，已忽略。");
+            correctionSuggestions[entry.Id] = (source, translation, revision, suggestion);
+            Status = suggestion.Uncertain ? "AI 无法确认，请人工核对建议。" : "AI 建议已就绪，确认后才会应用。";
+            return suggestion;
+        }
+        catch (Exception e) { Status = "AI 校对失败：" + e.Message; return null; }
     }
     public async Task StartAsync(int mode, string? output, string? input)
     {

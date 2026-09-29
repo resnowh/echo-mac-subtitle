@@ -15,6 +15,7 @@ public sealed class Preferences
     public bool Speakers { get; set; } = true;
     public string SonioxSecret { get; set; } = "";
     public string DeepSeekSecret { get; set; } = "";
+    public string CorrectionTerms { get; set; } = "";
     public string Theme { get; set; } = "Default";
     public static string Protect(string value) => value.Length == 0 ? "" : Convert.ToBase64String(ProtectedData.Protect(Encoding.UTF8.GetBytes(value), null, DataProtectionScope.CurrentUser));
     public static string Unprotect(string value) => value.Length == 0 ? "" : Encoding.UTF8.GetString(ProtectedData.Unprotect(Convert.FromBase64String(value), null, DataProtectionScope.CurrentUser));
