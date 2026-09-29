@@ -122,3 +122,5 @@ winapp package windows/Echo.Windows/bin/x64/Release/net10.0-windows10.0.26100.0/
 2026-09-30：扩展 A11 睡眠恢复状态机检查，模拟 10 次“录音意图保留→睡眠→唤醒→恢复→完成”循环，且单独验证唤醒等待期间用户停止后不会启动恢复。`Echo.CoreChecks --audio` 共 51 项通过；未触发系统睡眠、未启动应用。真实设备睡眠/唤醒、音频设备稳定等待及新录音段行为仍待人工验收。底稿见 `docs/sources/windows-a11-sleep-cycle-2026-09-30.md`。
 
 2026-09-30：扩展 A12 音频端点通知策略矩阵：默认多媒体端点变化会请求跟随；固定设备失联不切到其他设备；活动/未知设备、无关 flow、Console 角色和未变化的默认 ID 均忽略。全套 `Echo.CoreChecks --audio` 共 52 项通过。未触发设备拔插或蓝牙 profile 变化；真实端点与路由变化仍待硬件验收。底稿见 `docs/sources/windows-a12-endpoint-policy-2026-09-30.md`。
+
+2026-09-30：扩展 A13 活动会话断线回归：本机模拟服务先接受转写配置并收到音频帧，再主动关闭 WebSocket；客户端将缺少 finished 的断开报告为 `IOException`，符合有限重试分类。401 不重试、503 可重试及连接期间用户取消用例仍通过。`Echo.CoreChecks --audio` 全套共 53 项通过；未连接云端、未保存音频、未启动窗口。ViewModel 恢复编排路径已静态检查，但真实断网、恢复新段与错误提示尚未端到端实测。底稿见 `docs/sources/windows-a13-network-recovery-2026-09-30.md`。

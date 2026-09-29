@@ -206,6 +206,36 @@ async Task<bool> CheckConnectCancellationAsync()
     await rejectLater; return false;
 }
 Check(await CheckConnectCancellationAsync(), "user cancellation during reconnect is not mistaken for a connection timeout");
+var disconnectProbe = new TcpListener(IPAddress.Loopback, 0); disconnectProbe.Start();
+int disconnectPort = ((IPEndPoint)disconnectProbe.LocalEndpoint).Port; disconnectProbe.Stop();
+using var disconnectListener = new HttpListener(); disconnectListener.Prefixes.Add($"http://127.0.0.1:{disconnectPort}/"); disconnectListener.Start();
+using var disconnectTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+var unexpectedClose = new TaskCompletionSource<Exception>(TaskCreationOptions.RunContinuationsAsynchronously);
+var disconnectServer = Task.Run(async () =>
+{
+    var context = await disconnectListener.GetContextAsync().WaitAsync(disconnectTimeout.Token);
+    using var socket = (await context.AcceptWebSocketAsync(null)).WebSocket;
+    var packet = new byte[65536];
+    var config = await socket.ReceiveAsync(new ArraySegment<byte>(packet), disconnectTimeout.Token);
+    using var configJson = JsonDocument.Parse(packet.AsMemory(0, config.Count));
+    bool validConfig = config.MessageType == WebSocketMessageType.Text
+        && configJson.RootElement.GetProperty("sample_rate").GetInt32() == 16000;
+    WebSocketReceiveResult audio;
+    do { audio = await socket.ReceiveAsync(new ArraySegment<byte>(packet), disconnectTimeout.Token); }
+    while (audio.Count == 0 && !disconnectTimeout.IsCancellationRequested);
+    if (!validConfig || audio.MessageType != WebSocketMessageType.Binary || audio.Count == 0)
+        throw new InvalidDataException("synthetic session did not send configuration and audio");
+    await socket.CloseOutputAsync(WebSocketCloseStatus.InternalServerError, "simulated network interruption", disconnectTimeout.Token);
+}, disconnectTimeout.Token);
+await using (var disconnectSession = new SpeechSession(new Uri($"ws://127.0.0.1:{disconnectPort}/"), captureEnabled: false))
+{
+    disconnectSession.Failure += error => unexpectedClose.TrySetResult(error);
+    await disconnectSession.StartAsync(new Preferences(), "synthetic", 0, null, null);
+    var disconnectError = await unexpectedClose.Task.WaitAsync(disconnectTimeout.Token);
+    await disconnectServer; disconnectListener.Stop();
+    Check(disconnectError is IOException && SpeechRetryPolicy.IsTransient(disconnectError),
+        "an unexpected close after audio starts is reported as a transient failure eligible for bounded reconnection");
+}
 var drift = new ClockDriftController();
 int neutralFrames = drift.InputFramesFor(320, ClockDriftController.TargetBufferSeconds);
 int highBufferFrames = drift.InputFramesFor(320, 0.30);
