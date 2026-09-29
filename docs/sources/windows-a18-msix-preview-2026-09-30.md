@@ -28,12 +28,41 @@
 - Identity/版本/架构/Publisher：与上一包相同（`B7582E49-F75A-4EFA-950C-C6754B9E496E` / `1.0.0.0` / `x64` / `CN=AppPublisher`）。
 - 签名者 thumbprint 仍为 `ADDF31C7C19756CF27C37A6D72FBC5FAA3D95B69`，包内有 `AppxSignature.p7x`；Windows 状态仍为 `UnknownError`，原因仍是不受信任根。
 
+## A20 过期打包尝试
+
+2026-09-30 曾从遗留的 `AppX` 子目录打包并签名 `Echo-Windows-x64-a20-20260930.msix`（122,702,982 bytes，SHA-256 `98EE9197668E2617BEBE0D9F2E08713D6B9338F49AE72643B94BDD9192C28BAD`）。复核发现这个子目录上次生成于 2026-09-29，其 `Echo.Windows.dll` 与当日最新 Release 输出哈希不同。**此包已判为过期，不可用于分发或安装**，文件只保留在忽略目录中作为审计记录。
+
+尽管该文件有测试证书签名且 `Get-AuthenticodeSignature` 能读取签名者，它没有通过当前构建 DLL 对拍，所以签名不能证明代码新鲜度。
+
+## A21 当前候选包
+
+MSIX 版本从 `1.0.0.0` 递增到 `1.0.1.0`，并以 Release 输出为主、合并 AppX 资源的方式生成新包：
+
+- 路径：`windows/artifacts/Echo-Windows-x64-a21-20260930.msix`
+- 大小：108,210,625 bytes
+- SHA-256：`5FA2DAB7D945C3D5D06CBB62D40D26BB45010A5BC4C797BA9E2C2C96EE195C51`
+- 清单：Identity `B7582E49-F75A-4EFA-950C-C6754B9E496E`，版本 `1.0.1.0`，架构 `x64`，Publisher `CN=AppPublisher`。
+- SignTool 成功签名；签名者 thumbprint `ADDF31C7C19756CF27C37A6D72FBC5FAA3D95B69` 与清单 Publisher 匹配。Windows `Get-AuthenticodeSignature` 为 `UnknownError`，因为证书链终止于不受信任根。
+- 使用 MakeAppx 解包后，`Echo.Windows.exe` 与 `Echo.Windows.dll` 均与最新 Release 输出 SHA-256 一致。
+- 打包时 Release 输出来自 `3e74f1b83dc3f67a670783fb16b7be0b7e9d881c` 对应代码；包版本 `1.0.1.0` 当时刚在工作区递增、尚未提交，随后会与打包脚本一起入库。此候选包已通过解包与二进制对拍，仍应优先用已提交版脚本再生成一份可追溯包。
+
+## A22 候选包与打包脚本验证
+
+使用 `windows/package-preview.ps1` 重做 A21；脚本从 Release 输出覆盖遗留 AppX 目录中的旧载荷，检查清单与签名者一致，签名后再次解包并核对程序文件：
+
+- 路径：`windows/artifacts/Echo-Windows-x64-a22-20260930.msix`
+- 大小：108,210,624 bytes
+- SHA-256：`46D4014438F1989CC7E663FFFC8B3608BCB25F2EB2D5C7606CBA77C7836DF1D4`
+- 清单：Identity `B7582E49-F75A-4EFA-950C-C6754B9E496E`，版本 `1.0.1.0`，架构 `x64`，Publisher `CN=AppPublisher`。
+- 打包及签名命令均成功；脚本签名后解包核验，exe/dll 与 Release 输出 SHA-256 相同。签名者 thumbprint `ADDF31C7C19756CF27C37A6D72FBC5FAA3D95B69`。Windows 信任状态仍为 `UnknownError`（不受信任根）。
+- 本包生成时应用源代码来自 `3e74f1b83dc3f67a670783fb16b7be0b7e9d881c`；包版本递增与打包脚本改动在当前提交中保存。它是测试候选，不是可信发布包。
+
 ## 边界与未完成验收
 
 - 使用的是已有本地测试证书，不是正式个人/组织代码签名证书；本轮没有安装/信任该证书，没有安装或启动 MSIX，也未修改系统证书信任存储。
 - 没有可信时间戳；正式分发前必须用长期有效的发布身份重新签名并带可信时间戳。
 - 未在干净机器安装、升级、启动、填写 API Key、读取旧档或卸载回退。A18 仍未通过。
-- 旧版与 A17 预览包、私钥均保留在 `windows/artifacts` 忽略目录，不提交到 Git；哈希及可复核元数据写入本底稿。
+- 旧版、A17/A20/A21/A22 预览包与 PFX 均保留在 `windows/artifacts` 忽略目录，不提交到 Git；A20 已明确作废，A22 为最新候选，哈希及可复核元数据写入本底稿。
 
 ## 数据留存
 

@@ -52,15 +52,17 @@ NuGet 版本记录在 `packages.lock.json`。GitHub Actions 在 Windows runner �
 
 ## 测试签名安装包
 
-本地交付位置：`windows/artifacts/Echo-Windows-x64-a17-20260930.msix`，约 117 MiB，包含运行时。附带 `Echo-preview.cer` 公钥证书。**这是自签名测试包，不是公众发行证书，也不是商店上架版本。**
+最新本机候选：`windows/artifacts/Echo-Windows-x64-a22-20260930.msix`，约 103 MiB，包含运行时；SHA-256 和逐版信息见 [A18 打包底稿](../docs/sources/windows-a18-msix-preview-2026-09-30.md)。附带 `Echo-preview.cer` 公钥证书。**这是自签名测试包，不是公众发行证书，也不是商店上架版本。**
 
-其他测试机器需要先审查并信任该测试发布者证书，再安装 MSIX；普通用户直接双击可能被不受信任证书拦截。此前候选包曾通过开发注册启动；当前 A17 预览包没有安装或启动，`Get-AuthenticodeSignature` 显示证书链终止于未受信任根。尚未用另一台干净机器验证安装。不要把本机的 `.pfx` 私钥发给测试用户或提交到 Git。安装包和私钥均被 Git 忽略。
+其他测试机器需要先审查并信任该测试发布者证书，再安装 MSIX；普通用户直接双击可能被不受信任证书拦截。此前候选包曾通过开发注册启动；当前 A22 预览包没有安装或启动，`Get-AuthenticodeSignature` 显示证书链终止于未受信任根。尚未用另一台干净机器验证安装。不要把本机的 `.pfx` 私钥发给测试用户或提交到 Git。安装包和私钥均被 Git 忽略。
 
-可复现打包命令（已构建并通过 `winapp run` 生成 AppX 目录后）：
+在当前 Release 构建输出、Windows SDK Build Tools 与测试签名证书已就绪后，可用打包脚本生成新包。输出路径必须唯一；脚本会校验清单、签名者和包内 exe/dll 与当前构建一致，且不会启动或安装应用：
 
 ```powershell
-winapp cert generate --manifest windows/Echo.Windows/Package.appxmanifest --output windows/artifacts/Echo-preview.pfx --export-cer
-winapp package windows/Echo.Windows/bin/x64/Release/net10.0-windows10.0.26100.0/win-x64/AppX --output windows/artifacts/Echo-Windows-x64-a17-20260930.msix --cert windows/artifacts/Echo-preview.pfx
+.\windows\package-preview.ps1 `
+  -BuildOutputPath windows/Echo.Windows/bin/x64/Release/net10.0-windows10.0.26100.0/win-x64 `
+  -OutputPath windows/artifacts/Echo-Windows-x64-<build>.msix `
+  -SignerThumbprint <test-certificate-thumbprint>
 ```
 
 生产发布仍需确定发布者身份、正式代码签名或商店发行、安装升级测试、隐私政策及长时间稳定性验证。
