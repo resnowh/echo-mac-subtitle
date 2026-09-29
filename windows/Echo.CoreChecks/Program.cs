@@ -274,6 +274,20 @@ stoppedBeforeSleep.BeginSleep(recordingIntended: false); stoppedBeforeSleep.Canc
 Check(endForSleep && scheduleWake && beginWakeRecovery && !sleepState.IsRecovering
     && !stoppedBeforeSleep.BeginWake(),
     "sleep recovery restores only a recording that was intended before sleep and can be cancelled by the user");
+int recoveredCycles = 0;
+for (int cycle = 0; cycle < 10; cycle++)
+{
+    var repeatedSleep = new SleepRecoveryState();
+    bool ended = repeatedSleep.BeginSleep(recordingIntended: true);
+    bool queued = repeatedSleep.BeginWake();
+    bool recovering = repeatedSleep.BeginRecovery();
+    repeatedSleep.FinishRecovery();
+    if (ended && queued && recovering && !repeatedSleep.IsRecovering && !repeatedSleep.HasPendingWakeRecovery) recoveredCycles++;
+}
+var userStoppedAfterWake = new SleepRecoveryState();
+userStoppedAfterWake.BeginSleep(recordingIntended: true); userStoppedAfterWake.BeginWake(); userStoppedAfterWake.CancelByUser();
+Check(recoveredCycles == 10 && !userStoppedAfterWake.BeginRecovery(),
+    "ten simulated sleep/wake cycles recover an intended session, while a user stop after wake cancels pending recovery");
 if (args.Contains("--audio"))
 {
     Console.WriteLine($"Devices: render={AudioCapture.Devices(DataFlow.Render).Count}, capture={AudioCapture.Devices(DataFlow.Capture).Count}");

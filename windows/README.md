@@ -118,3 +118,5 @@ winapp package windows/Echo.Windows/bin/x64/Release/net10.0-windows10.0.26100.0/
 2026-09-30：补齐 A09 旧版字段与跨日时间回归。构造缺少 speaker/language 的旧 JSON，确认字段保持 null、不推断语种；段落从 2024-01-01 23:59:59 UTC 开始、字幕起点为 2 秒，解析后仍对应 2024-01-02 00:00:01 UTC，SRT 则以该档最早字幕为 0 秒正确导出。全套 `Echo.CoreChecks --audio` 共 49 项通过；仅使用合成 JSON、未写真实录音或启动应用。通过静态检查确认导入以 JSON 文本解析并写入应用自己的档案路径，但本轮没有比较源文件导入前后的字节哈希。底稿见 `docs/sources/windows-a09-legacy-dates-2026-09-30.md`。
 
 2026-09-30：补齐 A10 三种总结范围的可重复选择测试，并将纯选择逻辑用于生产总结流程。增量模式排除签名未变的旧条目、包含被修改和新加入的文字；当前段仅取末段；全文范围包含两段所有条目。既有 Unicode 长文分块检查仍通过。Release x64 构建通过，0 错误、10 条 NAudio 弃用警告；`Echo.CoreChecks --audio` 共 50 项通过。未配置或调用 DeepSeek、未启动窗口。真实总结响应、超大存档完整请求及总结期间录音并行仍需后续验收。底稿见 `docs/sources/windows-a10-summary-selection-2026-09-30.md`。
+
+2026-09-30：扩展 A11 睡眠恢复状态机检查，模拟 10 次“录音意图保留→睡眠→唤醒→恢复→完成”循环，且单独验证唤醒等待期间用户停止后不会启动恢复。`Echo.CoreChecks --audio` 共 51 项通过；未触发系统睡眠、未启动应用。真实设备睡眠/唤醒、音频设备稳定等待及新录音段行为仍待人工验收。底稿见 `docs/sources/windows-a11-sleep-cycle-2026-09-30.md`。
