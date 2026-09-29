@@ -23,6 +23,7 @@ public sealed partial class MainPage : Page
         var c = ViewModel.Config;
         SonioxModel.Text = c.SonioxModel; DeepSeekModel.Text = c.DeepSeekModel;
         CorrectionTerms.Text = c.CorrectionTerms;
+        AutoCorrection.IsOn = c.AutoCorrectionEnabled;
         SourceLanguage.Text = c.SourceLanguage; TargetLanguage.Text = c.TargetLanguage;
         Translate.IsOn = c.Translate; Speakers.IsOn = c.Speakers; Strict.IsOn = c.Strict;
         try { SonioxKey.Password = Preferences.Unprotect(c.SonioxSecret); DeepSeekKey.Password = Preferences.Unprotect(c.DeepSeekSecret); }
@@ -132,6 +133,7 @@ public sealed partial class MainPage : Page
         var accept = new Button { Content = "应用建议", IsEnabled = false };
         actions.Children.Add(ai); actions.Children.Add(translate); actions.Children.Add(undo); actions.Children.Add(accept);
         body.Children.Add(actions); body.Children.Add(suggestionText);
+        suggestionText.Text = ViewModel.GetCorrectionStatus(entry) ?? "";
         body.Children.Add(new TextBlock { Text = "AI 只读取文字。点击请求会把本句和相邻上下文发送给 DeepSeek，可能产生费用；建议需手动应用。", TextWrapping = TextWrapping.Wrap, Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"] });
         var dialog = new ContentDialog { Title = "纠正字幕", Content = body, PrimaryButtonText = "保存纠正", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot };
         dialog.PrimaryButtonClick += (_, args) =>
@@ -185,6 +187,7 @@ public sealed partial class MainPage : Page
             c.SonioxModel = SonioxModel.Text.Trim(); c.DeepSeekModel = DeepSeekModel.Text.Trim();
             c.SourceLanguage = SourceLanguage.Text.Trim(); c.TargetLanguage = TargetLanguage.Text.Trim();
             c.Translate = Translate.IsOn; c.Strict = Strict.IsOn; c.Speakers = Speakers.IsOn;
+            c.AutoCorrectionEnabled = AutoCorrection.IsOn;
             c.Theme = ThemeChoice.SelectedIndex == 1 ? "Light" : ThemeChoice.SelectedIndex == 2 ? "Dark" : "Default";
             c.Save(); RequestedTheme = Enum.Parse<ElementTheme>(c.Theme);
             ApplyWindowTheme();

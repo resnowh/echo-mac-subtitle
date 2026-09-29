@@ -32,6 +32,9 @@ Check(edited.English == "Recognized" && edited.Correction?.RawSource == "Late re
 var bilingual = new Segment(); var bilingualAssembler = new TokenAssembler(bilingual, _ => { });
 using (var turn = JsonDocument.Parse("""{"tokens":[{"text":"First","is_final":true},{"text":"一","is_final":true,"translation_status":"translation"},{"text":"<end>","is_final":true},{"text":"Second","is_final":true},{"text":"二","is_final":true,"translation_status":"translation"}]}""")) bilingualAssembler.Apply(turn.RootElement);
 Check(bilingual.Entries.Count == 2 && bilingual.Entries[1].Chinese == "二", "untagged endpoint advances both transcript and translation");
+int finalizedCount = 0; var finalizedSegment = new Segment(); var finalizedAssembler = new TokenAssembler(finalizedSegment, _ => { }, _ => finalizedCount++);
+using (var finalTurn = JsonDocument.Parse("""{"tokens":[{"text":"finished sentence","is_final":true},{"text":"<end>","is_final":true}]}""")) finalizedAssembler.Apply(finalTurn.RootElement);
+Check(finalizedCount == 1, "transcript final boundary triggers a single opt-in correction job");
 var archive = new Archive { CreatedAt = 800000000, Segments = [segment, new Segment { StartedAt = 800000010, Entries = [new Subtitle { Start = 0, End = 1, English = "Again" }] }] };
 string srt = TranscriptFiles.Srt(archive);
 Check(srt.Contains("00:00:10,000 --> 00:00:11,000") && srt.Contains("你好。"), "SRT preserves segment wall-clock gap and translation");

@@ -161,7 +161,7 @@ public static class TranscriptFiles
 
 // Final tokens append exactly once; provisional tokens are replaced on each response.
 // Source and translation have independent endpoint cursors, so delayed translations do not target the next source row.
-public sealed class TokenAssembler(Segment segment, Action<Subtitle> added)
+public sealed class TokenAssembler(Segment segment, Action<Subtitle> added, Action<Subtitle>? finalized = null)
 {
     private int sourceCursor, translationCursor;
     private readonly Dictionary<int, string> sourceFinal = [], translationFinal = [];
@@ -208,12 +208,25 @@ public sealed class TokenAssembler(Segment segment, Action<Subtitle> added)
                 if (markerLane is "" or "none")
                 {
                     // The normal untagged endpoint finalizes the complete bilingual utterance.
-                    if (final) sourceCursor = translationCursor = Math.Max(sourceCursor, translationCursor) + 1;
+                    if (final)
+                    {
+                        int completed = Math.Max(sourceCursor, translationCursor);
+                        if (completed < segment.Entries.Count) finalized?.Invoke(segment.Entries[completed]);
+                        sourceCursor = translationCursor = completed + 1;
+                    }
                     provisionalSource = provisionalTranslation = Math.Max(provisionalSource, provisionalTranslation) + 1;
                 }
                 else
                 {
-                    if (final) { if (translation) translationCursor++; else sourceCursor++; }
+                    if (final)
+                    {
+                        if (translation) translationCursor++;
+                        else
+                        {
+                            if (sourceCursor < segment.Entries.Count) finalized?.Invoke(segment.Entries[sourceCursor]);
+                            sourceCursor++;
+                        }
+                    }
                     if (translation) provisionalTranslation++; else provisionalSource++;
                 }
                 continue;

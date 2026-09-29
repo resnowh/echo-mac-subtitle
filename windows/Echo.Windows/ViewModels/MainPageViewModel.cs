@@ -20,6 +20,10 @@ public partial class MainPageViewModel : ObservableObject
     private readonly HttpClient http = new() { Timeout = TimeSpan.FromSeconds(90) };
     private readonly Dictionary<Guid, string> summarized = [];
     private readonly SubtitleCorrectionService corrections = new();
+    private readonly SemaphoreSlim correctionQueue = new(1, 1);
+    private readonly HashSet<Guid> correctionScheduled = [];
+    private Guid correctionGeneration = Guid.NewGuid();
+    private readonly Dictionary<Guid, string> correctionStatuses = [];
     private string failure = "";
     public Preferences Config { get; private set; } = new();
     public ObservableCollection<Archive> Archives { get; } = [];
@@ -39,7 +43,8 @@ public partial class MainPageViewModel : ObservableObject
     partial void OnIsRecordingChanged(bool value) => OnPropertyChanged(nameof(CanEdit));
     partial void OnSelectedArchiveChanged(Archive? value)
     {
-        Entries.Clear(); summarized.Clear(); correctionSuggestions.Clear();
+        correctionGeneration = Guid.NewGuid(); correctionScheduled.Clear();
+        Entries.Clear(); summarized.Clear(); correctionSuggestions.Clear(); correctionStatuses.Clear();
         if (value is not null) foreach (var entry in value.Segments.OrderBy(s => s.StartedAt).SelectMany(s => s.Entries)) Entries.Add(entry);
         Summary = "可总结新增内容、当前录音段或整个存档。";
     }
@@ -110,10 +115,12 @@ public partial class MainPageViewModel : ObservableObject
         return item.Source == entry.English && item.Translation == entry.Chinese
             && item.Revision == (entry.Correction?.Revision ?? Guid.Empty) ? item.Suggestion : null;
     }
-    public async Task<CorrectionSuggestion?> RequestCorrectionAsync(Subtitle entry, bool translateOnly = false)
+    public string? GetCorrectionStatus(Subtitle entry) => correctionStatuses.GetValueOrDefault(entry.Id);
+    public async Task<CorrectionSuggestion?> RequestCorrectionAsync(Subtitle entry, bool translateOnly = false, bool automatic = false)
     {
         try
         {
+            if (automatic && !Config.AutoCorrectionEnabled) return null;
             string key = Preferences.Unprotect(Config.DeepSeekSecret).Trim();
             if (key.Length == 0) throw new InvalidOperationException("请先在设置中填写 DeepSeek API Key。");
             if (entry.English.Length is 0 or > 4000 || entry.Chinese.Length > 4000) throw new InvalidOperationException("本条文字为空或过长，无法请求校对。");
@@ -121,21 +128,51 @@ public partial class MainPageViewModel : ObservableObject
             int index = Entries.IndexOf(entry);
             string context = string.Join("\n", Entries.Skip(Math.Max(0, index - 2)).Take(5).Select(e => e.English));
             Status = translateOnly ? "正在请求重新翻译…" : "正在请求 AI 校对建议…";
+            correctionStatuses[entry.Id] = automatic ? "正在自动生成校对建议…" : Status;
             var suggestion = await corrections.SuggestAsync(key, Config.DeepSeekModel, source, translation, context,
                 Config.CorrectionTerms, Config.Translate ? Config.TargetLanguage : "none", CancellationToken.None);
-            if (!Entries.Contains(entry) || entry.English != source || entry.Chinese != translation || (entry.Correction?.Revision ?? Guid.Empty) != revision)
+            if ((automatic && !Config.AutoCorrectionEnabled) || !Entries.Contains(entry) || entry.English != source || entry.Chinese != translation || (entry.Correction?.Revision ?? Guid.Empty) != revision)
                 throw new InvalidOperationException("字幕在请求期间已变化，旧建议已忽略。");
             if (translateOnly && suggestion.Source != source) throw new InvalidDataException("重新翻译返回了不同原文，已忽略。");
             correctionSuggestions[entry.Id] = (source, translation, revision, suggestion);
             Status = suggestion.Uncertain ? "AI 无法确认，请人工核对建议。" : "AI 建议已就绪，确认后才会应用。";
+            correctionStatuses[entry.Id] = Status;
             return suggestion;
         }
-        catch (Exception e) { Status = "AI 校对失败：" + e.Message; return null; }
+        catch (Exception e) { Status = "AI 校对失败：" + e.Message; correctionStatuses[entry.Id] = Status; return null; }
+    }
+    private void ScheduleAutomaticCorrection(Subtitle entry)
+    {
+        if (!Config.AutoCorrectionEnabled || string.IsNullOrWhiteSpace(entry.English) || correctionScheduled.Count >= 20 || !correctionScheduled.Add(entry.Id)) return;
+        correctionStatuses[entry.Id] = "等待自动校对…";
+        var generation = correctionGeneration;
+        _ = RunAutomaticCorrectionAsync(entry, generation);
+    }
+    private async Task RunAutomaticCorrectionAsync(Subtitle entry, Guid generation)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(3));
+            await correctionQueue.WaitAsync();
+            var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            if (!ui.TryEnqueue(async () =>
+            {
+                try
+                {
+                    if (generation == correctionGeneration && Config.AutoCorrectionEnabled && Entries.Contains(entry))
+                        await RequestCorrectionAsync(entry, automatic: true);
+                }
+                finally { correctionScheduled.Remove(entry.Id); correctionQueue.Release(); completed.TrySetResult(); }
+            })) { correctionQueue.Release(); return; }
+            await completed.Task;
+        }
+        catch { /* Automatic suggestions are optional; recording and saved text remain unaffected. */ }
     }
     public async Task StartAsync(int mode, string? output, string? input)
     {
         if (!CanEdit) return;
         IsBusy = true; failure = "";
+        correctionGeneration = Guid.NewGuid(); correctionScheduled.Clear();
         SpeechSession? current = null;
         try
         {
@@ -143,7 +180,7 @@ public partial class MainPageViewModel : ObservableObject
             if (string.IsNullOrWhiteSpace(key)) throw new InvalidOperationException("请先填写并保存 Soniox API Key。");
             if (SelectedArchive is null) { var a = new Archive(); Archives.Insert(0, a); SelectedArchive = a; }
             segment = new Segment(); SelectedArchive.Segments.Add(segment);
-            assembler = new TokenAssembler(segment, entry => Entries.Add(entry));
+            assembler = new TokenAssembler(segment, entry => Entries.Add(entry), ScheduleAutomaticCorrection);
             current = new SpeechSession(); session = current;
             current.Message += json => ui.TryEnqueue(() => { if (ReferenceEquals(session, current)) assembler?.Apply(json); });
             current.Level += value => ui.TryEnqueue(() => { if (ReferenceEquals(session, current)) Level = Math.Min(100, value * 100); });

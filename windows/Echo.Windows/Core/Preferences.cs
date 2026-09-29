@@ -13,6 +13,7 @@ public sealed class Preferences
     public bool Translate { get; set; } = true;
     public bool Strict { get; set; }
     public bool Speakers { get; set; } = true;
+    public bool AutoCorrectionEnabled { get; set; }
     public string SonioxSecret { get; set; } = "";
     public string DeepSeekSecret { get; set; } = "";
     public string CorrectionTerms { get; set; } = "";
