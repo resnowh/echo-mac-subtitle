@@ -110,3 +110,5 @@ winapp package windows/Echo.Windows/bin/x64/Release/net10.0-windows10.0.26100.0/
 2026-09-30：补齐 A05 建连前采集与有界缓冲。每个输入在 WebSocket 握手期间先采集，最多缓存 2.5 秒；连接后先追发送缓存帧，再恢复实时节奏。缓存超限会报明确错误并停止，避免静默缺口。后台本机测试在 1 秒握手延迟下缓存 0.98 秒，连接后 200 ms 降至约 0.11～0.12 秒；3.2 秒延迟时在缓冲上限处明确失败。A06 完成后的 `Echo.CoreChecks --audio` 共 46 项通过，Release x64 构建通过。未保存音频、未启动 Echo 窗口；其他硬件及运行中网络退化仍待验收。底稿见 `docs/sources/windows-a05-prebuffer-2026-09-30.md`。
 
 2026-09-30：补齐 A06 识别语言元数据在字幕行和 SRT 中的展示。字幕行现在订阅语言属性变更，并在有检测值时显示语言代码；SRT 在英文字幕前写入 `[Speaker N] [语言代码]`。合成最终 token 覆盖 Speaker 变化与 en/ja 语言绑定，Archive JSON 往返保留 Speaker/语言，SRT 断言 `[Speaker 2] [fr] bonjour`。Release x64 构建通过，`Echo.CoreChecks --audio` 共 46 项通过；XAML 由构建编译但没有启动窗口。没有保存真实语音或调用云服务；服务字段兼容及实际视觉排版待验证。底稿见 `docs/sources/windows-a06-speaker-language-2026-09-30.md`。
+
+2026-09-30：补齐 A07 停止收尾超时提示。会话正常停止等待服务端最终识别结果；若 8 秒内未收到结果，返回明确“最后识别结果超时，最后结果可能不完整”异常，界面继续保存已收到文字并提示不完整。后台本机模拟 WebSocket 分别验证正常最终响应和收到结束标记后故意不回最终结果的超时路径；全套 `Echo.CoreChecks --audio` 共 47 项通过，Release x64 构建通过、0 错误。未启动 Echo 窗口、未调用云服务、未保存音频。真实网络延迟分布待后续观测。底稿见 `docs/sources/windows-a07-stop-final-2026-09-30.md`。

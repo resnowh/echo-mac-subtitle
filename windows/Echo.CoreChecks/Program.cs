@@ -308,6 +308,35 @@ if (args.Contains("--audio"))
     await server; listener.Stop();
     Check(validConfig && receivedAudio > 0 && receivedFinal && switchedSegment.Entries.Count == 1 && switchedSegment.Entries[0].English == "Before and after.", "local WebSocket: 20 input switches preserve the session and subtitle while final PCM and end marker complete");
 
+    var noFinalPortProbe = new TcpListener(IPAddress.Loopback, 0); noFinalPortProbe.Start();
+    int noFinalPort = ((IPEndPoint)noFinalPortProbe.LocalEndpoint).Port; noFinalPortProbe.Stop();
+    using var noFinalListener = new HttpListener(); noFinalListener.Prefixes.Add($"http://127.0.0.1:{noFinalPort}/"); noFinalListener.Start();
+    using var noFinalTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+    var endMarkerReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    var noFinalServer = Task.Run(async () =>
+    {
+        var context = await noFinalListener.GetContextAsync().WaitAsync(noFinalTimeout.Token);
+        using var socket = (await context.AcceptWebSocketAsync(null)).WebSocket;
+        var packet = new byte[65536];
+        await socket.ReceiveAsync(new ArraySegment<byte>(packet), noFinalTimeout.Token); // config
+        while (true)
+        {
+            var result = await socket.ReceiveAsync(new ArraySegment<byte>(packet), noFinalTimeout.Token);
+            if (result.Count == 0) { endMarkerReceived.TrySetResult(); break; }
+        }
+        try { await socket.ReceiveAsync(new ArraySegment<byte>(packet), noFinalTimeout.Token); } catch (WebSocketException) { }
+    }, noFinalTimeout.Token);
+    Exception? finalTimeout = null;
+    await using (var noFinalSession = new SpeechSession(new Uri($"ws://127.0.0.1:{noFinalPort}/")))
+    {
+        await noFinalSession.StartAsync(new Preferences(), "synthetic", 0, null, null);
+        try { await noFinalSession.StopAsync(); } catch (Exception e) { finalTimeout = e; }
+    }
+    await endMarkerReceived.Task.WaitAsync(noFinalTimeout.Token);
+    noFinalListener.Stop(); await noFinalServer;
+    Check(finalTimeout is TimeoutException && finalTimeout.Message.Contains("最后识别结果超时") && endMarkerReceived.Task.IsCompleted,
+        "stop reports an explicit incomplete-result timeout when the service receives the end marker but sends no final response");
+
     var delayedPortProbe = new TcpListener(IPAddress.Loopback, 0); delayedPortProbe.Start();
     int delayedPort = ((IPEndPoint)delayedPortProbe.LocalEndpoint).Port; delayedPortProbe.Stop();
     using var delayedListener = new HttpListener(); delayedListener.Prefixes.Add($"http://127.0.0.1:{delayedPort}/"); delayedListener.Start();

@@ -241,11 +241,18 @@ public sealed class SpeechSession : IAsyncDisposable
         if (socket.State == WebSocketState.Open)
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(8));
-            int tail = capture.TailFrames;
-            for (int i = 0; i < tail; i++) await socket.SendAsync(capture.ReadFrame(out _).AsMemory(), WebSocketMessageType.Binary, true, timeout.Token);
-            capture.Dispose();
-            await socket.SendAsync(ReadOnlyMemory<byte>.Empty, WebSocketMessageType.Binary, true, timeout.Token);
-            await finished.Task.WaitAsync(timeout.Token);
+            try
+            {
+                int tail = capture.TailFrames;
+                for (int i = 0; i < tail; i++) await socket.SendAsync(capture.ReadFrame(out _).AsMemory(), WebSocketMessageType.Binary, true, timeout.Token);
+                capture.Dispose();
+                await socket.SendAsync(ReadOnlyMemory<byte>.Empty, WebSocketMessageType.Binary, true, timeout.Token);
+                await finished.Task.WaitAsync(timeout.Token);
+            }
+            catch (OperationCanceledException e) when (timeout.IsCancellationRequested)
+            {
+                throw new TimeoutException("等待服务端返回最后识别结果超时，最后结果可能不完整。", e);
+            }
         }
         else capture.Dispose();
     }
