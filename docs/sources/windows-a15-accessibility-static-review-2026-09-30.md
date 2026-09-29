@@ -21,6 +21,8 @@
 
 `dotnet build windows/Echo.Windows/Echo.Windows.csproj -c Release --no-restore /p:Platform=x64 /p:RuntimeIdentifier=win-x64` 成功：0 错误、10 条既有 NAudio 弃用警告。A22 CoreChecks 仍为 46 项通过。Release XAML 编译证明绑定语法和代码生成有效，但不能替代运行时 UI Automation 检查。
 
+提交 `9f68c8516b5d380e7885bd9ad38a56ac8b296954` 的 [GitHub Actions 运行 36617852437](https://github.com/resnowh/echo-mac-subtitle/actions/runs/36617852437) 全部通过：Windows 锁定还原、46 项 CoreChecks、Release x64 构建，以及 Mac transport checks 与 Debug/Release 构建均成功。
+
 ## 未覆盖
 
 没有启动应用或运行 `windows/ui-smoke.ps1`。Narrator 实际播报、键盘全流程与焦点顺序、高对比度主题、100%～200% 缩放、多显示器 DPI 切换仍未验收；A15 仅完成源码层面的语义补齐。
