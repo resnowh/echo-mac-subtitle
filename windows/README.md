@@ -107,4 +107,6 @@ winapp package windows/Echo.Windows/bin/x64/Release/net10.0-windows10.0.26100.0/
 
 2026-09-30：扩展 A03 可重复采样率检查，生产采集和测试共同使用 `AudioCapture.ToMono16k`。即时合成 44.1 kHz 双声道、48 kHz 单声道及 150 ms 延迟的 48 kHz 双声道输入；输出各 16,000 样本，延迟实测 2,402 样本，相对 2,400 样本目标误差 0.125 ms。Release x64 构建通过，`Echo.CoreChecks --audio` 共 41 项通过；未保存合成 PCM、未启动应用。真实双声卡时钟/相位同步仍待实测。底稿见 `docs/sources/windows-a03-resampling-2026-09-30.md`。
 
-2026-09-30：补齐 A05 建连前采集与有界缓冲。每个输入在 WebSocket 握手期间先采集，最多缓存 2.5 秒；连接后先追发送缓存帧，再恢复实时节奏。缓存超限会报明确错误并停止，避免静默缺口。后台本机测试在 1 秒握手延迟下缓存 0.98 秒，连接后 200 ms 降至 0.12 秒；3.2 秒延迟时在缓冲上限处明确失败。`Echo.CoreChecks --audio` 共 45 项通过，Release x64 构建通过、0 错误。未保存音频、未启动 Echo 窗口；其他硬件及运行中网络退化仍待验收。底稿见 `docs/sources/windows-a05-prebuffer-2026-09-30.md`。
+2026-09-30：补齐 A05 建连前采集与有界缓冲。每个输入在 WebSocket 握手期间先采集，最多缓存 2.5 秒；连接后先追发送缓存帧，再恢复实时节奏。缓存超限会报明确错误并停止，避免静默缺口。后台本机测试在 1 秒握手延迟下缓存 0.98 秒，连接后 200 ms 降至约 0.11～0.12 秒；3.2 秒延迟时在缓冲上限处明确失败。A06 完成后的 `Echo.CoreChecks --audio` 共 46 项通过，Release x64 构建通过。未保存音频、未启动 Echo 窗口；其他硬件及运行中网络退化仍待验收。底稿见 `docs/sources/windows-a05-prebuffer-2026-09-30.md`。
+
+2026-09-30：补齐 A06 识别语言元数据在字幕行和 SRT 中的展示。字幕行现在订阅语言属性变更，并在有检测值时显示语言代码；SRT 在英文字幕前写入 `[Speaker N] [语言代码]`。合成最终 token 覆盖 Speaker 变化与 en/ja 语言绑定，Archive JSON 往返保留 Speaker/语言，SRT 断言 `[Speaker 2] [fr] bonjour`。Release x64 构建通过，`Echo.CoreChecks --audio` 共 46 项通过；XAML 由构建编译但没有启动窗口。没有保存真实语音或调用云服务；服务字段兼容及实际视觉排版待验证。底稿见 `docs/sources/windows-a06-speaker-language-2026-09-30.md`。

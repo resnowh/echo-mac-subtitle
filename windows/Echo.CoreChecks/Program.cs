@@ -37,8 +37,8 @@ int finalizedCount = 0; var finalizedSegment = new Segment(); var finalizedAssem
 using (var finalTurn = JsonDocument.Parse("""{"tokens":[{"text":"finished sentence","is_final":true},{"text":"<end>","is_final":true}]}""")) finalizedAssembler.Apply(finalTurn.RootElement);
 Check(finalizedCount == 1, "transcript final boundary triggers a single opt-in correction job");
 int speakerFinalized = 0; var speakerSegment = new Segment(); var speakerAssembler = new TokenAssembler(speakerSegment, _ => { }, _ => speakerFinalized++);
-using (var speakerTurn = JsonDocument.Parse("""{"tokens":[{"text":"first speaker","is_final":true,"speaker":1,"start_ms":0,"end_ms":500},{"text":"second speaker","is_final":true,"speaker":2,"start_ms":600,"end_ms":1000},{"text":"<end>","is_final":true}]}""")) speakerAssembler.Apply(speakerTurn.RootElement);
-Check(speakerSegment.Entries.Count == 2 && speakerSegment.Entries[0].English == "first speaker" && speakerSegment.Entries[0].Speaker == "Speaker 1" && speakerSegment.Entries[1].English == "second speaker" && speakerSegment.Entries[1].Speaker == "Speaker 2" && speakerFinalized == 2, "final speaker change splits rows and finalizes each speaker turn once");
+using (var speakerTurn = JsonDocument.Parse("""{"tokens":[{"text":"first speaker","is_final":true,"speaker":1,"language":"en","start_ms":0,"end_ms":500},{"text":"second speaker","is_final":true,"speaker":2,"language":"ja","start_ms":600,"end_ms":1000},{"text":"<end>","is_final":true}]}""")) speakerAssembler.Apply(speakerTurn.RootElement);
+Check(speakerSegment.Entries.Count == 2 && speakerSegment.Entries[0].English == "first speaker" && speakerSegment.Entries[0].Speaker == "Speaker 1" && speakerSegment.Entries[0].Language == "en" && speakerSegment.Entries[1].English == "second speaker" && speakerSegment.Entries[1].Speaker == "Speaker 2" && speakerSegment.Entries[1].Language == "ja" && speakerFinalized == 2, "final speaker change splits rows, retains detected language and finalizes each anonymous speaker turn once");
 var archive = new Archive { CreatedAt = 800000000, Summary = "已保存总结", SummarizedEntries = { [segment.Entries[0].Id] = TranscriptFiles.SummarySignature(segment.Entries[0].English) }, Segments = [segment, new Segment { StartedAt = 800000010, Entries = [new Subtitle { Start = 0, End = 1, English = "Again" }] }] };
 var snapshot = TranscriptFiles.Snapshot(archive);
 archive.Segments[0].Entries[0].English = "后续编辑";
@@ -46,6 +46,13 @@ archive.Segments[0].Entries[0].Correction = new SubtitleCorrection { RawSource =
 Check(snapshot.Segments[0].Entries[0].English == "Hello there." && snapshot.Segments[0].Entries[0].Correction is null && snapshot.SummarizedEntries.Count == 1, "background persistence snapshot is isolated from later edits and keeps archive metadata");
 string srt = TranscriptFiles.Srt(archive);
 Check(srt.Contains("00:00:10,000 --> 00:00:11,000") && srt.Contains("你好。"), "SRT preserves segment wall-clock gap and translation");
+var metadataArchive = new Archive { Segments = [new Segment { StartedAt = 800000000, Entries = [new Subtitle { Start = 0, End = 1, English = "bonjour", Chinese = "你好", Speaker = "Speaker 2", Language = "fr" }] }] };
+string metadataJson = JsonSerializer.Serialize(metadataArchive, TranscriptFiles.Json);
+var metadataLoaded = TranscriptFiles.Parse(metadataJson);
+string metadataSrt = TranscriptFiles.Srt(metadataLoaded);
+Check(metadataLoaded.Segments[0].Entries[0].Speaker == "Speaker 2" && metadataLoaded.Segments[0].Entries[0].Language == "fr"
+    && metadataSrt.Contains("[Speaker 2] [fr] bonjour") && metadataArchive.Segments[0].Entries[0].HasLanguage,
+    "anonymous speaker and detected language survive archive round trip, remain available to the subtitle view, and export in SRT");
 string json = JsonSerializer.Serialize(archive, TranscriptFiles.Json);
 var loaded = TranscriptFiles.Parse(json);
 Check(loaded.Id == archive.Id && loaded.Segments[0].StartedAt == 800000000 && loaded.Summary == "已保存总结" && loaded.SummarizedEntries.GetValueOrDefault(segment.Entries[0].Id) == TranscriptFiles.SummarySignature("Hello there.") && json.Contains("\"english\""), "archive summary, incremental signatures, legacy JSON fields and Apple reference date round trip");

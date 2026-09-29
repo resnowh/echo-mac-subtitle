@@ -18,10 +18,13 @@ public partial class Subtitle : ObservableObject
     [ObservableProperty] public partial string English { get; set; } = "";
     [ObservableProperty] public partial string Chinese { get; set; } = "";
     [ObservableProperty] public partial string? Speaker { get; set; }
-    public string? Language { get; set; }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasLanguage))]
+    public partial string? Language { get; set; }
     public SubtitleCorrection? Correction { get; set; }
     [JsonIgnore] public string CorrectionLabel => Correction is null ? "纠正" : "查看校对";
     [JsonIgnore] public bool HasCorrection => Correction is not null;
+    [JsonIgnore] public bool HasLanguage => !string.IsNullOrWhiteSpace(Language);
     [JsonIgnore] public bool CanUndoCorrection => Correction?.History.Count > 0;
     public void ApplyRecognition(string source, string translation)
     {
@@ -265,6 +268,7 @@ public static class TranscriptFiles
             result.AppendLine((index++).ToString(CultureInfo.InvariantCulture));
             result.AppendLine($"{Stamp(start)} --> {Stamp(end)}");
             if (!string.IsNullOrWhiteSpace(e.Speaker)) result.Append($"[{e.Speaker}] ");
+            if (!string.IsNullOrWhiteSpace(e.Language)) result.Append($"[{e.Language}] ");
             if (!string.IsNullOrWhiteSpace(e.English)) result.AppendLine(e.English.Trim());
             if (!string.IsNullOrWhiteSpace(e.Chinese)) result.AppendLine(e.Chinese.Trim());
             result.AppendLine(); last = end;
