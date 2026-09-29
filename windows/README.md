@@ -124,3 +124,5 @@ winapp package windows/Echo.Windows/bin/x64/Release/net10.0-windows10.0.26100.0/
 2026-09-30：扩展 A12 音频端点通知策略矩阵：默认多媒体端点变化会请求跟随；固定设备失联不切到其他设备；活动/未知设备、无关 flow、Console 角色和未变化的默认 ID 均忽略。全套 `Echo.CoreChecks --audio` 共 52 项通过。未触发设备拔插或蓝牙 profile 变化；真实端点与路由变化仍待硬件验收。底稿见 `docs/sources/windows-a12-endpoint-policy-2026-09-30.md`。
 
 2026-09-30：扩展 A13 活动会话断线回归：本机模拟服务先接受转写配置并收到音频帧，再主动关闭 WebSocket；客户端将缺少 finished 的断开报告为 `IOException`，符合有限重试分类。401 不重试、503 可重试及连接期间用户取消用例仍通过。`Echo.CoreChecks --audio` 全套共 53 项通过；未连接云端、未保存音频、未启动窗口。ViewModel 恢复编排路径已静态检查，但真实断网、恢复新段与错误提示尚未端到端实测。底稿见 `docs/sources/windows-a13-network-recovery-2026-09-30.md`。
+
+2026-09-30：为当前 Release x64 构建生成自签名预览 MSIX `windows/artifacts/Echo-Windows-x64-20260930.msix`。WinApp CLI 0.6.1；包身份版本 1.0.0.0、架构 x64；签名发布者与清单 `CN=AppPublisher` 匹配，包内有 `AppxSignature.p7x`。SHA-256 与文件大小见 `docs/sources/windows-a18-msix-preview-2026-09-30.md`。Windows 证书链状态为未受信任根，因此该包只用于后续显式信任后的预览安装；本轮未安装、未导入/信任证书、未启动应用。正式证书、时间戳、干净机器安装升级和回退仍待完成。
