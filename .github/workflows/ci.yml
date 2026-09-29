@@ -57,7 +57,7 @@ jobs:
         run: dotnet run --project windows/Echo.CoreChecks -c Release --no-restore
 
       - name: Restore WinUI app with locked dependencies
-        run: dotnet restore windows/Echo.Windows/Echo.Windows.csproj --locked-mode /p:Platform=x64
+        run: dotnet restore windows/Echo.Windows/Echo.Windows.csproj --locked-mode /p:Platform=x64 /p:RuntimeIdentifier=win-x64
 
       - name: Build Release x64 without signing or launching
         run: dotnet build windows/Echo.Windows/Echo.Windows.csproj -c Release --no-restore /p:Platform=x64 /p:RuntimeIdentifier=win-x64
