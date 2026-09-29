@@ -120,3 +120,5 @@ winapp package windows/Echo.Windows/bin/x64/Release/net10.0-windows10.0.26100.0/
 2026-09-30：补齐 A10 三种总结范围的可重复选择测试，并将纯选择逻辑用于生产总结流程。增量模式排除签名未变的旧条目、包含被修改和新加入的文字；当前段仅取末段；全文范围包含两段所有条目。既有 Unicode 长文分块检查仍通过。Release x64 构建通过，0 错误、10 条 NAudio 弃用警告；`Echo.CoreChecks --audio` 共 50 项通过。未配置或调用 DeepSeek、未启动窗口。真实总结响应、超大存档完整请求及总结期间录音并行仍需后续验收。底稿见 `docs/sources/windows-a10-summary-selection-2026-09-30.md`。
 
 2026-09-30：扩展 A11 睡眠恢复状态机检查，模拟 10 次“录音意图保留→睡眠→唤醒→恢复→完成”循环，且单独验证唤醒等待期间用户停止后不会启动恢复。`Echo.CoreChecks --audio` 共 51 项通过；未触发系统睡眠、未启动应用。真实设备睡眠/唤醒、音频设备稳定等待及新录音段行为仍待人工验收。底稿见 `docs/sources/windows-a11-sleep-cycle-2026-09-30.md`。
+
+2026-09-30：扩展 A12 音频端点通知策略矩阵：默认多媒体端点变化会请求跟随；固定设备失联不切到其他设备；活动/未知设备、无关 flow、Console 角色和未变化的默认 ID 均忽略。全套 `Echo.CoreChecks --audio` 共 52 项通过。未触发设备拔插或蓝牙 profile 变化；真实端点与路由变化仍待硬件验收。底稿见 `docs/sources/windows-a12-endpoint-policy-2026-09-30.md`。

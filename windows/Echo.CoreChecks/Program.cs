@@ -266,6 +266,12 @@ Check(AudioEndpointChangePolicy.FindUnavailableRoute([fixedRoute], "fixed-speake
     && AudioEndpointChangePolicy.IsFollowingDefault(defaultRoute, DataFlow.Capture, Role.Multimedia, "new-default-mic")
     && !AudioEndpointChangePolicy.IsFollowingDefault(defaultRoute, DataFlow.Capture, Role.Communications, "new-default-mic"),
     "audio endpoint policy follows multimedia defaults and reports loss of the explicitly selected endpoint");
+Check(AudioEndpointChangePolicy.FindUnavailableRoute([defaultRoute], "old-default-mic", DeviceState.Unplugged) == defaultRoute
+    && AudioEndpointChangePolicy.FindUnavailableRoute([fixedRoute], "another-device", DeviceState.Unplugged) is null
+    && !AudioEndpointChangePolicy.IsFollowingDefault(defaultRoute, DataFlow.Render, Role.Multimedia, "new-default-mic")
+    && !AudioEndpointChangePolicy.IsFollowingDefault(defaultRoute, DataFlow.Capture, Role.Console, "new-default-mic")
+    && !AudioEndpointChangePolicy.IsFollowingDefault(defaultRoute, DataFlow.Capture, Role.Multimedia, "old-default-mic"),
+    "endpoint notifications ignore active/unknown devices, unrelated flows and roles, and unchanged default IDs");
 var sleepState = new SleepRecoveryState();
 bool endForSleep = sleepState.BeginSleep(recordingIntended: true);
 bool scheduleWake = sleepState.BeginWake(); bool beginWakeRecovery = sleepState.BeginRecovery(); sleepState.FinishRecovery();
