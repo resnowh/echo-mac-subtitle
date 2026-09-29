@@ -2,6 +2,7 @@ using System.Text.Json;
 using Echo_Windows.Core;
 using Echo_Windows.Services;
 using NAudio.CoreAudioApi;
+using NAudio.Wave;
 using System.Net;
 using System.Net.Sockets;
 using System.Net.WebSockets;
@@ -166,6 +167,23 @@ Check(neutralFrames == 320 && highBufferFrames > 320 && lowBufferFrames < 320
     && longDrift.LastRatio <= 1.005 && longDrift.LastRatio >= 0.995
     && Math.Abs(adjustedFrameTotal - 320 * 10000 * longDrift.LastRatio) < 4,
     "dual-input drift correction responds to buffer direction, stays bounded and preserves fractional frame adjustments");
+List<float> ReadNormalized(ISampleProvider input)
+{
+    ISampleProvider normalized = AudioCapture.ToMono16k(input);
+    var samples = new List<float>(); var frame = new float[1024]; int read;
+    while ((read = normalized.Read(frame.AsSpan())) > 0) samples.AddRange(frame.AsSpan(0, read).ToArray());
+    return samples;
+}
+var normalized441 = ReadNormalized(new FiniteToneSampleProvider(44100, 2, 1.0, 0));
+var normalized480 = ReadNormalized(new FiniteToneSampleProvider(48000, 1, 1.0, 0));
+Console.WriteLine($"A03 synthetic resample samples: 44.1 kHz stereo={normalized441.Count}, 48 kHz mono={normalized480.Count}");
+Check(normalized441.Count is >= 15900 and <= 16100 && normalized480.Count is >= 15900 and <= 16100,
+    "44.1 kHz stereo and 48 kHz mono sources resample to one second of 16 kHz mono within 0.01 seconds");
+var delayed480 = ReadNormalized(new FiniteToneSampleProvider(48000, 2, 1.0, 0.15));
+int firstDelayedTone = delayed480.FindIndex(sample => sample > 0.1f);
+Console.WriteLine($"A03 delayed source: expected onset=2400 samples, measured={firstDelayedTone}");
+Check(firstDelayedTone is >= 1600 and <= 3200,
+    "a 150 ms later-starting 48 kHz source retains its offset within the 50 ms timeline tolerance");
 (double Min, double Max) SimulateHour(double clockPpm)
 {
     var controller = new ClockDriftController(); double bufferedFrames = 16000 * ClockDriftController.TargetBufferSeconds;
@@ -269,3 +287,22 @@ if (args.Contains("--audio"))
     Check(validConfig && receivedAudio > 0 && receivedFinal && switchedSegment.Entries.Count == 1 && switchedSegment.Entries[0].English == "Before and after.", "local WebSocket: 20 input switches preserve the session and subtitle while final PCM and end marker complete");
 }
 Console.WriteLine($"Completed {passed} checks. No cloud calls; no audio was saved.");
+
+sealed class FiniteToneSampleProvider(int sampleRate, int channels, double durationSeconds, double leadingSilenceSeconds) : ISampleProvider
+{
+    private readonly int totalSamples = (int)Math.Round(sampleRate * channels * durationSeconds);
+    private int position;
+    public WaveFormat WaveFormat { get; } = WaveFormat.CreateIeeeFloatWaveFormat(sampleRate, channels);
+    public int Read(float[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
+    public int Read(Span<float> buffer)
+    {
+        int available = Math.Min(buffer.Length, totalSamples - position);
+        for (int i = 0; i < available; i++)
+        {
+            int sourceFrame = (position + i) / channels;
+            buffer[i] = sourceFrame / (double)sampleRate < leadingSilenceSeconds ? 0 : 0.25f;
+        }
+        position += available;
+        return available;
+    }
+}

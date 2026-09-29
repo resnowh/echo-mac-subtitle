@@ -52,6 +52,12 @@ public sealed class AudioCapture : IDisposable
         using var devices = enumerator.EnumerateAudioEndPoints(flow, DeviceState.Active);
         return devices.Select(d => new AudioDevice(d.ID, d.FriendlyName)).ToList();
     }
+    public static ISampleProvider ToMono16k(ISampleProvider sample)
+    {
+        if (sample.WaveFormat.Channels == 2) sample = new StereoToMonoSampleProvider(sample);
+        else if (sample.WaveFormat.Channels != 1) sample = new AverageChannels(sample);
+        return new WdlResamplingSampleProvider(sample, 16000);
+    }
     public void Start(int mode, string? outputId, string? inputId)
     {
         lock (gate) StartLocked(mode, outputId, inputId);
@@ -131,10 +137,7 @@ public sealed class AudioCapture : IDisposable
     private void Add(WasapiCapture capture)
     {
         var buffer = new BufferedWaveProvider(capture.WaveFormat, TimeSpan.FromSeconds(2)) { ReadFully = true, DiscardOnBufferOverflow = false };
-        ISampleProvider sample = buffer.ToSampleProvider();
-        if (sample.WaveFormat.Channels == 2) sample = new StereoToMonoSampleProvider(sample);
-        else if (sample.WaveFormat.Channels != 1) sample = new AverageChannels(sample);
-        var source = new Source(capture, buffer, new WdlResamplingSampleProvider(sample, 16000));
+        var source = new Source(capture, buffer, ToMono16k(buffer.ToSampleProvider()));
         sources.Add(source);
         source.DataHandler = (_, e) => { if (source.Stopping) return; try { buffer.AddSamples(e.Buffer, 0, e.BytesRecorded); } catch (Exception error) { if (!source.Stopping) Failed?.Invoke(error); } };
         source.StoppedHandler = (_, e) => { if (!source.Stopping && !disposing) Failed?.Invoke(e.Exception ?? new IOException("音频设备停止采集。")); };
