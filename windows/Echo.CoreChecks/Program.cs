@@ -61,7 +61,18 @@ try
     bool failedSafely = false;
     try { TranscriptFiles.AtomicWrite(blockedPath, "不应覆盖目录"); }
     catch { failedSafely = Directory.Exists(blockedPath) && !Directory.EnumerateFiles(atomicTestRoot, ".blocked.json.*.tmp").Any(); }
-    Check(replacedSafely && failedSafely, "atomic archive replacement flushes data, retains the last good backup and cleans failed temporary writes");
+    string protectedPath = Path.Combine(atomicTestRoot, "protected.json");
+    TranscriptFiles.AtomicWrite(protectedPath, "必须保留的旧存档");
+    Directory.CreateDirectory(protectedPath + ".bak");
+    bool replacementFailureSafe = false;
+    try { TranscriptFiles.AtomicWrite(protectedPath, "不能替换的新存档"); }
+    catch
+    {
+        replacementFailureSafe = File.ReadAllText(protectedPath) == "必须保留的旧存档"
+            && Directory.Exists(protectedPath + ".bak")
+            && !Directory.EnumerateFiles(atomicTestRoot, ".protected.json.*.tmp").Any();
+    }
+    Check(replacedSafely && failedSafely && replacementFailureSafe, "atomic archive replacement flushes data, preserves the last good file and backup on replace failure, and cleans temporary writes");
 }
 finally { if (Directory.Exists(atomicTestRoot)) Directory.Delete(atomicTestRoot, recursive: true); }
 var splitSource = new Archive { Title = "课程", Segments = [new Segment(), new Segment { StartedAt = 800000123, Entries = [new Subtitle { English = "拆分字幕" }] }] };
