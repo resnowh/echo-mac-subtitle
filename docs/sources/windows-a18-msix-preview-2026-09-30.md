@@ -64,12 +64,24 @@ MSIX 版本从 `1.0.0.0` 递增到 `1.0.1.0`，并以 Release 输出为主、合
 - 对 A22 执行 `Add-AppxPackage -Path ...` 失败，HRESULT `0x800B0109`：签名证书链终止于不受信任根。未改变证书信任存储；现有 `1.0.0.0` 包仍处于 `Ok` 状态。应用未启动。
 - 下一步只有在当前 Windows 用户明确允许信任该预览证书后，才能继续后台安装/升级验证；这仍不能代替干净机器测试或生产签名。
 
+## A23 最新候选包
+
+在 A21 原子写入代码已完成 Windows Release 构建后，使用已提交的 `windows/package-preview.ps1` 生成独立包。A22 ACL 用例只改动 CoreChecks 和文档，不进入应用包载荷。
+
+- 路径：`windows/artifacts/Echo-Windows-x64-a23-20260930.msix`
+- 大小：108,211,047 bytes
+- SHA-256：`FB4CA0D77A49065AD1475A9061082EDB91C4952EC995EB1F49BD6C1BA1FD6DFE`
+- 清单：Identity `B7582E49-F75A-4EFA-950C-C6754B9E496E`，版本 `1.0.1.0`，架构 `x64`，Publisher `CN=AppPublisher`。
+- SignTool 成功签名；thumbprint `ADDF31C7C19756CF27C37A6D72FBC5FAA3D95B69` 与 Publisher 匹配。签名状态仍为 `UnknownError`，因为测试证书链不受信任。
+- 脚本解包核验 `Echo.Windows.exe` 和 `Echo.Windows.dll`，两者 SHA-256 均与 Release 构建输出匹配。
+- 此候选没有安装、导入或信任证书，也没有启动 Echo。A23 安装/升级仍等待当前用户对测试证书信任的答复。
+
 ## 边界与未完成验收
 
 - 使用的是已有本地测试证书，不是正式个人/组织代码签名证书；本轮没有安装/信任该证书，没有安装或启动 MSIX，也未修改系统证书信任存储。
 - 没有可信时间戳；正式分发前必须用长期有效的发布身份重新签名并带可信时间戳。
 - 未在干净机器安装、升级、启动、填写 API Key、读取旧档或卸载回退。A18 仍未通过。
-- 旧版、A17/A20/A21/A22 预览包与 PFX 均保留在 `windows/artifacts` 忽略目录，不提交到 Git；A20 已明确作废，A22 为最新候选，哈希及可复核元数据写入本底稿。
+- 旧版、A17/A20/A21/A22/A23 预览包与 PFX 均保留在 `windows/artifacts` 忽略目录，不提交到 Git；A20 已明确作废，A23 为最新候选，哈希及可复核元数据写入本底稿。
 
 ## 数据留存
 
