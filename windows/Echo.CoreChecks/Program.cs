@@ -71,6 +71,11 @@ var chunkInput = new Subtitle { English = string.Concat(Enumerable.Repeat("汉",
 var chunks = TranscriptTextChunks.Create([chunkInput], 128);
 Check(chunks.Count > 1 && chunks.All(c => c.Length <= 128) && chunks.Sum(c => c.Count(ch => ch == '汉')) == 300, "long transcript chunks stay bounded without dropping Unicode text");
 Check(Archive.AppleEpoch.AddSeconds(0).Year == 2001, "Apple date reference is not Unix time");
+Check(SpeechRetryPolicy.MaxRetries == 2 && SpeechRetryPolicy.Delay(1) == TimeSpan.FromSeconds(1) && SpeechRetryPolicy.Delay(2) == TimeSpan.FromSeconds(3)
+    && SpeechRetryPolicy.IsTransient(new System.Net.WebSockets.WebSocketException())
+    && SpeechRetryPolicy.IsTransient(new SpeechServiceException("temporary 503", retryable: true))
+    && !SpeechRetryPolicy.IsTransient(new SpeechServiceException("401 or quota"))
+    && !SpeechRetryPolicy.IsTransient(new AudioCaptureFailureException("device failed", new IOException())), "network retry policy is bounded and excludes service/device errors");
 string secret = "synthetic-local-test-not-an-api-key";
 Check(Preferences.Unprotect(Preferences.Protect(secret)) == secret, "current-user DPAPI credential round trip");
 bool rejected = false; try { TranscriptFiles.Parse("{}"); } catch { rejected = true; }
@@ -81,6 +86,49 @@ Check(rejected, "out-of-range archive dates are rejected before UI formatting");
 var duplicate = new Archive { Segments = [new Segment { Entries = [segment.Entries[0], segment.Entries[0]] }] };
 rejected = false; try { TranscriptFiles.Parse(JsonSerializer.Serialize(duplicate, TranscriptFiles.Json)); } catch { rejected = true; }
 Check(rejected, "duplicate subtitle IDs are rejected before summary processing");
+async Task<bool> CheckRejectedHandshakeAsync(int statusCode)
+{
+    var probe = new TcpListener(IPAddress.Loopback, 0); probe.Start();
+    int statusPort = ((IPEndPoint)probe.LocalEndpoint).Port; probe.Stop();
+    using var rejectedListener = new HttpListener(); rejectedListener.Prefixes.Add($"http://127.0.0.1:{statusPort}/"); rejectedListener.Start();
+    using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+    var reject = Task.Run(async () =>
+    {
+        var context = await rejectedListener.GetContextAsync().WaitAsync(timeout.Token);
+        context.Response.StatusCode = statusCode; context.Response.Close();
+    }, timeout.Token);
+    await using var rejectedSession = new SpeechSession(new Uri($"ws://127.0.0.1:{statusPort}/"));
+    try { await rejectedSession.StartAsync(new Preferences(), "synthetic", 0, null, null); }
+    catch (SpeechServiceException error)
+    {
+        await reject;
+        return error.Retryable == (statusCode >= 500);
+    }
+    catch { await reject; return false; }
+    return false;
+}
+Check(await CheckRejectedHandshakeAsync(401), "HTTP 401 handshake failure is not retried");
+Check(await CheckRejectedHandshakeAsync(503), "HTTP 503 handshake failure uses the bounded retry policy");
+async Task<bool> CheckConnectCancellationAsync()
+{
+    var probe = new TcpListener(IPAddress.Loopback, 0); probe.Start();
+    int statusPort = ((IPEndPoint)probe.LocalEndpoint).Port; probe.Stop();
+    using var slowListener = new HttpListener(); slowListener.Prefixes.Add($"http://127.0.0.1:{statusPort}/"); slowListener.Start();
+    using var serverTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+    var rejectLater = Task.Run(async () =>
+    {
+        var context = await slowListener.GetContextAsync().WaitAsync(serverTimeout.Token);
+        await Task.Delay(300, serverTimeout.Token);
+        context.Response.StatusCode = 503; context.Response.Close();
+    }, serverTimeout.Token);
+    using var stop = new CancellationTokenSource(TimeSpan.FromMilliseconds(80));
+    await using var canceledSession = new SpeechSession(new Uri($"ws://127.0.0.1:{statusPort}/"));
+    try { await canceledSession.StartAsync(new Preferences(), "synthetic", 0, null, null, stop.Token); }
+    catch (OperationCanceledException) { await rejectLater; return true; }
+    catch { await rejectLater; return false; }
+    await rejectLater; return false;
+}
+Check(await CheckConnectCancellationAsync(), "user cancellation during reconnect is not mistaken for a connection timeout");
 if (args.Contains("--audio"))
 {
     Console.WriteLine($"Devices: render={AudioCapture.Devices(DataFlow.Render).Count}, capture={AudioCapture.Devices(DataFlow.Capture).Count}");

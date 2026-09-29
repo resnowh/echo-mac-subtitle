@@ -1,4 +1,6 @@
 using System.Net.WebSockets;
+using System.Net.Sockets;
+using System.Text.RegularExpressions;
 using System.Text.Json;
 using Echo_Windows.Core;
 using NAudio.CoreAudioApi;
@@ -21,13 +23,23 @@ public sealed class SpeechSession : IAsyncDisposable
     private string? outputId, inputId;
     public event Action<JsonElement>? Message;
     public event Action<double>? Level;
-    public event Action<string>? Failure;
+    public event Action<Exception>? Failure;
     private bool stopping;
-    public async Task StartAsync(Preferences config, string key, int mode, string? outputId, string? inputId)
+    public async Task StartAsync(Preferences config, string key, int mode, string? outputId, string? inputId, CancellationToken cancellationToken = default)
     {
-        using var connectTimeout = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+        using var connectTimeout = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, cancellationToken);
         connectTimeout.CancelAfter(TimeSpan.FromSeconds(20));
-        await socket.ConnectAsync(endpoint, connectTimeout.Token);
+        try { await socket.ConnectAsync(endpoint, connectTimeout.Token); }
+        catch (WebSocketException e)
+        {
+            int? status = ReadHandshakeStatus(e);
+            if (status is null) throw;
+            throw new SpeechServiceException($"转写服务拒绝连接（HTTP {status}）。", e, status is 408 or >= 500 and <= 599);
+        }
+        catch (OperationCanceledException e) when (!lifetime.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException("连接转写服务超时。", e);
+        }
         var request = new Dictionary<string, object> {
             ["api_key"] = key, ["model"] = config.SonioxModel, ["audio_format"] = "pcm_s16le", ["sample_rate"] = 16000, ["num_channels"] = 1,
             ["enable_endpoint_detection"] = true, ["max_endpoint_delay_ms"] = 900, ["enable_language_identification"] = true, ["enable_speaker_diarization"] = config.Speakers
@@ -36,10 +48,17 @@ public sealed class SpeechSession : IAsyncDisposable
         if (config.Translate) request["translation"] = new { type = "one_way", target_language = config.TargetLanguage };
         await socket.SendAsync(JsonSerializer.SerializeToUtf8Bytes(request).AsMemory(), WebSocketMessageType.Text, true, connectTimeout.Token);
         receiver = ReceiveAsync();
-        capture.Failed += error => { if (!stopping) Failure?.Invoke("音频中断：" + error.Message); };
+        capture.Failed += error => { if (!stopping) Failure?.Invoke(new AudioCaptureFailureException("音频中断：" + error.Message, error)); };
         this.mode = mode; this.outputId = outputId; this.inputId = inputId;
         capture.Start(mode, outputId, inputId);
         sender = SendAudioAsync();
+    }
+    private int? ReadHandshakeStatus(WebSocketException error)
+    {
+        int responseStatus = (int)socket.HttpStatusCode;
+        if (responseStatus is >= 400 and <= 599) return responseStatus;
+        var match = Regex.Match(error.Message, @"status code\s+'(?<status>[1-5]\d{2})'", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        return match.Success && int.TryParse(match.Groups["status"].Value, out int messageStatus) ? messageStatus : null;
     }
     public async Task SwitchDevicesAsync(string? newOutputId, string? newInputId)
     {
@@ -102,7 +121,7 @@ public sealed class SpeechSession : IAsyncDisposable
             }
         }
         catch (OperationCanceledException) when (audioStop.IsCancellationRequested || lifetime.IsCancellationRequested) { }
-        catch (Exception e) { if (!stopping) Failure?.Invoke("发送中断：" + e.Message); }
+        catch (Exception e) { if (!stopping) Failure?.Invoke(e); }
     }
     private async Task ReceiveAsync()
     {
@@ -122,13 +141,13 @@ public sealed class SpeechSession : IAsyncDisposable
                 } while (!part.EndOfMessage);
                 using var json = JsonDocument.Parse(message.ToArray());
                 var root = json.RootElement;
-                if (root.TryGetProperty("error_code", out var error)) throw new IOException($"服务错误 {error}：{(root.TryGetProperty("error_message", out var reason) ? reason.ToString() : "请求失败")}");
+                if (root.TryGetProperty("error_code", out var error)) throw new SpeechServiceException($"服务错误 {error}：{(root.TryGetProperty("error_message", out var reason) ? reason.ToString() : "请求失败")}");
                 Message?.Invoke(root.Clone());
                 if (root.TryGetProperty("finished", out var done) && done.GetBoolean()) { finished.TrySetResult(); return; }
             }
         }
         catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
-        catch (Exception e) { finished.TrySetException(e); if (!stopping) Failure?.Invoke(e.Message); }
+        catch (Exception e) { finished.TrySetException(e); if (!stopping) Failure?.Invoke(e); }
     }
     public async Task StopAsync()
     {
@@ -157,4 +176,25 @@ public sealed class SpeechSession : IAsyncDisposable
 public sealed class AudioDeviceSwitchException(string message, bool captureRestored, Exception innerException) : IOException(message, innerException)
 {
     public bool CaptureRestored { get; } = captureRestored;
+}
+
+public sealed class SpeechServiceException : IOException
+{
+    public SpeechServiceException(string message, Exception? innerException = null, bool retryable = false) : base(message, innerException) => Retryable = retryable;
+    public bool Retryable { get; }
+}
+public sealed class AudioCaptureFailureException(string message, Exception innerException) : IOException(message, innerException) { }
+
+public static class SpeechRetryPolicy
+{
+    public const int MaxRetries = 2;
+    public static TimeSpan Delay(int retryNumber) => retryNumber switch
+    {
+        1 => TimeSpan.FromSeconds(1),
+        2 => TimeSpan.FromSeconds(3),
+        _ => throw new ArgumentOutOfRangeException(nameof(retryNumber))
+    };
+    public static bool IsTransient(Exception error) => error is WebSocketException or SocketException or TimeoutException or OperationCanceledException
+        || error is SpeechServiceException { Retryable: true }
+        || error is IOException and not SpeechServiceException and not AudioCaptureFailureException and not AudioDeviceSwitchException;
 }

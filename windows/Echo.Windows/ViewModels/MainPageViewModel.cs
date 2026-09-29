@@ -25,7 +25,9 @@ public partial class MainPageViewModel : ObservableObject
     private Guid correctionGeneration = Guid.NewGuid();
     private readonly Dictionary<Guid, string> correctionStatuses = [];
     private Guid? completedArchiveId, completedSegmentId;
-    private string failure = "";
+    private Exception? failure;
+    private CancellationTokenSource? recoveryCancellation;
+    private Task recoveryTask = Task.CompletedTask;
     public Preferences Config { get; private set; } = new();
     public ObservableCollection<Archive> Archives { get; } = [];
     public ObservableCollection<Subtitle> Entries { get; } = [];
@@ -44,10 +46,11 @@ public partial class MainPageViewModel : ObservableObject
     [ObservableProperty] public partial double Level { get; set; }
     public bool CanEdit => !IsBusy && !IsRecording;
     public bool CanSwitchAudioDevices => IsRecording && !IsBusy;
+    public bool CanStopRecording => IsRecording && (!IsBusy || recoveryCancellation is not null);
     public bool CanSplitCompletedSegment => !IsBusy && !IsRecording && completedArchiveId is not null && completedSegmentId is not null;
     public bool CanDeleteSelectedArchive => CanEdit && !IsSummarizing && SelectedArchive is not null;
-    partial void OnIsBusyChanged(bool value) { OnPropertyChanged(nameof(CanEdit)); OnPropertyChanged(nameof(CanSwitchAudioDevices)); OnPropertyChanged(nameof(CanSplitCompletedSegment)); OnPropertyChanged(nameof(CanDeleteSelectedArchive)); }
-    partial void OnIsRecordingChanged(bool value) { OnPropertyChanged(nameof(CanEdit)); OnPropertyChanged(nameof(CanSwitchAudioDevices)); OnPropertyChanged(nameof(CanSplitCompletedSegment)); OnPropertyChanged(nameof(CanDeleteSelectedArchive)); }
+    partial void OnIsBusyChanged(bool value) { OnPropertyChanged(nameof(CanEdit)); OnPropertyChanged(nameof(CanSwitchAudioDevices)); OnPropertyChanged(nameof(CanStopRecording)); OnPropertyChanged(nameof(CanSplitCompletedSegment)); OnPropertyChanged(nameof(CanDeleteSelectedArchive)); }
+    partial void OnIsRecordingChanged(bool value) { OnPropertyChanged(nameof(CanEdit)); OnPropertyChanged(nameof(CanSwitchAudioDevices)); OnPropertyChanged(nameof(CanStopRecording)); OnPropertyChanged(nameof(CanSplitCompletedSegment)); OnPropertyChanged(nameof(CanDeleteSelectedArchive)); }
     partial void OnIsSummarizingChanged(bool value) => OnPropertyChanged(nameof(CanDeleteSelectedArchive));
     partial void OnSelectedArchiveChanged(Archive? value)
     {
@@ -256,7 +259,7 @@ public partial class MainPageViewModel : ObservableObject
     public async Task StartAsync(int mode, string? output, string? input)
     {
         if (!CanEdit) return;
-        IsBusy = true; failure = "";
+        IsBusy = true; failure = null;
         completedArchiveId = completedSegmentId = null; OnPropertyChanged(nameof(CanSplitCompletedSegment));
         correctionGeneration = Guid.NewGuid(); correctionScheduled.Clear();
         SpeechSession? current = null;
@@ -267,18 +270,10 @@ public partial class MainPageViewModel : ObservableObject
             if (SelectedArchive is null) { var a = new Archive(); Archives.Insert(0, a); SelectedArchive = a; }
             segment = new Segment(); SelectedArchive.Segments.Add(segment);
             assembler = new TokenAssembler(segment, entry => Entries.Add(entry), ScheduleAutomaticCorrection);
-            current = new SpeechSession(); session = current;
-            current.Message += json => ui.TryEnqueue(() => { if (ReferenceEquals(session, current)) assembler?.Apply(json); });
-            current.Level += value => ui.TryEnqueue(() => { if (ReferenceEquals(session, current)) Level = Math.Min(100, value * 100); });
-            current.Failure += error => ui.TryEnqueue(async () =>
-            {
-                if (!ReferenceEquals(session, current)) return;
-                failure = error;
-                if (!IsBusy) await StopAsync();
-            });
+            current = CreateSpeechSession(); session = current;
             Status = "正在连接 Soniox…";
             await current.StartAsync(Config, key, mode, output, input);
-            if (failure.Length > 0) throw new IOException(failure);
+            if (failure is not null) throw failure;
             ActiveAudioMode = mode; ActiveOutputId = output; ActiveInputId = input;
             IsRecording = true; checkpoint.Start();
             Status = "正在录音 · 音频发送至 Soniox · 原始音频不落盘";
@@ -289,6 +284,98 @@ public partial class MainPageViewModel : ObservableObject
             session = null; IsRecording = false; Status = "无法开始：" + e.Message; Save();
         }
         finally { IsBusy = false; }
+    }
+    private SpeechSession CreateSpeechSession()
+    {
+        var current = new SpeechSession();
+        current.Message += json => ui.TryEnqueue(() => { if (ReferenceEquals(session, current)) assembler?.Apply(json); });
+        current.Level += value => ui.TryEnqueue(() => { if (ReferenceEquals(session, current)) Level = Math.Min(100, value * 100); });
+        current.Failure += error => ui.TryEnqueue(() => HandleSessionFailure(current, error));
+        return current;
+    }
+    private void HandleSessionFailure(SpeechSession failed, Exception error)
+    {
+        if (!ReferenceEquals(session, failed)) return;
+        failure = error;
+        if (IsBusy) return;
+        if (IsRecording && SpeechRetryPolicy.IsTransient(error) && recoveryCancellation is null)
+        {
+            recoveryTask = RecoverRecordingAsync(failed, error);
+            return;
+        }
+        _ = StopAsync();
+    }
+    private async Task RecoverRecordingAsync(SpeechSession failed, Exception initialError)
+    {
+        var cancellation = new CancellationTokenSource();
+        recoveryCancellation = cancellation; OnPropertyChanged(nameof(CanStopRecording));
+        IsBusy = true; checkpoint.Stop();
+        Exception lastError = initialError;
+        bool cancelled = false;
+        try
+        {
+            var archive = SelectedArchive;
+            if (archive is null) throw new InvalidOperationException("当前存档已关闭，无法自动恢复录音。");
+            Status = "连接中断，正在保存当前段并准备恢复…";
+            await failed.DisposeAsync();
+            await DrainUiQueueAsync();
+            if (ReferenceEquals(session, failed)) session = null;
+            if (!await SaveArchiveAndWaitAsync(archive)) throw new IOException(Status);
+
+            string key = Preferences.Unprotect(Config.SonioxSecret);
+            for (int retry = 1; retry <= SpeechRetryPolicy.MaxRetries; retry++)
+            {
+                Status = $"连接中断 · {retry}/{SpeechRetryPolicy.MaxRetries} 次重试（{SpeechRetryPolicy.Delay(retry).TotalSeconds:0} 秒后）…";
+                await Task.Delay(SpeechRetryPolicy.Delay(retry), cancellation.Token);
+                if (!IsRecording || !ReferenceEquals(SelectedArchive, archive)) return;
+
+                segment = new Segment(); archive.Segments.Add(segment);
+                assembler = new TokenAssembler(segment, entry => Entries.Add(entry), ScheduleAutomaticCorrection);
+                var candidate = CreateSpeechSession(); session = candidate; failure = null;
+                try
+                {
+                    await candidate.StartAsync(Config, key, ActiveAudioMode, ActiveOutputId, ActiveInputId, cancellation.Token);
+                    cancellation.Token.ThrowIfCancellationRequested();
+                    if (failure is not null) throw failure;
+                    checkpoint.Start(); Status = "连接已恢复 · 转写继续，断线前后的内容已分段保存";
+                    return;
+                }
+                catch (Exception e)
+                {
+                    if (cancellation.IsCancellationRequested) throw;
+                    lastError = e;
+                    await candidate.DisposeAsync();
+                    await DrainUiQueueAsync();
+                    if (ReferenceEquals(session, candidate)) session = null;
+                    if (!await SaveArchiveAndWaitAsync(archive)) throw new IOException(Status);
+                    if (!SpeechRetryPolicy.IsTransient(e)) break;
+                }
+            }
+            failure = lastError;
+            Status = $"自动恢复失败，已保留断线前文字；请手动重新开始。{lastError.Message}";
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+            cancelled = true;
+            Status = "已取消自动恢复；正在保存已收到的文字…";
+        }
+        catch (Exception e)
+        {
+            failure = e; Status = "自动恢复失败，正在保存已收到的文字：" + e.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+            if (ReferenceEquals(recoveryCancellation, cancellation)) recoveryCancellation = null;
+            cancellation.Dispose(); OnPropertyChanged(nameof(CanStopRecording));
+        }
+        if (!cancelled && IsRecording) await StopAsync();
+    }
+    private Task DrainUiQueueAsync()
+    {
+        var drained = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!ui.TryEnqueue(() => drained.TrySetResult())) drained.TrySetResult();
+        return drained.Task;
     }
     public async Task SwitchAudioDevicesAsync(string? outputId, string? inputId)
     {
@@ -305,7 +392,7 @@ public partial class MainPageViewModel : ObservableObject
         catch (AudioDeviceSwitchException e)
         {
             Status = e.Message;
-            if (!e.CaptureRestored) { failure = e.Message; stopAfterFailure = true; }
+            if (!e.CaptureRestored) { failure = e; stopAfterFailure = true; }
         }
         catch (Exception e) { Status = "切换失败，录音仍使用原设备：" + e.Message; }
         finally { IsBusy = false; }
@@ -313,17 +400,21 @@ public partial class MainPageViewModel : ObservableObject
     }
     public async Task StopAsync()
     {
-        if (IsBusy || session is null) return;
+        if (recoveryCancellation is { } recovery)
+        {
+            recovery.Cancel();
+            try { await recoveryTask; } catch { }
+        }
+        if (IsBusy || (session is null && !IsRecording)) return;
         IsBusy = true; checkpoint.Stop(); Status = "正在接收最后结果并保存…";
-        var current = session; string warning = failure;
-        try { await current.StopAsync(); }
+        var current = session; string warning = failure?.Message ?? "";
+        try { if (current is not null) await current.StopAsync(); }
         catch (Exception e) { warning = warning.Length > 0 ? warning : "最后结果可能不完整：" + e.Message; }
         finally
         {
-            await current.DisposeAsync();
-            var flushed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            ui.TryEnqueue(() => flushed.TrySetResult());
-            await flushed.Task;
+            if (current is not null) await current.DisposeAsync();
+            await DrainUiQueueAsync();
+            if (ReferenceEquals(session, current)) session = null;
             session = null; IsRecording = false; Level = 0;
             // Flush queued transcript events before serialization on the same dispatcher.
             if (SelectedArchive is not null && segment is not null)
