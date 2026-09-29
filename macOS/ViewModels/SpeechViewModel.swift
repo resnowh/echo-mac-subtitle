@@ -46,6 +46,24 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     @Published private(set) var archives: [TranscriptArchive] = []
     @Published var selectedArchiveID: UUID?
     @Published var archiveStatus = ""
+    @Published var isAICorrectionEnabled = UserDefaults.standard.bool(forKey: "aiCorrectionEnabled") {
+        didSet {
+            UserDefaults.standard.set(isAICorrectionEnabled, forKey: "aiCorrectionEnabled")
+            if !isAICorrectionEnabled {
+                for job in correctionQueue where job.automatic { correctionStatuses[job.id] = "已取消自动校对" }
+                correctionQueue.removeAll { $0.automatic }
+            }
+        }
+    }
+    @Published var correctionTerms = UserDefaults.standard.string(forKey: "correctionTerms") ?? "" {
+        didSet { UserDefaults.standard.set(correctionTerms, forKey: "correctionTerms") }
+    }
+    @Published private(set) var correctionSuggestions: [UUID: CorrectionSuggestion] = [:]
+    @Published private(set) var correctionStatuses: [UUID: String] = [:]
+    private var correctionQueue: [(id: UUID, translate: Bool, automatic: Bool)] = []
+    private var correctionTask: URLSessionDataTask?
+    private var correctionBusy = false
+    private var correctionGeneration = UUID()
 
     private let microphoneCapture = MacMicrophoneCapture()
     private let audioQueue = DispatchQueue(label: "local.echo.soniox-audio")
@@ -146,6 +164,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     deinit {
+        correctionTask?.cancel()
         lifecycleObserver.stop()
         wakeRecoveryWorkItem?.cancel()
         captureRecoveryWorkItem?.cancel()
@@ -949,7 +968,8 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
             "enable_language_identification": true,
             "enable_speaker_diarization": recognitionConfig.speakerDiarizationEnabled,
             "enable_endpoint_detection": true,
-            "max_endpoint_delay_ms": 900,
+            "max_endpoint_delay_ms": 3_000,
+            "endpoint_sensitivity": -0.3,
             "context": [
                 "general": [
                     ["key": "domain", "value": "economics and finance"],
@@ -1036,6 +1056,13 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         }
         if !recognitionConfig.translationEnabled {
             config.removeValue(forKey: "translation")
+        }
+        if var context = config["context"] as? [String: Any] {
+            let terms = correctionTerms.components(separatedBy: .newlines)
+                .map { String($0.trimmingCharacters(in: .whitespacesAndNewlines).prefix(80)) }
+                .filter { !$0.isEmpty }.prefix(100)
+            context["terms"] = (context["terms"] as? [String] ?? []) + terms
+            config["context"] = context
         }
         config = SonioxRequestBuilder.applying(recognitionConfig, to: config)
         do {
@@ -1310,15 +1337,11 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
             guard !translation.isEmpty else { return }
         }
 
-        let words = text.split(whereSeparator: { $0 == " " || $0 == "\n" }).count
         let elapsed = elapsedSinceSessionStart - (currentSourceStart ?? elapsedSinceSessionStart)
-        let endsSentence = text.range(of: "[.!?。！？][\\\"’”)]*$", options: .regularExpression) != nil
-        let longEnough = words >= 16 || (text.count >= 90 && elapsed >= 3)
-        let quietLongEnough = lastTokenReceivedAt.map { Date().timeIntervalSince($0) >= 1.8 } ?? false
-
-        // Soniox normally emits <end>. These fallbacks handle devices/streams
-        // where endpoint tokens are omitted, so one row cannot grow forever.
-        guard (endsSentence && words >= 3) || longEnough || (quietLongEnough && words >= 5) else { return }
+        let quiet = lastTokenReceivedAt.map { Date().timeIntervalSince($0) } ?? 0
+        // Prefer Soniox's semantic <end>. This is only a safety fallback when
+        // endpoint tokens are absent: don't split at punctuation or short pauses.
+        guard TranscriptSegmentationPolicy.shouldFinalize(text: text, elapsed: elapsed, quiet: quiet) else { return }
         finalizeCurrentEntry()
         saveCurrentSessionFile()
     }
@@ -1343,11 +1366,16 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     private func updateCurrentEntry() {
         guard let currentEntryID,
               let index = entries.firstIndex(where: { $0.id == currentEntryID }) else { return }
+        let previous = entries[index]
         let rawEnglish = (finalEnglish + partialEnglish).trimmingCharacters(in: .whitespacesAndNewlines)
         let correctedEnglish = Self.correctEconomicTerms(in: rawEnglish)
-        entries[index].english = correctedEnglish
         let rawChinese = (finalChinese + partialChinese).trimmingCharacters(in: .whitespacesAndNewlines)
-        entries[index].chinese = Self.correctEconomicTranslation(rawChinese, for: correctedEnglish)
+        entries[index].applyRecognition(source: correctedEnglish,
+            translation: Self.correctEconomicTranslation(rawChinese, for: correctedEnglish))
+        if !entries[index].matchesCorrectionSnapshot(previous), correctionSuggestions[currentEntryID] != nil {
+            correctionSuggestions[currentEntryID] = nil
+            correctionStatuses[currentEntryID] = "识别稿已更新，旧建议已失效"
+        }
         entries[index].speaker = currentSpeaker.map { "Speaker \($0)" }
         entries[index].language = currentLanguage
         entries[index].start = currentSourceStart ?? entries[index].start
@@ -1364,6 +1392,14 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
             entries.remove(at: index)
         }
         self.currentEntryID = nil
+        if isAICorrectionEnabled {
+            let finishedID = currentEntryID
+            let generation = correctionGeneration
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                guard let self, self.isAICorrectionEnabled, self.correctionGeneration == generation else { return }
+                self.requestCorrection(finishedID, automatic: true)
+            }
+        }
         finalEnglish = ""
         partialEnglish = ""
         finalChinese = ""
@@ -1511,7 +1547,12 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         return text.replacingOccurrences(of: "关税", with: "导数")
     }
 
+    private var lastAudioLevelPublication: TimeInterval = 0
+
     private func recordAudioLevel(_ level: Double) {
+        let now = ProcessInfo.processInfo.systemUptime
+        guard now - lastAudioLevelPublication >= 1.0 / 20 else { return }
+        lastAudioLevelPublication = now
         // Attack quickly when speech starts, then decay more slowly. This
         // keeps the history readable without inventing movement when silent.
         isReceivingAudio = true
@@ -1555,19 +1596,154 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         showTransientArchiveStatus(id == nil ? "已选择新存档" : "已选择存档")
     }
 
+    func saveCorrection(_ id: UUID, source: String?, translation: String?) {
+        guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
+        let source = source ?? entries[index].english
+        let translation = translation ?? entries[index].chinese
+        guard !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              source != entries[index].english || translation != entries[index].chinese else { return }
+        entries[index].edit(source: source, translation: translation)
+        correctionSuggestions[id] = nil
+        correctionStatuses[id] = "已手动纠正；修改字段已锁定"
+        persistCorrection(entries[index])
+    }
+
+    func undoCorrection(_ id: UUID) {
+        guard let index = entries.firstIndex(where: { $0.id == id }),
+              entries[index].correction?.history.isEmpty == false else { return }
+        entries[index].undoCorrection()
+        correctionSuggestions[id] = nil
+        correctionStatuses[id] = "已撤销上次纠正；保留手动选择"
+        persistCorrection(entries[index])
+    }
+
+    private func persistCorrection(_ entry: SubtitleEntry) {
+        refreshFullTranscript()
+        // Historical segments are not included by saveArchiveProgress. Update
+        // by stable subtitle UUID, never by the current session-relative index.
+        if let archiveIndex = archives.firstIndex(where: { $0.id == currentArchiveID }) {
+            var archive = archives[archiveIndex]
+            if archive.updateCorrection(entry) {
+                archives[archiveIndex] = archive
+                saveArchive(archive)
+            }
+        }
+        saveCurrentSessionFile(force: true)
+        if !summaryText.isEmpty { summaryStatus = "文字稿已纠正；已有总结未改动，可重新生成。" }
+    }
+
+    func addCorrectionTerm(_ text: String) -> Bool {
+        let term = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        var terms = correctionTerms.components(separatedBy: .newlines).filter { !$0.isEmpty }
+        guard !term.isEmpty, term.count <= 80, terms.count < 100,
+              !terms.contains(where: { $0.caseInsensitiveCompare(term) == .orderedSame }) else { return false }
+        terms.append(term)
+        correctionTerms = terms.joined(separator: "\n")
+        return true
+    }
+
+    func requestCorrection(_ id: UUID, translate: Bool = false, automatic: Bool = false) {
+        guard let entry = entries.first(where: { $0.id == id }), !entry.english.isEmpty else { return }
+        guard !deepSeekAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            correctionStatuses[id] = "请先在设置中填写 DeepSeek API Key"
+            return
+        }
+        guard entry.english.count <= 4000, entry.chinese.count <= 4000 else {
+            correctionStatuses[id] = "本条文字过长，请手动纠正"
+            return
+        }
+        guard !correctionQueue.contains(where: { $0.id == id }) else { return }
+        guard correctionQueue.count < 20 else {
+            correctionStatuses[id] = "校对队列已满，可稍后手动校对"
+            return
+        }
+        if automatic { correctionQueue.append((id, translate, automatic)) }
+        else { correctionQueue.insert((id, translate, automatic), at: 0) }
+        correctionStatuses[id] = "等待校对…"
+        runNextCorrection()
+    }
+
+    private func runNextCorrection() {
+        guard !correctionBusy, !correctionQueue.isEmpty else { return }
+        let job = correctionQueue.removeFirst()
+        guard (!job.automatic || isAICorrectionEnabled),
+              let index = entries.firstIndex(where: { $0.id == job.id }) else {
+            runNextCorrection()
+            return
+        }
+        let snapshot = entries[index]
+        let generation = correctionGeneration
+        let archiveID = currentArchiveID
+        let config = recognitionConfig
+        let context = entries[max(0, index - 2)..<min(entries.count, index + 3)]
+            .map(\.english).joined(separator: "\n")
+        guard let request = DeepSeekService().correctionRequest(
+            apiKey: deepSeekAPIKey.trimmingCharacters(in: .whitespacesAndNewlines),
+            source: snapshot.english, translation: snapshot.chinese, context: context,
+            terms: correctionTerms, targetLanguage: config.translationEnabled ? config.targetTranslationLanguage : "none",
+            translationOnly: job.translate) else { return }
+        correctionBusy = true
+        correctionStatuses[job.id] = job.translate ? "正在重新翻译…" : "正在 AI 校对…"
+        correctionTask = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            let result: Result<CorrectionSuggestion, Error> = Result {
+                if let error { throw error }
+                guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode), let data else {
+                    throw URLError(.badServerResponse)
+                }
+                return try DeepSeekService.decodeCorrection(data)
+            }
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.correctionBusy = false
+                self.correctionTask = nil
+                defer { self.runNextCorrection() }
+                guard self.correctionGeneration == generation,
+                      self.currentArchiveID == archiveID, self.recognitionConfig == config,
+                      let current = self.entries.first(where: { $0.id == job.id }) else { return }
+                guard (!job.automatic || self.isAICorrectionEnabled),
+                      current.matchesCorrectionSnapshot(snapshot) else {
+                    self.correctionStatuses[job.id] = "文字已变化，旧校对结果已忽略"
+                    return
+                }
+                switch result {
+                case .success(let suggestion):
+                    guard !job.translate || suggestion.source == snapshot.english else {
+                        self.correctionStatuses[job.id] = "翻译返回了不同原文，已忽略"
+                        return
+                    }
+                    if self.correctionSuggestions.count >= 100, let oldest = self.entries.first(where: {
+                        self.correctionSuggestions[$0.id] != nil
+                    }) { self.correctionSuggestions[oldest.id] = nil }
+                    self.correctionSuggestions[job.id] = suggestion
+                    self.correctionStatuses[job.id] = suggestion.uncertain ? "AI 无法确认，请人工核对" : "AI 建议已就绪，确认后才保存"
+                case .failure:
+                    self.correctionStatuses[job.id] = "AI 校对失败，请检查网络、API Key 或额度；原稿未改动"
+                }
+            }
+        }
+        correctionTask?.resume()
+    }
+
     private func prepareArchiveForRecording() {
+        correctionGeneration = UUID()
+        correctionQueue.removeAll()
+        correctionTask?.cancel()
+        correctionSuggestions.removeAll()
+        correctionStatuses.removeAll()
         let now = Date()
         if let selectedArchiveID,
            let archive = archives.first(where: { $0.id == selectedArchiveID }) {
             let restoredEntries = archive.segments.flatMap(\.entries).map { archived in
                 SubtitleEntry(
+                    id: archived.id,
                     start: archived.start,
                     end: archived.end,
                     recordedAt: archived.recordedAt,
                     english: archived.english,
                     chinese: archived.chinese,
                     speaker: archived.speaker,
-                    language: archived.language
+                    language: archived.language,
+                    correction: archived.correction
                 )
             }
             entries = restoredEntries
@@ -1638,7 +1814,8 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
                 english: $0.english,
                 chinese: $0.chinese,
                 speaker: $0.speaker,
-                language: $0.language
+                language: $0.language,
+                correction: $0.correction
             )
         }
         let now = Date()
@@ -1957,6 +2134,11 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     func clearTranscript() {
+        correctionGeneration = UUID()
+        correctionQueue.removeAll()
+        correctionTask?.cancel()
+        correctionSuggestions.removeAll()
+        correctionStatuses.removeAll()
         _ = lifecycleState.handle(.userStop)
         wakeRecoveryWorkItem?.cancel()
         wakeRecoveryWorkItem = nil
@@ -2040,14 +2222,14 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     private func saveCurrentSessionFile(force: Bool = false) {
-        let source = Array(entries.dropFirst(sessionEntriesStartIndex))
-            .filter { !$0.english.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        guard !source.isEmpty else { return }
         if !force,
            let lastSessionFileSaveAt,
            Date().timeIntervalSince(lastSessionFileSaveAt) < 3 {
             return
         }
+        let source = Array(entries.dropFirst(sessionEntriesStartIndex))
+            .filter { !$0.english.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        guard !source.isEmpty else { return }
         let url: URL
         if let currentSessionFileURL { url = currentSessionFileURL }
         else {
@@ -2086,7 +2268,8 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
                         english: entry.english,
                         chinese: entry.chinese,
                         speaker: entry.speaker,
-                        language: entry.language
+                        language: entry.language,
+                        correction: entry.correction
                     )
                 }
             }

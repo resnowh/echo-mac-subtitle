@@ -20,7 +20,7 @@ Audio Source
 - **电脑音频链路**：`MacSystemAudioCapture` 使用 ScreenCaptureKit 的音频流。收到的 `CMSampleBuffer` 被转换成同一目标格式，再进入音频串行队列。捕获电脑音频需要系统的“屏幕与系统音频录制”权限。
 - **双输入混音**：两路采集独立进行，以各自的 PCM frame position 放入 `PCM16TimelineMixer`。混音器按重叠 frame 对齐，多个输入的 signed 16-bit sample 取平均并限制在 Int16 范围内；不会把两段 PCM 直接首尾拼接。单输入模式绕过混音器，仍发送一条连续 PCM 流。输入源切换时保留当前 Soniox 会话和文字。
 - **建连前缓冲**：`PCM16Prebuffer` 最多保留约 2.5 秒的完整 PCM 块。WebSocket 配置发送成功并标记 ready 后，按 FIFO 顺序 flush；新 session、停止、失败和清空都会清理它。
-- **Soniox token 处理**：WebSocket 返回的 finalized token 与 provisional token 分开累积。`<end>`/`<fin>`、句末标点、长度和静默时间共同触发一条字幕完成，避免字幕长期只更新一行。翻译 token 写入中文字段，原文 token 写入英文字段；同一字幕中 speaker 改变时先完成前一条。
+- **Soniox token 处理**：WebSocket 返回的 finalized token 与 provisional token 分开累积。优先使用 Soniox 语义端点 `<end>`/`<fin>` 完成一句。兜底仅在至少 5 个词静默 4.5 秒后分段；若 endpoint 丢失且单条达到 80 词、90 秒，则触发安全上限。句号、短停顿或 16 词本身不会提前切段。翻译 token 写入译文，原文 token 写入原文字段；同一字幕中 speaker 改变时先完成前一条。
 - **Speaker / language**：请求开启 speaker diarization 和 language identification。token 的 `speaker` 保存为 `Speaker 1` 形式，`language` 保存为语言代码，随后进入 `SubtitleEntry` 和 `ArchivedSubtitle`。当前只使用匿名编号，不推断真人身份。
 - **Archive**：录音开始时可新建存档或选择已有存档接续。每次 session 是一个 `TranscriptSegment`，识别到的非空字幕会定期写入 `Application Support/Echo/Archives/*.json`；旧存档缺少新增可选字段时仍可加载。
 - **SRT**：当前 session 使用 session-relative `start/end` 导出。整存档导出时按 segment 的 `startedAt` 和 entry 的 `recordedAt` 建立跨 session 的相对 timeline，并强制保持单调递增；字幕正文可带 `[Speaker 1]` 前缀，但不会改变标准 SRT 时间行。
@@ -28,13 +28,26 @@ Audio Source
 
 ## 模块职责
 
+### 字幕纠正旁路
+
+每行“纠正/查看校对”打开 `SubtitleCorrectionEditor`，不停止录音。ViewModel 通过
+`SubtitleEntry.edit/applyRecognition/undoCorrection` 维护锁定和历史，强制保存当前段，并按稳定 UUID 更新历史段。
+DeepSeek 校对默认关闭；可手动请求，或开启后在分句结束 3 秒后排队。每次处理一句和附近两句上下文，
+一个请求在途、最多 20 个等待任务、手动任务优先、最多保留 100 个候选，失败不自动重试。
+清空/新录音准备取消旧任务并变更 generation；结果还必须匹配 archive、语言配置、文本和纠正 revision。
+关闭自动校对后不接纳在途自动结果。AI 不直接修改字幕，uncertain 候选要求人工核对。
+只发送文字不发送音频，使用独立 JSON 请求，不改变总结或音频/WebSocket 生命周期。
+JSON 参数依据 [DeepSeek 官方说明](https://api-docs.deepseek.com/guides/json_mode/)，截断或缺字段响应会被拒绝。
+UserDefaults 的 `correctionTerms` 保存课程术语，AI 校对立即使用，Soniox 从下次建连使用；
+`aiCorrectionEnabled` 缺省为 false。
+
 - `Models/TranscriptModels.swift`：平台无关的字幕、存档、输入源、主题和识别配置模型。
 - `Audio/AudioCapture.swift`：音频采集抽象；`AudioCaptureSource` 描述 PCM 话筒源，`SystemAudioCaptureSource` 描述系统音频源。
 - `Audio/AudioCapture.swift` 中的 `MacMicrophoneCapture`：macOS `AVAudioEngine` 话筒实现。
 - `Audio/MacSystemAudioCapture.swift`：macOS ScreenCaptureKit 系统音频实现。
 - `Audio/PCM16AudioPipeline.swift`：统一 PCM 块表示、双输入按 frame 对齐混音、以及有界 pre-buffer。该文件不依赖 SwiftUI 或 ScreenCaptureKit。
 - `Services/SonioxRequestBuilder.swift`：把 `RecognitionConfig` 映射到 Soniox request 字段，包括语言提示、严格限制、翻译、语言识别和 speaker diarization。
-- `Services/SonioxWebSocketClient.swift`：只负责 Soniox WebSocket 的建立、配置发送重试、接收循环、PCM 发送和关闭。
+- `Services/SonioxWebSocketClient.swift`：负责 Soniox WebSocket 建立、单次配置发送、接收循环、PCM 顺序发送和关闭。内部 transport 串行队列持有连接状态，消费者回调在独立串行队列执行；回调校验 socket identity。PCM 待发送量（含在途）最多 160 KB，建连/单次发送超时 15 秒；超限或超时明确失败。结束标记等待已接受的 PCM 发送完毕。配置发送失败不在原连接重发。
 - `Services/MacLifecycleObserver.swift`：集中注册和清理 macOS 睡眠、唤醒及 `AVAudioEngine` 配置变化通知，不承载录音业务。
 - `Models/LifecycleRecoveryState.swift`：平台无关的睡眠/唤醒恢复状态机，防止重复恢复并区分用户停止与系统生命周期事件。
 - `ViewModels/SpeechViewModel.swift`：协调录音 session、采集生命周期、WebSocket、token 状态、存档和 UI 发布状态。

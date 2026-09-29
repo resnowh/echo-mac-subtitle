@@ -3,6 +3,9 @@ import Foundation
 enum SonioxRequestBuilder {
     static func applying(_ recognition: RecognitionConfig, to base: [String: Any]) -> [String: Any] {
         var request = base
+        // Prefer Soniox's semantic endpoint over punctuation/short gaps.
+        request["max_endpoint_delay_ms"] = 3_000
+        request["endpoint_sensitivity"] = -0.3
         request["enable_speaker_diarization"] = recognition.speakerDiarizationEnabled
         request["enable_language_identification"] = true
         if recognition.sourceLanguageMode == .specified {
@@ -39,7 +42,8 @@ enum SonioxRequestBuilder {
             "sample_rate": sampleRate,
             "num_channels": channels,
             "enable_endpoint_detection": true,
-            "max_endpoint_delay_ms": 900,
+            "max_endpoint_delay_ms": 3_000,
+            "endpoint_sensitivity": -0.3,
             "enable_speaker_diarization": recognition.speakerDiarizationEnabled,
             "enable_language_identification": true
         ]

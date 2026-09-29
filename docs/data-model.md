@@ -15,6 +15,16 @@
 
 `SubtitleEntry` 本身是运行时模型，不直接 Codable。
 
+可选 `correction: SubtitleCorrection?` 同时持久化到 `ArchivedSubtitle`。旧 JSON 缺字段时由合成 Codable 解码为 nil。
+`rawSource/rawTranslation` 是未应用人工纠正的识别稿（仍包含既有识别处理规则），活跃条目随新识别更新。
+`sourceLocked/translationLocked` 分别保护人工改动字段；`revision: UUID` 在编辑/撤销后变化，用于拒绝迟到 AI 响应。
+`history` 保存每次修改前的 source、translation 和绝对 date；撤销恢复上一版并保留手动锁定，防止再被识别覆盖。
+`english/chinese` 始终是 SRT 和后续总结读取的有效文本。恢复时保留字幕 UUID，跨段纠正按 UUID 匹配。
+历史 SRT 副本及已生成总结不自动重写；需重新导出/总结。当前录音段的自动 SRT 在保存纠正时更新。
+
+`CorrectionSuggestion` 为内存候选，包含 source、translation、reason、uncertain。确认到编辑框并保存后才走人工纠正流程，
+未确认候选不进入存档、SRT 或总结。
+
 ### `ArchivedSubtitle`
 
 `SubtitleEntry` 的 Codable 存档版本，字段语义相同，包含 `id/start/end/recordedAt/english/chinese/speaker/language`。它保留 session-relative 时间，同时尽量保留现实开始时间，供恢复 UI、总结和跨段 SRT 使用。
