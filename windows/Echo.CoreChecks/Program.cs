@@ -46,6 +46,15 @@ archive.Segments[0].Entries[0].Correction = new SubtitleCorrection { RawSource =
 Check(snapshot.Segments[0].Entries[0].English == "Hello there." && snapshot.Segments[0].Entries[0].Correction is null && snapshot.SummarizedEntries.Count == 1, "background persistence snapshot is isolated from later edits and keeps archive metadata");
 string srt = TranscriptFiles.Srt(archive);
 Check(srt.Contains("00:00:10,000 --> 00:00:11,000") && srt.Contains("你好。"), "SRT preserves segment wall-clock gap and translation");
+var overlapExport = new Archive { Segments =
+[
+    new Segment { StartedAt = 800000002, Entries = [new Subtitle { Start = 0, End = 3, English = "later segment" }] },
+    new Segment { StartedAt = 800000000, Entries = [new Subtitle { Start = 0, End = 5, English = "earlier segment" }] }
+] };
+string overlapSrt = TranscriptFiles.Srt(overlapExport);
+Check(overlapSrt.IndexOf("earlier segment", StringComparison.Ordinal) < overlapSrt.IndexOf("later segment", StringComparison.Ordinal)
+    && overlapSrt.Contains("00:00:00,000 --> 00:00:05,000") && overlapSrt.Contains("00:00:05,000 --> 00:00:08,000"),
+    "archive SRT export sorts unordered segments by wall clock and clamps overlaps so cue times never move backward");
 var metadataArchive = new Archive { Segments = [new Segment { StartedAt = 800000000, Entries = [new Subtitle { Start = 0, End = 1, English = "bonjour", Chinese = "你好", Speaker = "Speaker 2", Language = "fr" }] }] };
 string metadataJson = JsonSerializer.Serialize(metadataArchive, TranscriptFiles.Json);
 var metadataLoaded = TranscriptFiles.Parse(metadataJson);
