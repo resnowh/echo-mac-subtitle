@@ -426,12 +426,28 @@ struct WaveformView: View {
     let active: Bool
 
     var body: some View {
-        HStack(alignment: .center, spacing: 3) {
-            ForEach(Array(samples.enumerated()), id: \.offset) { _, sample in
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(active ? Color.mint.opacity(0.85) : Color.secondary.opacity(0.35))
-                    .frame(width: 3, height: active ? max(2, min(46, 3 + sample * 44)) : 2)
+        Canvas { context, size in
+            let baselineY = size.height / 2
+            let baseline = Path { path in
+                path.move(to: CGPoint(x: 0, y: baselineY))
+                path.addLine(to: CGPoint(x: size.width, y: baselineY))
             }
+            context.stroke(baseline, with: .color(.secondary.opacity(0.28)), lineWidth: 1)
+
+            guard !samples.isEmpty else { return }
+            var waveform = Path()
+            for (index, sample) in samples.enumerated() {
+                let x = size.width * (CGFloat(index) + 0.5) / CGFloat(samples.count)
+                let level = min(1, max(0, sample))
+                let halfHeight = 1 + CGFloat(level) * 20
+                waveform.move(to: CGPoint(x: x, y: baselineY - halfHeight))
+                waveform.addLine(to: CGPoint(x: x, y: baselineY + halfHeight))
+            }
+            context.stroke(
+                waveform,
+                with: .color(active ? .mint.opacity(0.85) : .secondary.opacity(0.35)),
+                style: StrokeStyle(lineWidth: 1.5, lineCap: .round)
+            )
         }
         .frame(maxWidth: .infinity)
         .frame(height: 52, alignment: .center)
