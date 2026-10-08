@@ -13,6 +13,10 @@ private extension AppThemeMode {
 
 @main
 struct EchoMacApp: App {
+    @StateObject private var speechModel = SpeechViewModel()
+    @StateObject private var desktopSubtitleSettings = DesktopSubtitleOverlaySettingsStore()
+    @StateObject private var desktopSubtitleController = SubtitleOverlayController()
+
     init() {
         // Echo is intentionally a single-window app. Prevent macOS from
         // adding an automatic tab bar/tab strip to the standard window.
@@ -21,7 +25,9 @@ struct EchoMacApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(model: speechModel,
+                desktopSubtitleSettings: desktopSubtitleSettings,
+                desktopSubtitleController: desktopSubtitleController)
         }
         .windowResizability(.automatic)
     }
@@ -51,8 +57,11 @@ private struct WindowAccessor: NSViewRepresentable {
 }
 
 struct ContentView: View {
-    @StateObject private var model = SpeechViewModel()
+    @ObservedObject var model: SpeechViewModel
+    @ObservedObject var desktopSubtitleSettings: DesktopSubtitleOverlaySettingsStore
+    @ObservedObject var desktopSubtitleController: SubtitleOverlayController
     @State private var showSettings = false
+    @State private var showDesktopSubtitleSettings = false
     @State private var editingSubtitle: SubtitleEntry?
     @State private var isSummaryExpanded = true
     @AppStorage("themeMode") private var themeModeRaw = AppThemeMode.dark.rawValue
@@ -66,6 +75,39 @@ struct ContentView: View {
             HStack {
                 Text("ECHO").font(.caption.weight(.bold)).foregroundStyle(.mint)
                 Spacer()
+                Menu {
+                    Button(desktopSubtitleSettings.settings.enabled ? "关闭悬浮字幕" : "开启悬浮字幕") {
+                        let shouldEnable = !desktopSubtitleSettings.settings.enabled
+                        desktopSubtitleSettings.update { $0.enabled = shouldEnable }
+                        if shouldEnable {
+                            desktopSubtitleController.show(model: model, settings: desktopSubtitleSettings)
+                        } else {
+                            desktopSubtitleController.hide()
+                        }
+                    }
+                    Button("调整位置和大小") {
+                        desktopSubtitleSettings.update { $0.enabled = true }
+                        desktopSubtitleController.show(model: model, settings: desktopSubtitleSettings, adjusting: true)
+                    }
+                    Divider()
+                    Button(desktopSubtitleSettings.settings.positionLocked ? "解锁位置" : "锁定位置") {
+                        let unlock = desktopSubtitleSettings.settings.positionLocked
+                        desktopSubtitleSettings.update { $0.positionLocked = !unlock }
+                        desktopSubtitleController.setAdjusting(unlock)
+                        desktopSubtitleController.refresh(settings: desktopSubtitleSettings.settings)
+                    }
+                    Toggle("点击穿透", isOn: Binding(
+                        get: { desktopSubtitleSettings.settings.clickThrough },
+                        set: { value in desktopSubtitleSettings.update { $0.clickThrough = value } }
+                    ))
+                    Divider()
+                    Button("悬浮字幕设置…") { showDesktopSubtitleSettings = true }
+                } label: {
+                    Image(systemName: "captions.bubble")
+                        .foregroundStyle(desktopSubtitleSettings.settings.enabled ? .mint : .secondary)
+                }
+                .menuStyle(.borderlessButton)
+                .help("悬浮字幕")
                 Button { showSettings = true } label: {
                     Image(systemName: "gearshape")
                 }
@@ -184,7 +226,27 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(WindowAccessor(alwaysOnTop: model.isAlwaysOnTop))
         .sheet(isPresented: $showSettings) { SettingsView(model: model) }
+        .sheet(isPresented: $showDesktopSubtitleSettings) {
+            DesktopSubtitleOverlaySettingsView(store: desktopSubtitleSettings,
+                controller: desktopSubtitleController, model: model)
+        }
         .sheet(item: $editingSubtitle) { entry in SubtitleCorrectionEditor(model: model, entry: entry) }
+        .onAppear {
+            if desktopSubtitleSettings.settings.enabled {
+                desktopSubtitleController.show(model: model, settings: desktopSubtitleSettings)
+            }
+        }
+        .onChange(of: desktopSubtitleSettings.settings) { _, value in
+            if value.enabled {
+                if desktopSubtitleController.hasWindow {
+                    desktopSubtitleController.refresh(settings: value)
+                } else {
+                    desktopSubtitleController.show(model: model, settings: desktopSubtitleSettings)
+                }
+            } else {
+                desktopSubtitleController.hide()
+            }
+        }
         .preferredColorScheme(themeMode.colorScheme)
     }
 

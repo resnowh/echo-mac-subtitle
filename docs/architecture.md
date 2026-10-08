@@ -55,9 +55,30 @@ UserDefaults 的 `correctionTerms` 保存课程术语，AI 校对立即使用，
 - `Storage/TranscriptArchiveStore.swift`：负责 Archive JSON 的目录、编码、保存和读取。
 - `Services/DeepSeekService.swift`：构造 DeepSeek Chat Completions 请求；不依赖 SwiftUI，也不持有总结状态。
 - `Views/TranscriptViews.swift`：字幕双栏滚动、Speaker/时间显示、Markdown 总结显示、输入源标签和波形视图。
+- `Models/DesktopSubtitleOverlayModels.swift`：悬浮字幕显示设置、当前 entry 显示状态及纯逻辑 reducer。
+- `Services/DesktopSubtitleOverlayFeed.swift`：向悬浮层发布低频只读字幕快照；不订阅波形，不持有音频/网络职责。
+- `Views/DesktopSubtitleOverlay.swift`：管理单个透明 AppKit `NSPanel`、SwiftUI 字幕渲染、调整模式和悬浮字幕设置。
 - `EchoMacApp.swift` 中的 `ContentView`/`SettingsView`/`WindowAccessor`：macOS SwiftUI 界面、设置入口和窗口置顶行为；核心业务由 `SpeechViewModel` 提供。
 
 依赖方向是：采集实现 → 音频抽象/PCM pipeline → `SpeechViewModel` → Soniox transport / token processing / 存储 / SwiftUI。Soniox request 和 transport 已独立于 View；session 生命周期与 token 业务协调仍由 `SpeechViewModel` 负责。
+
+### 桌面悬浮字幕旁路
+
+```mermaid
+flowchart LR
+  S[Soniox token processing] --> VM[SpeechViewModel / SubtitleEntry]
+  VM -->|当前 entry 更新、定稿、修正、清理| F[DesktopSubtitleOverlayFeed]
+  F --> V[SwiftUI DesktopSubtitleOverlayView]
+  V --> P[AppKit transparent NSPanel]
+  H[Overlay settings store] --> V
+  H --> P
+```
+
+`SpeechViewModel` 仍是字幕与录音状态的唯一所有者。feed 接收当前 entry 的整段有效文本；同一 provisional entry 以稳定 UUID 替换更新，译文只和同一个 entry 配对。定稿后 feed 记录定稿时间，SwiftUI 在配置的保留时间后隐藏；停止/清空/新 session 清除 feed。手动纠正只把当前可见 entry 的有效文本更新到 feed，不改 feed 之外的历史和纠错语义。
+
+`EchoMacApp` 持有唯一 `SpeechViewModel`、设置 store 和 panel controller；因此主窗口最小化/关闭但进程仍在时，不会因 `ContentView` 消失而销毁悬浮层或录音数据。`SubtitleOverlayController` 创建至多一个非激活、透明、无标题栏的 `NSPanel`，SwiftUI 只负责字幕文本。锁定状态下按设置启用鼠标穿透；调整模式临时接收鼠标以拖动/缩放。面板位置、宽度与样式保存在 UserDefaults，屏幕参数变化时将面板夹回可见区域。面板不创建第二个 ViewModel、录音源或 Soniox client，也不反向写字幕/Archive。隐藏面板会移除 SwiftUI content view 并解除面板对 feed 的订阅；退出应用进程时所有窗口正常销毁。
+
+`.canJoinAllSpaces`/`.fullScreenAuxiliary` 只表示尽力参与其他 Space 和全屏窗口层级，不保证每个全屏/受保护应用都能被覆盖。主窗口最小化或被遮挡时悬浮层仍在同一进程运行；应用进程结束后不会继续显示。
 
 ## 平台边界
 

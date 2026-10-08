@@ -4,6 +4,7 @@ enum CorrectionChecks {
     static func run() throws {
         try segmentationChecks()
         try recognitionConfigChecks()
+        try desktopSubtitleOverlayChecks()
         var entry = SubtitleEntry(start: 1, end: 3, english: "material", chinese: "材料", speaker: "Speaker 1", language: "en")
         let original = entry
         entry.edit(source: "maturity day", translation: "材料")
@@ -273,5 +274,82 @@ enum CorrectionChecks {
         precondition(conflictingBase["max_endpoint_delay_ms"] as? Int == 1_750)
         precondition(conflictingBase["endpoint_sensitivity"] as? Double == 0.4)
         print("PASS: segmentation triggers, endpoint priority, translation wait, defaults/bounds, UserDefaults roundtrip, Soniox request settings")
+    }
+
+    private static func desktopSubtitleOverlayChecks() throws {
+        var reducer = DesktopSubtitleOverlayReducer()
+        let id = UUID()
+        let first = SubtitleEntry(id: id, start: 0, end: 1, english: "The marginal", chinese: "")
+        reducer.update(first, translationEnabled: true)
+        precondition(reducer.current?.original == "The marginal")
+        precondition(reducer.current?.translation.isEmpty == true)
+        let revised = SubtitleEntry(id: id, start: 0, end: 2, english: "The marginal cost", chinese: "")
+        reducer.update(revised, translationEnabled: true)
+        precondition(reducer.current?.original == "The marginal cost", "Provisional updates replace the entire entry")
+        precondition(reducer.current?.original != "The marginalThe marginal cost")
+
+        let translated = SubtitleEntry(id: id, start: 0, end: 2, english: "The marginal cost", chinese: "边际成本")
+        reducer.update(translated, translationEnabled: true)
+        precondition(reducer.current?.translation == "边际成本", "Late translation updates the matching entry")
+        let next = SubtitleEntry(id: UUID(), start: 2, end: 3, english: "Opportunity cost", chinese: "")
+        reducer.update(next, translationEnabled: true)
+        precondition(reducer.current?.original == "Opportunity cost" && reducer.current?.translation.isEmpty == true,
+            "A new original must not inherit the previous entry translation")
+
+        let originalOnly = SubtitleEntry(id: UUID(), start: 0, end: 1, english: "Hello", chinese: "stale")
+        reducer.update(originalOnly, translationEnabled: false)
+        precondition(reducer.current?.isVisible == true && reducer.current?.translationEnabled == false)
+        reducer.finalize(originalOnly, translationEnabled: false, at: Date(timeIntervalSince1970: 100))
+        precondition(reducer.current?.remainsVisible(at: Date(timeIntervalSince1970: 104), retention: 5) == true)
+        precondition(reducer.current?.remainsVisible(at: Date(timeIntervalSince1970: 105), retention: 5) == false)
+        let replacement = SubtitleEntry(id: UUID(), start: 1, end: 2, english: "Next", chinese: "下一句")
+        reducer.update(replacement, translationEnabled: true)
+        precondition(reducer.current?.entryID == replacement.id && reducer.current?.isFinal == false)
+        reducer.clear()
+        precondition(reducer.current == nil)
+
+        let suiteName = "EchoDesktopSubtitleOverlayChecks.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        precondition(DesktopSubtitleOverlaySettings.load(from: defaults) == .defaults)
+        var settings = DesktopSubtitleOverlaySettings.defaults
+        settings.enabled = true
+        settings.showOriginal = false
+        settings.showTranslation = true
+        settings.originalFontSize = 32
+        settings.translationFontSize = 28
+        settings.opacity = 0.8
+        settings.widthFraction = 0.7
+        settings.retentionSeconds = 7
+        settings.clickThrough = false
+        settings.normalizedX = 0.3
+        settings.save(to: defaults)
+        let restored = DesktopSubtitleOverlaySettings.load(from: defaults)
+        precondition(restored == settings && restored.enabled && restored.translationFontSize == 28)
+
+        let outOfRangeJSON: [String: Any] = [
+            "showOriginal": false, "showTranslation": false,
+            "originalFontSize": 900, "translationFontSize": 24,
+            "opacity": 2, "widthFraction": -1, "retentionSeconds": 500,
+            "shadowStrength": 0.35, "normalizedX": 4, "normalizedBottom": 0.12
+        ]
+        defaults.set(try JSONSerialization.data(withJSONObject: outOfRangeJSON), forKey: DesktopSubtitleOverlaySettings.userDefaultsKey)
+        let safe = DesktopSubtitleOverlaySettings.load(from: defaults)
+        precondition(safe.originalFontSize == 26 && safe.opacity == 1 && safe.widthFraction == 0.75)
+        precondition(safe.retentionSeconds == 5 && safe.normalizedX == 0.5)
+        precondition(safe.showOriginal || safe.showTranslation, "At least one language remains visible")
+        let feed = DesktopSubtitleOverlayFeed()
+        feed.update(first, translationEnabled: true)
+        for index in 0..<10 {
+            feed.update(SubtitleEntry(id: id, start: 0, end: Double(index + 2),
+                english: "revision \(index)", chinese: ""), translationEnabled: true)
+        }
+        RunLoop.main.run(until: Date().addingTimeInterval(0.08))
+        precondition(feed.current?.original == "revision 9", "Throttling publishes the latest provisional revision")
+        feed.update(revised, translationEnabled: true)
+        feed.clear()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.08))
+        precondition(feed.current == nil, "A delayed provisional update cannot repopulate a cleared/new session")
+        print("PASS: live overlay replacement, translation pairing, no-translation mode, final retention, and validated settings persistence")
     }
 }
