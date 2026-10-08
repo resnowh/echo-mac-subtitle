@@ -1,0 +1,110 @@
+name: macOS Signed Distribution Candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "CFBundleShortVersionString (e.g. 0.1.0)"
+        required: true
+        type: string
+      build_number:
+        description: "Incrementing CFBundleVersion integer"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  notarized-dmg:
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-latest
+    environment: macos-distribution
+    timeout-minutes: 90
+    steps:
+      - name: Check out reviewed main
+        uses: actions/checkout@v4
+
+      - name: Validate release version parameters
+        env:
+          VERSION: ${{ inputs.version }}
+          BUILD: ${{ inputs.build_number }}
+        run: |
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Version must be X.Y.Z"; exit 1; }
+          [[ "$BUILD" =~ ^[1-9][0-9]*$ ]] || { echo "Build number must be a positive integer"; exit 1; }
+          bash -n scripts/macos-package.sh
+          plutil -lint macOS/Entitlements/EchoRelease.entitlements
+
+      - name: Isolated core regression checks
+        run: python3 tests/run_stream_checks.py
+
+      - name: Build isolated universal Release (do not open Echo)
+        run: |
+          xcodebuild -project macOS/EchoMac.xcodeproj -scheme Echo \
+            -configuration Release -sdk macosx \
+            -derivedDataPath "$RUNNER_TEMP/echo-distribution-release" \
+            CODE_SIGNING_ALLOWED=NO 'ARCHS=arm64 x86_64' ONLY_ACTIVE_ARCH=NO build
+
+      - name: Insert version and verify two architectures
+        env:
+          VERSION: ${{ inputs.version }}
+          BUILD: ${{ inputs.build_number }}
+        run: |
+          app="$RUNNER_TEMP/echo-distribution-release/Build/Products/Release/Echo.app"
+          plist="$app/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$plist" || /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $VERSION" "$plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" "$plist" || /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $BUILD" "$plist"
+          archs="$(lipo -archs "$app/Contents/MacOS/Echo")"
+          [[ " $archs " == *" arm64 "* && " $archs " == *" x86_64 "* ]] || { echo "Not a universal app: $archs"; exit 1; }
+
+      - name: Import temporary Developer ID certificate, sign and notarize
+        env:
+          CERT_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_P12_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_P12_PASSWORD }}
+          APPLE_SIGN_IDENTITY: ${{ secrets.APPLE_DEVELOPER_ID_APPLICATION }}
+          NOTARY_PRIVATE_KEY: ${{ secrets.APPLE_NOTARY_API_PRIVATE_KEY }}
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          : "${CERT_BASE64:?Missing signing certificate secret}"
+          : "${CERT_PASSWORD:?Missing signing password secret}"
+          : "${APPLE_SIGN_IDENTITY:?Missing Developer ID Application identity secret}"
+          : "${NOTARY_PRIVATE_KEY:?Missing notarization private key secret}"
+          : "${APPLE_NOTARY_KEY_ID:?Missing notarization key ID}"
+          : "${APPLE_NOTARY_ISSUER_ID:?Missing notarization issuer ID}"
+          cert="$RUNNER_TEMP/echo-signing.p12"
+          APPLE_NOTARY_KEY_PATH="$RUNNER_TEMP/echo-notary-key.p8"
+          keychain="$RUNNER_TEMP/echo-release-signing.keychain-db"
+          cleanup() {
+            security delete-keychain "$keychain" >/dev/null 2>&1 || true
+            rm -f "$cert" "$APPLE_NOTARY_KEY_PATH"
+          }
+          trap cleanup EXIT
+          printf '%s' "$CERT_BASE64" | base64 -D > "$cert"
+          printf '%s' "$NOTARY_PRIVATE_KEY" > "$APPLE_NOTARY_KEY_PATH"
+          chmod 600 "$cert" "$APPLE_NOTARY_KEY_PATH"
+          password="$(openssl rand -hex 24)"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$cert" -k "$keychain" -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain"
+          security list-keychains -d user -s "$keychain"
+          export APPLE_NOTARY_KEY_PATH
+          bash scripts/macos-package.sh signed \
+            "$RUNNER_TEMP/echo-distribution-release/Build/Products/Release/Echo.app" \
+            "$RUNNER_TEMP/echo-signed-release"
+          shasum -a 256 -c "$RUNNER_TEMP/echo-signed-release/"*.sha256
+
+      - name: Upload notarized candidate for private acceptance testing
+        uses: actions/upload-artifact@v4
+        with:
+          name: Echo-macOS-signed-candidate
+          path: |
+            ${{ runner.temp }}/echo-signed-release/*.dmg
+            ${{ runner.temp }}/echo-signed-release/*.sha256
+          retention-days: 14
+          if-no-files-found: error
+
+      # Not a GitHub Release. Manual clean-machine install/upgrade must pass first.
