@@ -40,7 +40,9 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     @Published var isSwitchingInput = false
     @Published var isSummaryEnabled: Bool
     @Published var deepSeekAPIKey: String
-    @Published var recognitionConfig: RecognitionConfig
+    @Published var recognitionConfig: RecognitionConfig {
+        didSet { recognitionConfig.save() }
+    }
     @Published var transcriptSegmentationConfig: TranscriptSegmentationConfig {
         didSet { transcriptSegmentationConfig.save() }
     }
@@ -76,6 +78,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     private let lifecycleObserver = MacLifecycleObserver()
     private var lifecycleState = LifecycleRecoveryState()
     private var activeSegmentationConfig = TranscriptSegmentationConfig.defaults
+    private var activeRecognitionConfig = RecognitionConfig()
     private var wakeRecoveryWorkItem: DispatchWorkItem?
     private var captureRecoveryWorkItem: DispatchWorkItem?
     private var microphoneStartupWorkItem: DispatchWorkItem?
@@ -147,18 +150,9 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         isSummaryEnabled = UserDefaults.standard.bool(forKey: "aiSummaryEnabled")
         deepSeekAPIKey = UserDefaults.standard.string(forKey: "deepSeekAPIKey") ?? ""
         transcriptSegmentationConfig = TranscriptSegmentationConfig.load()
-        let languageMode = SourceLanguageMode(rawValue: UserDefaults.standard.string(forKey: "sourceLanguageMode") ?? "specified") ?? .specified
-        let specifiedLanguage = UserDefaults.standard.string(forKey: "specifiedSourceLanguage") ?? "en"
-        let targetLanguage = UserDefaults.standard.string(forKey: "targetTranslationLanguage") ?? "zh"
-        recognitionConfig = RecognitionConfig(
-            sourceLanguageMode: languageMode,
-            specifiedSourceLanguage: specifiedLanguage,
-            languageHints: languageMode == .specified ? [specifiedLanguage] : [],
-            strictLanguageRestriction: UserDefaults.standard.bool(forKey: "strictLanguageRestriction"),
-            translationEnabled: UserDefaults.standard.object(forKey: "translationEnabled") as? Bool ?? true,
-            targetTranslationLanguage: targetLanguage,
-            speakerDiarizationEnabled: UserDefaults.standard.object(forKey: "speakerDiarizationEnabled") as? Bool ?? true
-        )
+        let loadedRecognitionConfig = RecognitionConfig.load()
+        recognitionConfig = loadedRecognitionConfig
+        activeRecognitionConfig = loadedRecognitionConfig
         archives = Self.loadArchives()
         selectedArchiveID = nil
         super.init()
@@ -419,6 +413,11 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     private func start(preserveSummary: Bool = false) {
+        // A user-started recording snapshots settings once. Sleep/wake recovery
+        // preserves the existing snapshot because it continues the same recording intent.
+        if !preserveSummary {
+            activeRecognitionConfig = recognitionConfig
+        }
         errorMessage = ""
         fileStatus = ""
         if !preserveSummary {
@@ -970,12 +969,12 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
             "audio_format": "pcm_s16le",
             "sample_rate": 16_000,
             "num_channels": 1,
-            "language_hints": recognitionConfig.sourceLanguageMode == .specified
-                ? [recognitionConfig.specifiedSourceLanguage]
-                : recognitionConfig.languageHints,
-            "language_hints_strict": recognitionConfig.strictLanguageRestriction,
+            "language_hints": activeRecognitionConfig.sourceLanguageMode == .specified
+                ? [activeRecognitionConfig.specifiedSourceLanguage]
+                : activeRecognitionConfig.languageHints,
+            "language_hints_strict": activeRecognitionConfig.strictLanguageRestriction,
             "enable_language_identification": true,
-            "enable_speaker_diarization": recognitionConfig.speakerDiarizationEnabled,
+            "enable_speaker_diarization": activeRecognitionConfig.speakerDiarizationEnabled,
             "context": [
                 "general": [
                     ["key": "domain", "value": "economics and finance"],
@@ -1054,13 +1053,13 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
             ],
             "translation": [
                 "type": "one_way",
-                "target_language": recognitionConfig.targetTranslationLanguage
+                "target_language": activeRecognitionConfig.targetTranslationLanguage
             ]
         ]
-        if recognitionConfig.sourceLanguageMode == .automatic && recognitionConfig.languageHints.isEmpty {
+        if activeRecognitionConfig.sourceLanguageMode == .automatic && activeRecognitionConfig.languageHints.isEmpty {
             config.removeValue(forKey: "language_hints")
         }
-        if !recognitionConfig.translationEnabled {
+        if !activeRecognitionConfig.translationEnabled {
             config.removeValue(forKey: "translation")
         }
         if var context = config["context"] as? [String: Any] {
@@ -1071,7 +1070,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
             config["context"] = context
         }
         config = SonioxRequestBuilder.applying(
-            recognitionConfig,
+            activeRecognitionConfig,
             to: config,
             segmentation: activeSegmentationConfig
         )
@@ -1338,7 +1337,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
             quiet: 0,
             config: activeSegmentationConfig,
             endpointReached: reachedEndpoint,
-            translationEnabled: recognitionConfig.translationEnabled,
+            translationEnabled: activeRecognitionConfig.translationEnabled,
             translationReady: !(finalChinese + partialChinese).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         )
         if endpointTrigger == .endpoint {
@@ -1361,7 +1360,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
             elapsed: elapsed,
             quiet: quiet,
             config: activeSegmentationConfig,
-            translationEnabled: recognitionConfig.translationEnabled,
+            translationEnabled: activeRecognitionConfig.translationEnabled,
             translationReady: translationReady
         ) != nil else { return }
         finalizeCurrentEntry()
@@ -1907,12 +1906,35 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     func saveRecognitionSettings() {
-        UserDefaults.standard.set(recognitionConfig.sourceLanguageMode.rawValue, forKey: "sourceLanguageMode")
-        UserDefaults.standard.set(recognitionConfig.specifiedSourceLanguage, forKey: "specifiedSourceLanguage")
-        UserDefaults.standard.set(recognitionConfig.strictLanguageRestriction, forKey: "strictLanguageRestriction")
-        UserDefaults.standard.set(recognitionConfig.translationEnabled, forKey: "translationEnabled")
-        UserDefaults.standard.set(recognitionConfig.targetTranslationLanguage, forKey: "targetTranslationLanguage")
-        UserDefaults.standard.set(recognitionConfig.speakerDiarizationEnabled, forKey: "speakerDiarizationEnabled")
+        recognitionConfig.save()
+    }
+
+    var effectiveRecognitionConfig: RecognitionConfig {
+        isRecording ? activeRecognitionConfig : recognitionConfig
+    }
+
+    func setSourceLanguageMode(_ mode: SourceLanguageMode) {
+        var config = recognitionConfig
+        config.selectSourceLanguage(mode == .automatic ? nil : config.specifiedSourceLanguage)
+        recognitionConfig = config
+    }
+
+    func selectSourceLanguage(_ languageCode: String?) {
+        var config = recognitionConfig
+        config.selectSourceLanguage(languageCode)
+        recognitionConfig = config
+    }
+
+    func selectTranslationLanguage(_ languageCode: String?) {
+        var config = recognitionConfig
+        config.selectTranslationLanguage(languageCode)
+        recognitionConfig = config
+    }
+
+    func updateRecognitionConfig(_ update: (inout RecognitionConfig) -> Void) {
+        var config = recognitionConfig
+        update(&config)
+        recognitionConfig = config
     }
 
     func restoreDefaultSegmentationSettings() {

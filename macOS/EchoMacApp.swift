@@ -87,7 +87,12 @@ struct ContentView: View {
                 .help(model.isAlwaysOnTop ? "取消置顶" : "置顶窗口")
             }
 
-            SynchronizedTranscriptView(entries: model.entries, recognitionConfig: model.recognitionConfig,
+            SynchronizedTranscriptView(entries: model.entries,
+                recognitionConfig: model.recognitionConfig,
+                activeRecognitionConfig: model.effectiveRecognitionConfig,
+                isRecording: model.isRecording,
+                onSelectSourceLanguage: model.selectSourceLanguage,
+                onSelectTranslationLanguage: model.selectTranslationLanguage,
                 suggestedIDs: Set(model.correctionStatuses.keys), onEdit: { editingSubtitle = $0 })
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -381,7 +386,7 @@ struct SettingsView: View {
                 settingsSection("识别与翻译") {
                     Picker("识别模式", selection: Binding(
                         get: { model.recognitionConfig.sourceLanguageMode },
-                        set: { model.recognitionConfig.sourceLanguageMode = $0 }
+                        set: { model.setSourceLanguageMode($0) }
                     )) {
                         Text("自动识别").tag(SourceLanguageMode.automatic)
                         Text("优先语言").tag(SourceLanguageMode.specified)
@@ -389,10 +394,7 @@ struct SettingsView: View {
                     if model.recognitionConfig.sourceLanguageMode == .specified {
                         Picker("优先语言", selection: Binding(
                             get: { model.recognitionConfig.specifiedSourceLanguage },
-                            set: {
-                                model.recognitionConfig.specifiedSourceLanguage = $0
-                                model.recognitionConfig.languageHints = [$0]
-                            }
+                            set: { model.selectSourceLanguage($0) }
                         )) {
                             ForEach(LanguageOption.supported) { language in
                                 Text(language.title).tag(language.code)
@@ -400,7 +402,9 @@ struct SettingsView: View {
                         }
                         Toggle("仅识别此语言", isOn: Binding(
                             get: { model.recognitionConfig.strictLanguageRestriction },
-                            set: { model.recognitionConfig.strictLanguageRestriction = $0 }
+                            set: { enabled in
+                                model.updateRecognitionConfig { $0.strictLanguageRestriction = enabled }
+                            }
                         ))
                         Text("关闭时，优先语言只作为 Soniox 的识别提示。")
                             .font(.caption)
@@ -408,12 +412,14 @@ struct SettingsView: View {
                     }
                     Toggle("启用翻译", isOn: Binding(
                         get: { model.recognitionConfig.translationEnabled },
-                        set: { model.recognitionConfig.translationEnabled = $0 }
+                        set: { enabled in
+                            model.updateRecognitionConfig { $0.translationEnabled = enabled }
+                        }
                     ))
                     if model.recognitionConfig.translationEnabled {
                         Picker("翻译目标", selection: Binding(
                             get: { model.recognitionConfig.targetTranslationLanguage },
-                            set: { model.recognitionConfig.targetTranslationLanguage = $0 }
+                            set: { model.selectTranslationLanguage($0) }
                         )) {
                             ForEach(LanguageOption.supported) { language in
                                 Text(language.title).tag(language.code)
@@ -422,7 +428,9 @@ struct SettingsView: View {
                     }
                     Toggle("区分说话人", isOn: Binding(
                         get: { model.recognitionConfig.speakerDiarizationEnabled },
-                        set: { model.recognitionConfig.speakerDiarizationEnabled = $0 }
+                        set: { enabled in
+                            model.updateRecognitionConfig { $0.speakerDiarizationEnabled = enabled }
+                        }
                     ))
                     Text("在字幕中使用 Speaker 1、Speaker 2 等匿名编号。")
                         .font(.caption)

@@ -390,4 +390,49 @@ struct RecognitionConfig: Equatable {
     var translationEnabled = true
     var targetTranslationLanguage = "zh"
     var speakerDiarizationEnabled = true
+
+    static func load(from defaults: UserDefaults = .standard) -> RecognitionConfig {
+        let languageMode = SourceLanguageMode(
+            rawValue: defaults.string(forKey: "sourceLanguageMode") ?? SourceLanguageMode.specified.rawValue
+        ) ?? .specified
+        let specifiedLanguage = defaults.string(forKey: "specifiedSourceLanguage") ?? "en"
+        return RecognitionConfig(
+            sourceLanguageMode: languageMode,
+            specifiedSourceLanguage: specifiedLanguage,
+            languageHints: languageMode == .specified ? [specifiedLanguage] : [],
+            strictLanguageRestriction: defaults.bool(forKey: "strictLanguageRestriction"),
+            translationEnabled: defaults.object(forKey: "translationEnabled") as? Bool ?? true,
+            targetTranslationLanguage: defaults.string(forKey: "targetTranslationLanguage") ?? "zh",
+            speakerDiarizationEnabled: defaults.object(forKey: "speakerDiarizationEnabled") as? Bool ?? true
+        )
+    }
+
+    func save(to defaults: UserDefaults = .standard) {
+        defaults.set(sourceLanguageMode.rawValue, forKey: "sourceLanguageMode")
+        defaults.set(specifiedSourceLanguage, forKey: "specifiedSourceLanguage")
+        defaults.set(strictLanguageRestriction, forKey: "strictLanguageRestriction")
+        defaults.set(translationEnabled, forKey: "translationEnabled")
+        defaults.set(targetTranslationLanguage, forKey: "targetTranslationLanguage")
+        defaults.set(speakerDiarizationEnabled, forKey: "speakerDiarizationEnabled")
+    }
+
+    mutating func selectSourceLanguage(_ languageCode: String?) {
+        guard let languageCode else {
+            sourceLanguageMode = .automatic
+            languageHints = []
+            return
+        }
+        sourceLanguageMode = .specified
+        specifiedSourceLanguage = languageCode
+        languageHints = [languageCode]
+    }
+
+    mutating func selectTranslationLanguage(_ languageCode: String?) {
+        guard let languageCode else {
+            translationEnabled = false
+            return
+        }
+        targetTranslationLanguage = languageCode
+        translationEnabled = true
+    }
 }

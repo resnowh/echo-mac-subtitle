@@ -3,6 +3,7 @@ import Foundation
 enum CorrectionChecks {
     static func run() throws {
         try segmentationChecks()
+        try recognitionConfigChecks()
         var entry = SubtitleEntry(start: 1, end: 3, english: "material", chinese: "材料", speaker: "Speaker 1", language: "en")
         let original = entry
         entry.edit(source: "maturity day", translation: "材料")
@@ -69,6 +70,77 @@ enum CorrectionChecks {
             catch { /* Expected rejection; never modify the transcript. */ }
         }
         print("PASS: manual field locks, late recognition, undo/revision guard, legacy/new archive, corrected SRT, structured AI response validation")
+    }
+
+    private static func recognitionConfigChecks() throws {
+        let suiteName = "EchoRecognitionConfigChecks.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let config = RecognitionConfig.load(from: defaults)
+        precondition(config.sourceLanguageMode == .specified && config.specifiedSourceLanguage == "en")
+        precondition(config.translationEnabled && config.targetTranslationLanguage == "zh")
+
+        // English -> Simplified Chinese
+        var englishToChinese = config
+        englishToChinese.selectSourceLanguage("en")
+        englishToChinese.selectTranslationLanguage("zh")
+        var request = SonioxRequestBuilder.makeRequest(apiKey: "fixture", recognition: englishToChinese)
+        precondition((request["language_hints"] as? [String]) == ["en"])
+        precondition((request["translation"] as? [String: String])?["target_language"] == "zh")
+
+        // Japanese -> Simplified Chinese
+        var japaneseToChinese = config
+        japaneseToChinese.selectSourceLanguage("ja")
+        japaneseToChinese.selectTranslationLanguage("zh")
+        request = SonioxRequestBuilder.makeRequest(apiKey: "fixture", recognition: japaneseToChinese)
+        precondition((request["language_hints"] as? [String]) == ["ja"])
+        precondition((request["translation"] as? [String: String])?["target_language"] == "zh")
+
+        // English -> Japanese
+        var englishToJapanese = config
+        englishToJapanese.selectSourceLanguage("en")
+        englishToJapanese.selectTranslationLanguage("ja")
+        request = SonioxRequestBuilder.makeRequest(apiKey: "fixture", recognition: englishToJapanese)
+        precondition((request["language_hints"] as? [String]) == ["en"])
+        precondition((request["translation"] as? [String: String])?["target_language"] == "ja")
+
+        // Automatic recognition does not inherit or mutate a detected language.
+        var automatic = englishToChinese
+        automatic.selectSourceLanguage(nil)
+        request = SonioxRequestBuilder.makeRequest(apiKey: "fixture", recognition: automatic)
+        precondition(automatic.sourceLanguageMode == .automatic && automatic.languageHints.isEmpty)
+        precondition(request["language_hints"] == nil && request["language_hints_strict"] == nil)
+        automatic.save(to: defaults)
+        let persistedAutomatic = RecognitionConfig.load(from: defaults)
+        precondition(persistedAutomatic.sourceLanguageMode == .automatic)
+        precondition(persistedAutomatic.languageHints.isEmpty)
+
+        // "No translation" preserves the saved target and removes only the
+        // next-session translation request.
+        var noTranslation = englishToChinese
+        noTranslation.selectTranslationLanguage(nil)
+        precondition(!noTranslation.translationEnabled && noTranslation.targetTranslationLanguage == "zh")
+        request = SonioxRequestBuilder.makeRequest(apiKey: "fixture", recognition: noTranslation)
+        precondition(request["translation"] == nil)
+
+        // A value snapshot stays fixed for the active session while the next
+        // session can use a newly selected language combination.
+        let activeSnapshot = englishToChinese
+        var pending = englishToChinese
+        pending.selectSourceLanguage("ja")
+        pending.selectTranslationLanguage("en")
+        let activeRequest = SonioxRequestBuilder.makeRequest(apiKey: "fixture", recognition: activeSnapshot)
+        let nextRequest = SonioxRequestBuilder.makeRequest(apiKey: "fixture", recognition: pending)
+        precondition((activeRequest["language_hints"] as? [String]) == ["en"])
+        precondition((activeRequest["translation"] as? [String: String])?["target_language"] == "zh")
+        precondition((nextRequest["language_hints"] as? [String]) == ["ja"])
+        precondition((nextRequest["translation"] as? [String: String])?["target_language"] == "en")
+
+        noTranslation.save(to: defaults)
+        let reloaded = RecognitionConfig.load(from: defaults)
+        precondition(reloaded == noTranslation, "Recognition settings must persist and be shared by both UI entry points")
+        print("PASS: recognition language combinations, automatic/no-translation requests, session snapshot, and UserDefaults persistence")
     }
 
     private static func segmentationChecks() throws {
