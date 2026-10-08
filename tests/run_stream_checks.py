@@ -59,6 +59,7 @@ with tempfile.TemporaryDirectory(prefix="echo-stream-checks-") as folder:
                     str(root / "macOS/Audio/PCM16AudioPipeline.swift"),
                     str(root / "macOS/Services/SonioxWebSocketClient.swift"),
                     str(root / "macOS/Models/TranscriptModels.swift"),
+                    str(root / "macOS/Services/SonioxRequestBuilder.swift"),
                     str(root / "macOS/Services/DeepSeekService.swift"),
                     str(root / "macOS/Services/SRTExporter.swift"),
                     str(root / "tests/CorrectionChecks.swift"),

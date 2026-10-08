@@ -2,6 +2,7 @@ import Foundation
 
 enum CorrectionChecks {
     static func run() throws {
+        try segmentationChecks()
         var entry = SubtitleEntry(start: 1, end: 3, english: "material", chinese: "材料", speaker: "Speaker 1", language: "en")
         let original = entry
         entry.edit(source: "maturity day", translation: "材料")
@@ -68,5 +69,137 @@ enum CorrectionChecks {
             catch { /* Expected rejection; never modify the transcript. */ }
         }
         print("PASS: manual field locks, late recognition, undo/revision guard, legacy/new archive, corrected SRT, structured AI response validation")
+    }
+
+    private static func segmentationChecks() throws {
+        let defaults = TranscriptSegmentationConfig.defaults
+        precondition(defaults.sonioxMaxEndpointDelayMilliseconds == 3_000)
+        precondition(defaults.sonioxEndpointSensitivity == -0.3)
+        precondition(defaults.sonioxEndpointLatencyAdjustmentLevel == 0)
+        precondition(defaults.localSilenceFallbackEnabled && defaults.localSilenceThresholdSeconds == 4.5)
+        precondition(defaults.localSilenceMinimumWordCount == 5)
+        precondition(defaults.longSegmentFallbackEnabled && defaults.longSegmentWordThreshold == 80)
+        precondition(defaults.longSegmentDurationThresholdSeconds == 90)
+
+        let words5 = "one two three four five"
+        precondition(TranscriptSegmentationPolicy.trigger(text: words5, elapsed: 1, quiet: 4.4, config: defaults) == nil)
+        precondition(TranscriptSegmentationPolicy.trigger(text: words5, elapsed: 1, quiet: 4.5, config: defaults) == .silence)
+        precondition(TranscriptSegmentationPolicy.trigger(text: "one two three four", elapsed: 1, quiet: 10, config: defaults) == nil)
+        precondition(TranscriptSegmentationPolicy.trigger(text: "...", elapsed: 1, quiet: 0, config: defaults) == nil)
+
+        let words80 = (0..<80).map { "word\($0)" }.joined(separator: " ")
+        precondition(TranscriptSegmentationPolicy.trigger(text: words80, elapsed: 89.9, quiet: 0, config: defaults) == nil)
+        precondition(TranscriptSegmentationPolicy.trigger(text: words80, elapsed: 90, quiet: 0, config: defaults) == .longSegment)
+        let words79 = (0..<79).map { "word\($0)" }.joined(separator: " ")
+        precondition(TranscriptSegmentationPolicy.trigger(text: words79, elapsed: 600, quiet: 0, config: defaults) == nil)
+
+        var localOnlyDisabled = defaults
+        localOnlyDisabled.localSilenceFallbackEnabled = false
+        precondition(TranscriptSegmentationPolicy.trigger(text: words5, elapsed: 1, quiet: 20, config: localOnlyDisabled) == nil)
+        var longOnlyDisabled = defaults
+        longOnlyDisabled.longSegmentFallbackEnabled = false
+        precondition(TranscriptSegmentationPolicy.trigger(text: words80, elapsed: 600, quiet: 0, config: longOnlyDisabled) == nil)
+        precondition(TranscriptSegmentationPolicy.trigger(text: words5, elapsed: 1, quiet: 4.5, config: longOnlyDisabled) == .silence)
+
+        // Endpoint markers remain authoritative even when local fallbacks are
+        // disabled and the translation for this entry has not arrived yet.
+        var bothDisabled = defaults
+        bothDisabled.localSilenceFallbackEnabled = false
+        bothDisabled.longSegmentFallbackEnabled = false
+        precondition(TranscriptSegmentationPolicy.trigger(
+            text: words5,
+            elapsed: 0,
+            quiet: 0,
+            config: bothDisabled,
+            endpointReached: true,
+            translationEnabled: true,
+            translationReady: false
+        ) == .endpoint)
+        precondition(TranscriptSegmentationPolicy.trigger(
+            text: words5,
+            elapsed: 1,
+            quiet: 20,
+            config: defaults,
+            translationEnabled: true,
+            translationReady: false
+        ) == nil)
+        precondition(TranscriptSegmentationPolicy.trigger(
+            text: words5,
+            elapsed: 1,
+            quiet: 4.5,
+            config: defaults,
+            translationEnabled: true,
+            translationReady: true
+        ) == .silence)
+
+        let bounds = TranscriptSegmentationConfig(
+            sonioxMaxEndpointDelayMilliseconds: 500,
+            sonioxEndpointSensitivity: -1,
+            sonioxEndpointLatencyAdjustmentLevel: 3,
+            localSilenceThresholdSeconds: 0.5,
+            localSilenceMinimumWordCount: 100,
+            longSegmentWordThreshold: 1_000,
+            longSegmentDurationThresholdSeconds: 600
+        )
+        precondition(bounds.sonioxMaxEndpointDelayMilliseconds == 500 && bounds.sonioxEndpointSensitivity == -1)
+        precondition(bounds.sonioxEndpointLatencyAdjustmentLevel == 3 && bounds.localSilenceThresholdSeconds == 0.5)
+        precondition(bounds.localSilenceMinimumWordCount == 100 && bounds.longSegmentWordThreshold == 1_000)
+        precondition(bounds.longSegmentDurationThresholdSeconds == 600)
+
+        let invalid = TranscriptSegmentationConfig(
+            sonioxMaxEndpointDelayMilliseconds: 499,
+            sonioxEndpointSensitivity: .nan,
+            sonioxEndpointLatencyAdjustmentLevel: 4,
+            localSilenceThresholdSeconds: .infinity,
+            localSilenceMinimumWordCount: 101,
+            longSegmentWordThreshold: 9,
+            longSegmentDurationThresholdSeconds: 601
+        )
+        precondition(invalid == defaults, "Invalid values must fall back safely")
+
+        let suiteName = "EchoSegmentationChecks.\(UUID().uuidString)"
+        let userDefaults = UserDefaults(suiteName: suiteName)!
+        defer { userDefaults.removePersistentDomain(forName: suiteName) }
+        precondition(TranscriptSegmentationConfig.load(from: userDefaults) == defaults)
+        let saved = TranscriptSegmentationConfig(
+            sonioxMaxEndpointDelayMilliseconds: 1_750,
+            sonioxEndpointSensitivity: 0.4,
+            sonioxEndpointLatencyAdjustmentLevel: 2,
+            localSilenceThresholdSeconds: 6.5,
+            localSilenceMinimumWordCount: 8,
+            longSegmentWordThreshold: 120,
+            longSegmentDurationThresholdSeconds: 120
+        )
+        saved.save(to: userDefaults)
+        precondition(TranscriptSegmentationConfig.load(from: userDefaults) == saved)
+        let outOfRangeJSON = Data("""
+        {"sonioxMaxEndpointDelayMilliseconds":499,"sonioxEndpointSensitivity":0.2}
+        """.utf8)
+        userDefaults.set(outOfRangeJSON, forKey: TranscriptSegmentationConfig.userDefaultsKey)
+        let repaired = TranscriptSegmentationConfig.load(from: userDefaults)
+        precondition(repaired.sonioxMaxEndpointDelayMilliseconds == defaults.sonioxMaxEndpointDelayMilliseconds)
+        precondition(repaired.sonioxEndpointSensitivity == 0.2)
+        let nonFiniteJSON = Data("""
+        {"sonioxEndpointSensitivity":"NaN","localSilenceThresholdSeconds":"Infinity"}
+        """.utf8)
+        userDefaults.set(nonFiniteJSON, forKey: TranscriptSegmentationConfig.userDefaultsKey)
+        precondition(TranscriptSegmentationConfig.load(from: userDefaults) == defaults)
+        userDefaults.set(Data("{invalid".utf8), forKey: TranscriptSegmentationConfig.userDefaultsKey)
+        precondition(TranscriptSegmentationConfig.load(from: userDefaults) == defaults)
+
+        let request = SonioxRequestBuilder.makeRequest(
+            apiKey: "fixture-only",
+            recognition: RecognitionConfig(),
+            segmentation: saved
+        )
+        precondition(request["enable_endpoint_detection"] as? Bool == true)
+        precondition(request["max_endpoint_delay_ms"] as? Int == 1_750)
+        precondition(request["endpoint_sensitivity"] as? Double == 0.4)
+        precondition(request["endpoint_latency_adjustment_level"] as? Int == 2)
+        var conflictingBase: [String: Any] = ["max_endpoint_delay_ms": 3_000, "endpoint_sensitivity": -0.3]
+        conflictingBase = SonioxRequestBuilder.applying(RecognitionConfig(), to: conflictingBase, segmentation: saved)
+        precondition(conflictingBase["max_endpoint_delay_ms"] as? Int == 1_750)
+        precondition(conflictingBase["endpoint_sensitivity"] as? Double == 0.4)
+        print("PASS: segmentation triggers, endpoint priority, translation wait, defaults/bounds, UserDefaults roundtrip, Soniox request settings")
     }
 }

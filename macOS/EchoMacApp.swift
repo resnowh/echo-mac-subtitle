@@ -429,6 +429,79 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
 
+                settingsSection("字幕分段") {
+                    segmentationSlider(
+                        "Soniox 最大端点延迟",
+                        value: integerSliderBinding(\.sonioxMaxEndpointDelayMilliseconds),
+                        range: 500...3_000,
+                        step: 50,
+                        valueText: "\(model.transcriptSegmentationConfig.sonioxMaxEndpointDelayMilliseconds) ms",
+                        explanation: "讲话停止后等待服务端确认端点的上限。"
+                    )
+                    segmentationSlider(
+                        "Soniox 端点灵敏度",
+                        value: segmentationBinding(\.sonioxEndpointSensitivity),
+                        range: -1...1,
+                        step: 0.1,
+                        valueText: String(format: "%.1f", model.transcriptSegmentationConfig.sonioxEndpointSensitivity),
+                        explanation: "调整服务端判断语义端点的灵敏度。"
+                    )
+                    segmentationStepper(
+                        "Soniox 延迟调整等级",
+                        value: segmentationBinding(\.sonioxEndpointLatencyAdjustmentLevel),
+                        range: 0...3,
+                        unit: "级",
+                        explanation: "Soniox v5 的端点延迟调整参数。"
+                    )
+
+                    Toggle("启用本地静音兜底", isOn: segmentationBinding(\.localSilenceFallbackEnabled))
+                    segmentationSlider(
+                        "静音阈值",
+                        value: segmentationBinding(\.localSilenceThresholdSeconds),
+                        range: 0.5...20,
+                        step: 0.5,
+                        valueText: String(format: "%.1f 秒", model.transcriptSegmentationConfig.localSilenceThresholdSeconds),
+                        explanation: "连续无新识别内容达到此时长，且词数达标时分段。"
+                    )
+                    .disabled(!model.transcriptSegmentationConfig.localSilenceFallbackEnabled)
+                    segmentationStepper(
+                        "静音兜底最少词数",
+                        value: segmentationBinding(\.localSilenceMinimumWordCount),
+                        range: 1...100,
+                        unit: "词",
+                        explanation: "避免短语或短暂停顿造成过度分段。"
+                    )
+                    .disabled(!model.transcriptSegmentationConfig.localSilenceFallbackEnabled)
+
+                    Toggle("启用超长段落兜底", isOn: segmentationBinding(\.longSegmentFallbackEnabled))
+                    segmentationStepper(
+                        "长段兜底词数门槛",
+                        value: segmentationBinding(\.longSegmentWordThreshold),
+                        range: 10...1_000,
+                        unit: "词",
+                        explanation: "必须同时达到词数和时长门槛才会分段。"
+                    )
+                    .disabled(!model.transcriptSegmentationConfig.longSegmentFallbackEnabled)
+                    segmentationSlider(
+                        "长段兜底时长门槛",
+                        value: segmentationBinding(\.longSegmentDurationThresholdSeconds),
+                        range: 5...600,
+                        step: 1,
+                        valueText: "\(Int(model.transcriptSegmentationConfig.longSegmentDurationThresholdSeconds.rounded())) 秒",
+                        explanation: "与长段词数门槛同时满足后触发。"
+                    )
+                    .disabled(!model.transcriptSegmentationConfig.longSegmentFallbackEnabled)
+
+                    Text("所有修改会立即保存在本机，并在下一次创建 Soniox 会话时生效；当前录音连接和参数保持不变。睡眠唤醒后新建的会话使用当时保存的设置。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("Soniox 端点延迟是讲话停止后的等待上限，不是单条字幕的最大时长。本地兜底也不保证严格的最大长度；设置较激进可能让分段变碎，并影响识别准确性。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button("恢复默认值") { model.restoreDefaultSegmentationSettings() }
+                        .buttonStyle(.borderless)
+                }
+
                 settingsSection("服务") {
                     SecureField("Soniox API Key", text: $model.sonioxAPIKey)
                         .textFieldStyle(.roundedBorder)
@@ -477,6 +550,67 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title).font(.headline)
             content()
+        }
+    }
+
+    private func segmentationBinding<Value>(_ keyPath: WritableKeyPath<TranscriptSegmentationConfig, Value>) -> Binding<Value> {
+        Binding(
+            get: { model.transcriptSegmentationConfig[keyPath: keyPath] },
+            set: { newValue in
+                var config = model.transcriptSegmentationConfig
+                config[keyPath: keyPath] = newValue
+                model.transcriptSegmentationConfig = config
+            }
+        )
+    }
+
+    private func integerSliderBinding(_ keyPath: WritableKeyPath<TranscriptSegmentationConfig, Int>) -> Binding<Double> {
+        Binding(
+            get: { Double(model.transcriptSegmentationConfig[keyPath: keyPath]) },
+            set: { newValue in
+                var config = model.transcriptSegmentationConfig
+                config[keyPath: keyPath] = Int(newValue.rounded())
+                model.transcriptSegmentationConfig = config
+            }
+        )
+    }
+
+    private func segmentationSlider(
+        _ title: String,
+        value: Binding<Double>,
+        range: ClosedRange<Double>,
+        step: Double,
+        valueText: String,
+        explanation: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(title)
+                Spacer(minLength: 8)
+                Text(valueText).monospacedDigit().foregroundStyle(.secondary)
+            }
+            Slider(value: value, in: range, step: step)
+            Text(explanation).font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private func segmentationStepper(
+        _ title: String,
+        value: Binding<Int>,
+        range: ClosedRange<Int>,
+        unit: String,
+        explanation: String
+    ) -> some View {
+        HStack(alignment: .center, spacing: 8) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                Text(explanation).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 4)
+            Stepper(value: value, in: range) {
+                Text("\(value.wrappedValue) \(unit)").monospacedDigit()
+            }
+            .fixedSize()
         }
     }
 }

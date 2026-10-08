@@ -1,11 +1,17 @@
 import Foundation
 
 enum SonioxRequestBuilder {
-    static func applying(_ recognition: RecognitionConfig, to base: [String: Any]) -> [String: Any] {
+    static func applying(
+        _ recognition: RecognitionConfig,
+        to base: [String: Any],
+        segmentation: TranscriptSegmentationConfig = .defaults
+    ) -> [String: Any] {
         var request = base
-        // Prefer Soniox's semantic endpoint over punctuation/short gaps.
-        request["max_endpoint_delay_ms"] = 3_000
-        request["endpoint_sensitivity"] = -0.3
+        let segmentation = segmentation.validated()
+        request["enable_endpoint_detection"] = true
+        request["max_endpoint_delay_ms"] = segmentation.sonioxMaxEndpointDelayMilliseconds
+        request["endpoint_sensitivity"] = segmentation.sonioxEndpointSensitivity
+        request["endpoint_latency_adjustment_level"] = segmentation.sonioxEndpointLatencyAdjustmentLevel
         request["enable_speaker_diarization"] = recognition.speakerDiarizationEnabled
         request["enable_language_identification"] = true
         if recognition.sourceLanguageMode == .specified {
@@ -33,6 +39,7 @@ enum SonioxRequestBuilder {
         sampleRate: Int = 16_000,
         channels: Int = 1,
         recognition: RecognitionConfig,
+        segmentation: TranscriptSegmentationConfig = .defaults,
         context: [String: Any] = [:]
     ) -> [String: Any] {
         var request: [String: Any] = [
@@ -40,28 +47,9 @@ enum SonioxRequestBuilder {
             "model": model,
             "audio_format": audioFormat,
             "sample_rate": sampleRate,
-            "num_channels": channels,
-            "enable_endpoint_detection": true,
-            "max_endpoint_delay_ms": 3_000,
-            "endpoint_sensitivity": -0.3,
-            "enable_speaker_diarization": recognition.speakerDiarizationEnabled,
-            "enable_language_identification": true
+            "num_channels": channels
         ]
-
-        if recognition.sourceLanguageMode == .specified {
-            request["language_hints"] = [recognition.specifiedSourceLanguage]
-            request["language_hints_strict"] = recognition.strictLanguageRestriction
-        } else if !recognition.languageHints.isEmpty {
-            request["language_hints"] = recognition.languageHints
-        }
-
-        if recognition.translationEnabled {
-            request["translation"] = [
-                "type": "one_way",
-                "target_language": recognition.targetTranslationLanguage
-            ]
-        }
         if !context.isEmpty { request["context"] = context }
-        return request
+        return applying(recognition, to: request, segmentation: segmentation)
     }
 }

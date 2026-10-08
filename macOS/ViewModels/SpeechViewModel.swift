@@ -41,6 +41,9 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     @Published var isSummaryEnabled: Bool
     @Published var deepSeekAPIKey: String
     @Published var recognitionConfig: RecognitionConfig
+    @Published var transcriptSegmentationConfig: TranscriptSegmentationConfig {
+        didSet { transcriptSegmentationConfig.save() }
+    }
     @Published var summaryText = ""
     @Published var summaryStatus = ""
     @Published private(set) var archives: [TranscriptArchive] = []
@@ -72,6 +75,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     private let sonioxClient = SonioxWebSocketClient()
     private let lifecycleObserver = MacLifecycleObserver()
     private var lifecycleState = LifecycleRecoveryState()
+    private var activeSegmentationConfig = TranscriptSegmentationConfig.defaults
     private var wakeRecoveryWorkItem: DispatchWorkItem?
     private var captureRecoveryWorkItem: DispatchWorkItem?
     private var microphoneStartupWorkItem: DispatchWorkItem?
@@ -142,6 +146,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         inputMode = AudioInputMode(rawValue: savedInputMode) ?? .microphone
         isSummaryEnabled = UserDefaults.standard.bool(forKey: "aiSummaryEnabled")
         deepSeekAPIKey = UserDefaults.standard.string(forKey: "deepSeekAPIKey") ?? ""
+        transcriptSegmentationConfig = TranscriptSegmentationConfig.load()
         let languageMode = SourceLanguageMode(rawValue: UserDefaults.standard.string(forKey: "sourceLanguageMode") ?? "specified") ?? .specified
         let specifiedLanguage = UserDefaults.standard.string(forKey: "specifiedSourceLanguage") ?? "en"
         let targetLanguage = UserDefaults.standard.string(forKey: "targetTranslationLanguage") ?? "zh"
@@ -472,6 +477,10 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
 
     private func beginCapture(apiKey: String) {
         do {
+            // Settings edited during an active recording are persisted for the
+            // next session; this immutable value drives this session's socket
+            // and local fallback, including its lifecycle recoveries.
+            activeSegmentationConfig = transcriptSegmentationConfig.validated()
             prepareArchiveForRecording()
             guard let targetFormat = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16_000, channels: 1, interleaved: true) else {
                 throw NSError(domain: "Echo", code: 4, userInfo: [NSLocalizedDescriptionKey: "无法准备 Soniox 音频格式。"])
@@ -967,9 +976,6 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
             "language_hints_strict": recognitionConfig.strictLanguageRestriction,
             "enable_language_identification": true,
             "enable_speaker_diarization": recognitionConfig.speakerDiarizationEnabled,
-            "enable_endpoint_detection": true,
-            "max_endpoint_delay_ms": 3_000,
-            "endpoint_sensitivity": -0.3,
             "context": [
                 "general": [
                     ["key": "domain", "value": "economics and finance"],
@@ -1064,7 +1070,11 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
             context["terms"] = (context["terms"] as? [String] ?? []) + terms
             config["context"] = context
         }
-        config = SonioxRequestBuilder.applying(recognitionConfig, to: config)
+        config = SonioxRequestBuilder.applying(
+            recognitionConfig,
+            to: config,
+            segmentation: activeSegmentationConfig
+        )
         do {
             let data = try JSONSerialization.data(withJSONObject: config)
             let json = String(decoding: data, as: UTF8.self)
@@ -1322,7 +1332,16 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
             ensureCurrentEntry()
             updateCurrentEntry()
         }
-        if reachedEndpoint {
+        let endpointTrigger = TranscriptSegmentationPolicy.trigger(
+            text: finalEnglish + partialEnglish,
+            elapsed: 0,
+            quiet: 0,
+            config: activeSegmentationConfig,
+            endpointReached: reachedEndpoint,
+            translationEnabled: recognitionConfig.translationEnabled,
+            translationReady: !(finalChinese + partialChinese).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        )
+        if endpointTrigger == .endpoint {
             finalizeCurrentEntry()
             saveCurrentSessionFile()
         }
@@ -1332,16 +1351,19 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         guard isRecording, currentEntryID != nil else { return }
         let text = (finalEnglish + partialEnglish).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        if recognitionConfig.translationEnabled {
-            let translation = (finalChinese + partialChinese).trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !translation.isEmpty else { return }
-        }
-
         let elapsed = elapsedSinceSessionStart - (currentSourceStart ?? elapsedSinceSessionStart)
         let quiet = lastTokenReceivedAt.map { Date().timeIntervalSince($0) } ?? 0
         // Prefer Soniox's semantic <end>. This is only a safety fallback when
         // endpoint tokens are absent: don't split at punctuation or short pauses.
-        guard TranscriptSegmentationPolicy.shouldFinalize(text: text, elapsed: elapsed, quiet: quiet) else { return }
+        let translationReady = !(finalChinese + partialChinese).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        guard TranscriptSegmentationPolicy.trigger(
+            text: text,
+            elapsed: elapsed,
+            quiet: quiet,
+            config: activeSegmentationConfig,
+            translationEnabled: recognitionConfig.translationEnabled,
+            translationReady: translationReady
+        ) != nil else { return }
         finalizeCurrentEntry()
         saveCurrentSessionFile()
     }
@@ -1891,6 +1913,10 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         UserDefaults.standard.set(recognitionConfig.translationEnabled, forKey: "translationEnabled")
         UserDefaults.standard.set(recognitionConfig.targetTranslationLanguage, forKey: "targetTranslationLanguage")
         UserDefaults.standard.set(recognitionConfig.speakerDiarizationEnabled, forKey: "speakerDiarizationEnabled")
+    }
+
+    func restoreDefaultSegmentationSettings() {
+        transcriptSegmentationConfig = .defaults
     }
 
     func generateAISummary() {
