@@ -1,2 +1,8 @@
 .DS_Store
 macOS/**/xcuserdata/
+*.p12
+*.p8
+*.mobileprovision
+*.dmg
+*.keychain-db
+release-artifacts/
