@@ -423,196 +423,258 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage("themeMode") private var themeModeRaw = AppThemeMode.dark.rawValue
 
+    private enum SettingsTab: String, CaseIterable, Identifiable {
+        case general
+        case recognition
+        case segmentation
+        case services
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .general: return "常规"
+            case .recognition: return "识别"
+            case .segmentation: return "分段"
+            case .services: return "AI 服务"
+            }
+        }
+    }
+
+    @State private var selectedTab: SettingsTab = .general
+
     var body: some View {
-        ScrollView(.vertical) {
-            VStack(alignment: .leading, spacing: 18) {
-                HStack {
-                    Text("设置").font(.title2.weight(.semibold))
-                    Spacer()
-                    Button("完成") {
-                        model.saveAPIKey()
-                        model.saveSummarySettings()
-                        model.saveRecognitionSettings()
-                        dismiss()
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("设置").font(.title2.weight(.semibold))
+                Spacer()
+                Button("完成") {
+                    model.saveAPIKey()
+                    model.saveSummarySettings()
+                    model.saveRecognitionSettings()
+                    dismiss()
+                }
+            }
+
+            Picker("设置分类", selection: $selectedTab) {
+                ForEach(SettingsTab.allCases) { tab in
+                    Text(tab.title).tag(tab)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+
+            Divider()
+
+            ScrollView(.vertical) {
+                VStack(alignment: .leading, spacing: 18) {
+                    switch selectedTab {
+                    case .general:
+                        generalSettings
+                    case .recognition:
+                        recognitionSettings
+                    case .segmentation:
+                        segmentationSettings
+                    case .services:
+                        serviceSettings
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 4)
+            }
+            .id(selectedTab)
+        }
+        .padding(24)
+        .frame(width: 520, height: 560)
+    }
 
-                settingsSection("常规") {
-                    Picker("主题", selection: $themeModeRaw) {
-                        ForEach(AppThemeMode.allCases) { mode in
-                            Text(mode.title).tag(mode.rawValue)
-                        }
+    private var generalSettings: some View {
+        VStack(alignment: .leading, spacing: 18) {
+        settingsSection("常规") {
+            Picker("主题", selection: $themeModeRaw) {
+                ForEach(AppThemeMode.allCases) { mode in
+                    Text(mode.title).tag(mode.rawValue)
+                }
+            }
+        }
+
+        settingsSection("文件") {
+            Text("文字稿保存位置")
+                .font(.subheadline.weight(.semibold))
+            Text(model.transcriptFolderPath)
+                .font(.callout.monospaced())
+                .textSelection(.enabled)
+            Text("每次停止录音后自动保存 .srt 文件；默认不保存音频。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+
+        Text("输入源可在主界面切换；捕获电脑音频需要在系统设置中允许 Echo 使用“屏幕与系统音频录制”。")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private var recognitionSettings: some View {
+        VStack(alignment: .leading, spacing: 18) {
+        settingsSection("识别与翻译") {
+            Picker("识别模式", selection: Binding(
+                get: { model.recognitionConfig.sourceLanguageMode },
+                set: { model.setSourceLanguageMode($0) }
+            )) {
+                Text("自动识别").tag(SourceLanguageMode.automatic)
+                Text("优先语言").tag(SourceLanguageMode.specified)
+            }
+            if model.recognitionConfig.sourceLanguageMode == .specified {
+                Picker("优先语言", selection: Binding(
+                    get: { model.recognitionConfig.specifiedSourceLanguage },
+                    set: { model.selectSourceLanguage($0) }
+                )) {
+                    ForEach(LanguageOption.supported) { language in
+                        Text(language.title).tag(language.code)
                     }
                 }
-
-                settingsSection("识别与翻译") {
-                    Picker("识别模式", selection: Binding(
-                        get: { model.recognitionConfig.sourceLanguageMode },
-                        set: { model.setSourceLanguageMode($0) }
-                    )) {
-                        Text("自动识别").tag(SourceLanguageMode.automatic)
-                        Text("优先语言").tag(SourceLanguageMode.specified)
+                Toggle("仅识别此语言", isOn: Binding(
+                    get: { model.recognitionConfig.strictLanguageRestriction },
+                    set: { enabled in
+                        model.updateRecognitionConfig { $0.strictLanguageRestriction = enabled }
                     }
-                    if model.recognitionConfig.sourceLanguageMode == .specified {
-                        Picker("优先语言", selection: Binding(
-                            get: { model.recognitionConfig.specifiedSourceLanguage },
-                            set: { model.selectSourceLanguage($0) }
-                        )) {
-                            ForEach(LanguageOption.supported) { language in
-                                Text(language.title).tag(language.code)
-                            }
-                        }
-                        Toggle("仅识别此语言", isOn: Binding(
-                            get: { model.recognitionConfig.strictLanguageRestriction },
-                            set: { enabled in
-                                model.updateRecognitionConfig { $0.strictLanguageRestriction = enabled }
-                            }
-                        ))
-                        Text("关闭时，优先语言只作为 Soniox 的识别提示。")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Toggle("启用翻译", isOn: Binding(
-                        get: { model.recognitionConfig.translationEnabled },
-                        set: { enabled in
-                            model.updateRecognitionConfig { $0.translationEnabled = enabled }
-                        }
-                    ))
-                    if model.recognitionConfig.translationEnabled {
-                        Picker("翻译目标", selection: Binding(
-                            get: { model.recognitionConfig.targetTranslationLanguage },
-                            set: { model.selectTranslationLanguage($0) }
-                        )) {
-                            ForEach(LanguageOption.supported) { language in
-                                Text(language.title).tag(language.code)
-                            }
-                        }
-                    }
-                    Toggle("区分说话人", isOn: Binding(
-                        get: { model.recognitionConfig.speakerDiarizationEnabled },
-                        set: { enabled in
-                            model.updateRecognitionConfig { $0.speakerDiarizationEnabled = enabled }
-                        }
-                    ))
-                    Text("在字幕中使用 Speaker 1、Speaker 2 等匿名编号。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                settingsSection("字幕分段") {
-                    segmentationSlider(
-                        "Soniox 最大端点延迟",
-                        value: integerSliderBinding(\.sonioxMaxEndpointDelayMilliseconds),
-                        range: 500...3_000,
-                        step: 50,
-                        valueText: "\(model.transcriptSegmentationConfig.sonioxMaxEndpointDelayMilliseconds) ms",
-                        explanation: "讲话停止后等待服务端确认端点的上限。"
-                    )
-                    segmentationSlider(
-                        "Soniox 端点灵敏度",
-                        value: segmentationBinding(\.sonioxEndpointSensitivity),
-                        range: -1...1,
-                        step: 0.1,
-                        valueText: String(format: "%.1f", model.transcriptSegmentationConfig.sonioxEndpointSensitivity),
-                        explanation: "调整服务端判断语义端点的灵敏度。"
-                    )
-                    segmentationStepper(
-                        "Soniox 延迟调整等级",
-                        value: segmentationBinding(\.sonioxEndpointLatencyAdjustmentLevel),
-                        range: 0...3,
-                        unit: "级",
-                        explanation: "Soniox v5 的端点延迟调整参数。"
-                    )
-
-                    Toggle("启用本地静音兜底", isOn: segmentationBinding(\.localSilenceFallbackEnabled))
-                    segmentationSlider(
-                        "静音阈值",
-                        value: segmentationBinding(\.localSilenceThresholdSeconds),
-                        range: 0.5...20,
-                        step: 0.5,
-                        valueText: String(format: "%.1f 秒", model.transcriptSegmentationConfig.localSilenceThresholdSeconds),
-                        explanation: "连续无新识别内容达到此时长，且词数达标时分段。"
-                    )
-                    .disabled(!model.transcriptSegmentationConfig.localSilenceFallbackEnabled)
-                    segmentationStepper(
-                        "静音兜底最少词数",
-                        value: segmentationBinding(\.localSilenceMinimumWordCount),
-                        range: 1...100,
-                        unit: "词",
-                        explanation: "避免短语或短暂停顿造成过度分段。"
-                    )
-                    .disabled(!model.transcriptSegmentationConfig.localSilenceFallbackEnabled)
-
-                    Toggle("启用超长段落兜底", isOn: segmentationBinding(\.longSegmentFallbackEnabled))
-                    segmentationStepper(
-                        "长段兜底词数门槛",
-                        value: segmentationBinding(\.longSegmentWordThreshold),
-                        range: 10...1_000,
-                        unit: "词",
-                        explanation: "必须同时达到词数和时长门槛才会分段。"
-                    )
-                    .disabled(!model.transcriptSegmentationConfig.longSegmentFallbackEnabled)
-                    segmentationSlider(
-                        "长段兜底时长门槛",
-                        value: segmentationBinding(\.longSegmentDurationThresholdSeconds),
-                        range: 5...600,
-                        step: 1,
-                        valueText: "\(Int(model.transcriptSegmentationConfig.longSegmentDurationThresholdSeconds.rounded())) 秒",
-                        explanation: "与长段词数门槛同时满足后触发。"
-                    )
-                    .disabled(!model.transcriptSegmentationConfig.longSegmentFallbackEnabled)
-
-                    Text("所有修改会立即保存在本机，并在下一次创建 Soniox 会话时生效；当前录音连接和参数保持不变。睡眠唤醒后新建的会话使用当时保存的设置。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text("Soniox 端点延迟是讲话停止后的等待上限，不是单条字幕的最大时长。本地兜底也不保证严格的最大长度；设置较激进可能让分段变碎，并影响识别准确性。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Button("恢复默认值") { model.restoreDefaultSegmentationSettings() }
-                        .buttonStyle(.borderless)
-                }
-
-                settingsSection("服务") {
-                    SecureField("Soniox API Key", text: $model.sonioxAPIKey)
-                        .textFieldStyle(.roundedBorder)
-                    Text("用于实时识别和翻译，只保存在本机。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    SecureField("DeepSeek API Key（可选）", text: $model.deepSeekAPIKey)
-                        .textFieldStyle(.roundedBorder)
-                    Toggle("停止录音后自动生成 AI 总结", isOn: $model.isSummaryEnabled)
-                    Toggle("自动 AI 语境校对（仅生成建议）", isOn: $model.isAICorrectionEnabled)
-                    Text("默认关闭。开启后将已分句文字及相邻上下文发送给 DeepSeek，可能产生费用；不发送音频。建议需人工确认，不会自动覆盖文字。")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Text("课程术语（每行一个，最多使用 100 个）")
-                    TextEditor(text: $model.correctionTerms)
-                        .font(.body).frame(height: 90)
-                        .overlay(RoundedRectangle(cornerRadius: 4).stroke(.secondary.opacity(0.3)))
-                    Text("术语用于 AI 校对及下一次 Soniox 建连的识别提示，不作全局替换。")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Text("总结会把文字稿发送到云端 AI；API Key 只保存在本机。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                settingsSection("文件") {
-                    Text("文字稿保存位置")
-                        .font(.subheadline.weight(.semibold))
-                    Text(model.transcriptFolderPath)
-                        .font(.callout.monospaced())
-                        .textSelection(.enabled)
-                    Text("每次停止录音后自动保存 .srt 文件；默认不保存音频。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Text("输入源可在主界面切换；捕获电脑音频需要在系统设置中允许 Echo 使用“屏幕与系统音频录制”。")
+                ))
+                Text("关闭时，优先语言只作为 Soniox 的识别提示。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            .padding(24)
+            Toggle("启用翻译", isOn: Binding(
+                get: { model.recognitionConfig.translationEnabled },
+                set: { enabled in
+                    model.updateRecognitionConfig { $0.translationEnabled = enabled }
+                }
+            ))
+            if model.recognitionConfig.translationEnabled {
+                Picker("翻译目标", selection: Binding(
+                    get: { model.recognitionConfig.targetTranslationLanguage },
+                    set: { model.selectTranslationLanguage($0) }
+                )) {
+                    ForEach(LanguageOption.supported) { language in
+                        Text(language.title).tag(language.code)
+                    }
+                }
+            }
+            Toggle("区分说话人", isOn: Binding(
+                get: { model.recognitionConfig.speakerDiarizationEnabled },
+                set: { enabled in
+                    model.updateRecognitionConfig { $0.speakerDiarizationEnabled = enabled }
+                }
+            ))
+            Text("在字幕中使用 Speaker 1、Speaker 2 等匿名编号。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
-        .frame(width: 520, height: 560)
+        }
+    }
+
+    private var segmentationSettings: some View {
+        VStack(alignment: .leading, spacing: 18) {
+        settingsSection("字幕分段") {
+            segmentationSlider(
+                "Soniox 最大端点延迟",
+                value: integerSliderBinding(\.sonioxMaxEndpointDelayMilliseconds),
+                range: 500...3_000,
+                step: 50,
+                valueText: "\(model.transcriptSegmentationConfig.sonioxMaxEndpointDelayMilliseconds) ms",
+                explanation: "讲话停止后等待服务端确认端点的上限。"
+            )
+            segmentationSlider(
+                "Soniox 端点灵敏度",
+                value: segmentationBinding(\.sonioxEndpointSensitivity),
+                range: -1...1,
+                step: 0.1,
+                valueText: String(format: "%.1f", model.transcriptSegmentationConfig.sonioxEndpointSensitivity),
+                explanation: "调整服务端判断语义端点的灵敏度。"
+            )
+            segmentationStepper(
+                "Soniox 延迟调整等级",
+                value: segmentationBinding(\.sonioxEndpointLatencyAdjustmentLevel),
+                range: 0...3,
+                unit: "级",
+                explanation: "Soniox v5 的端点延迟调整参数。"
+            )
+
+            Toggle("启用本地静音兜底", isOn: segmentationBinding(\.localSilenceFallbackEnabled))
+            segmentationSlider(
+                "静音阈值",
+                value: segmentationBinding(\.localSilenceThresholdSeconds),
+                range: 0.5...20,
+                step: 0.5,
+                valueText: String(format: "%.1f 秒", model.transcriptSegmentationConfig.localSilenceThresholdSeconds),
+                explanation: "连续无新识别内容达到此时长，且词数达标时分段。"
+            )
+            .disabled(!model.transcriptSegmentationConfig.localSilenceFallbackEnabled)
+            segmentationStepper(
+                "静音兜底最少词数",
+                value: segmentationBinding(\.localSilenceMinimumWordCount),
+                range: 1...100,
+                unit: "词",
+                explanation: "避免短语或短暂停顿造成过度分段。"
+            )
+            .disabled(!model.transcriptSegmentationConfig.localSilenceFallbackEnabled)
+
+            Toggle("启用超长段落兜底", isOn: segmentationBinding(\.longSegmentFallbackEnabled))
+            segmentationStepper(
+                "长段兜底词数门槛",
+                value: segmentationBinding(\.longSegmentWordThreshold),
+                range: 10...1_000,
+                unit: "词",
+                explanation: "必须同时达到词数和时长门槛才会分段。"
+            )
+            .disabled(!model.transcriptSegmentationConfig.longSegmentFallbackEnabled)
+            segmentationSlider(
+                "长段兜底时长门槛",
+                value: segmentationBinding(\.longSegmentDurationThresholdSeconds),
+                range: 5...600,
+                step: 1,
+                valueText: "\(Int(model.transcriptSegmentationConfig.longSegmentDurationThresholdSeconds.rounded())) 秒",
+                explanation: "与长段词数门槛同时满足后触发。"
+            )
+            .disabled(!model.transcriptSegmentationConfig.longSegmentFallbackEnabled)
+
+            Text("所有修改会立即保存在本机，并在下一次创建 Soniox 会话时生效；当前录音连接和参数保持不变。睡眠唤醒后新建的会话使用当时保存的设置。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text("Soniox 端点延迟是讲话停止后的等待上限，不是单条字幕的最大时长。本地兜底也不保证严格的最大长度；设置较激进可能让分段变碎，并影响识别准确性。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Button("恢复默认值") { model.restoreDefaultSegmentationSettings() }
+                .buttonStyle(.borderless)
+        }
+        }
+    }
+
+    private var serviceSettings: some View {
+        VStack(alignment: .leading, spacing: 18) {
+        settingsSection("服务") {
+            SecureField("Soniox API Key", text: $model.sonioxAPIKey)
+                .textFieldStyle(.roundedBorder)
+            Text("用于实时识别和翻译，只保存在本机。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            SecureField("DeepSeek API Key（可选）", text: $model.deepSeekAPIKey)
+                .textFieldStyle(.roundedBorder)
+            Toggle("停止录音后自动生成 AI 总结", isOn: $model.isSummaryEnabled)
+            Toggle("自动 AI 语境校对（仅生成建议）", isOn: $model.isAICorrectionEnabled)
+            Text("默认关闭。开启后将已分句文字及相邻上下文发送给 DeepSeek，可能产生费用；不发送音频。建议需人工确认，不会自动覆盖文字。")
+                .font(.caption).foregroundStyle(.secondary)
+            Text("课程术语（每行一个，最多使用 100 个）")
+            TextEditor(text: $model.correctionTerms)
+                .font(.body).frame(height: 90)
+                .overlay(RoundedRectangle(cornerRadius: 4).stroke(.secondary.opacity(0.3)))
+            Text("术语用于 AI 校对及下一次 Soniox 建连的识别提示，不作全局替换。")
+                .font(.caption).foregroundStyle(.secondary)
+            Text("总结会把文字稿发送到云端 AI；API Key 只保存在本机。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        }
     }
 
     @ViewBuilder
