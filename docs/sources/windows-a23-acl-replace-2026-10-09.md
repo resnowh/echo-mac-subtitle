@@ -19,6 +19,8 @@
 
 锁定依赖还原后运行 `dotnet run --project windows/Echo.CoreChecks -c Release --no-restore`，47 项检查全部通过。该用例不依赖新增 NuGet 包，不访问 Echo 用户档案，也不改系统级 ACL。
 
+提交 `c424d331e9131cefbe02547ff588ee26c271e3e5` 的 [GitHub Actions 运行 37899690548](https://github.com/resnowh/echo-mac-subtitle/actions/runs/37899690548) 全部通过：Windows 锁定还原、47 项 CoreChecks、Release x64 构建，以及 Mac transport checks 与 Debug/Release 构建均成功。
+
 ## 边界
 
 仅验证一个临时档案的 ACL 拒绝；没有填满磁盘、修改真实存档目录权限、模拟存储硬件故障或启动 Echo。真实磁盘空间耗尽和 Echo 本体强退仍待后续验收。
