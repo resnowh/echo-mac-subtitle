@@ -12,6 +12,7 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Security.AccessControl;
 using System.Security.Principal;
+using System.Xml.Linq;
 
 if (args.Length == 4 && args[0] == "--atomic-write-crash-child")
 {
@@ -58,6 +59,25 @@ Check(savedDisplaySettings?.DisplayId == 42 && legacyOverlaySettings?.DisplayId 
     "overlay display preference round-trips while older settings remain compatible");
 overlaySettings.ShowOriginal = false; overlaySettings.ShowTranslation = false; overlaySettings.Opacity = double.NaN; overlaySettings.Validate();
 Check(overlaySettings.ShowOriginal && overlaySettings.Opacity == 1, "overlay settings retain a visible language and repair invalid persisted values");
+var translationOnlySettings = new DesktopSubtitleOverlaySettings { ShowOriginal = false, ShowTranslation = true };
+var originalOnlyState = new DesktopSubtitleOverlayState(Guid.NewGuid(), "Original", "", false, false, Guid.NewGuid(), null);
+var translatedState = originalOnlyState with { Translation = "译文", TranslationEnabled = true };
+var noLanguageSettings = new DesktopSubtitleOverlaySettings { ShowOriginal = false, ShowTranslation = false }.Validate();
+Check(DesktopSubtitleOverlayPresentation.ShouldShowOriginal(originalOnlyState, translationOnlySettings)
+    && !DesktopSubtitleOverlayPresentation.ShouldShowTranslation(originalOnlyState, translationOnlySettings)
+    && !DesktopSubtitleOverlayPresentation.ShouldShowOriginal(translatedState, translationOnlySettings)
+    && DesktopSubtitleOverlayPresentation.ShouldShowTranslation(translatedState, translationOnlySettings)
+    && DesktopSubtitleOverlayPresentation.ShouldShowOriginal(translatedState, noLanguageSettings),
+    "overlay visibility matches Mac when translation is disabled, when only translation is selected, and when both language switches are off");
+var overlayXaml = XDocument.Load(Path.Combine(AppContext.BaseDirectory, "Fixtures", "DesktopSubtitleOverlayWindow.xaml"));
+XNamespace presentationNamespace = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+XNamespace xamlNamespace = "http://schemas.microsoft.com/winfx/2006/xaml";
+var overlaySubtitleTexts = overlayXaml.Descendants(presentationNamespace + "TextBlock")
+    .Where(element => element.Attribute(xamlNamespace + "Name")?.Value is "OriginalShadow" or "OriginalText" or "TranslationShadow" or "TranslationText")
+    .ToArray();
+Check(overlaySubtitleTexts.Length == 4 && overlaySubtitleTexts.All(element =>
+        element.Attribute("MaxLines")?.Value == "2" && element.Attribute("TextTrimming")?.Value == "CharacterEllipsis"),
+    "overlay original, translation and shadow text all follow Mac two-line tail truncation");
 var overlayFeed = new DesktopSubtitleOverlayFeed();
 var overlayEntry = new Subtitle { English = "Live caption", Chinese = "实时字幕" };
 var overlayAt = DateTimeOffset.Parse("2026-10-09T00:00:00Z");

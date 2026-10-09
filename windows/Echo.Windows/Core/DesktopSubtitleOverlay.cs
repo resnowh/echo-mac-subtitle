@@ -17,6 +17,16 @@ public sealed record DesktopSubtitleOverlayState(
         !IsFinal || FinalizedAt is null || (now - FinalizedAt.Value).TotalSeconds < retentionSeconds;
 }
 
+public static class DesktopSubtitleOverlayPresentation
+{
+    public static bool ShouldShowOriginal(DesktopSubtitleOverlayState state, DesktopSubtitleOverlaySettings settings) =>
+        !string.IsNullOrWhiteSpace(state.Original)
+        && (settings.ShowOriginal || !state.TranslationEnabled || !settings.ShowTranslation);
+
+    public static bool ShouldShowTranslation(DesktopSubtitleOverlayState state, DesktopSubtitleOverlaySettings settings) =>
+        state.TranslationEnabled && settings.ShowTranslation && !string.IsNullOrWhiteSpace(state.Translation);
+}
+
 /// <summary>A read-only projection of the latest live subtitle; it owns no audio or network resources.</summary>
 public partial class DesktopSubtitleOverlayFeed : ObservableObject
 {

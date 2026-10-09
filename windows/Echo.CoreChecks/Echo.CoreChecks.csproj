@@ -13,5 +13,6 @@
  </ItemGroup>
  <ItemGroup>
   <None Update="Fixtures/*.json" CopyToOutputDirectory="PreserveNewest" />
+  <None Include="../Echo.Windows/DesktopSubtitleOverlayWindow.xaml" Link="Fixtures/DesktopSubtitleOverlayWindow.xaml" CopyToOutputDirectory="PreserveNewest" />
  </ItemGroup>
 </Project>

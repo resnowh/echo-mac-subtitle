@@ -266,9 +266,10 @@ public sealed partial class DesktopSubtitleOverlayWindow : Window
         expiryTimer.Stop();
         visibleState = state;
         bool show = state is { IsVisible: true } && state.RemainsVisible(DateTimeOffset.UtcNow, settings.RetentionSeconds);
-        bool showOriginal = show && settings.ShowOriginal && !string.IsNullOrWhiteSpace(state!.Original);
-        bool showTranslation = show && settings.ShowTranslation && state!.TranslationEnabled && !string.IsNullOrWhiteSpace(state.Translation);
-        OriginalLine.Visibility = showOriginal || (adjusting && settings.ShowOriginal) ? Visibility.Visible : Visibility.Collapsed;
+        bool showOriginal = show && DesktopSubtitleOverlayPresentation.ShouldShowOriginal(state!, settings);
+        bool showTranslation = show && DesktopSubtitleOverlayPresentation.ShouldShowTranslation(state!, settings);
+        bool originalRequired = state is { TranslationEnabled: false } || !settings.ShowTranslation;
+        OriginalLine.Visibility = showOriginal || (adjusting && (settings.ShowOriginal || originalRequired)) ? Visibility.Visible : Visibility.Collapsed;
         TranslationLine.Visibility = showTranslation || (adjusting && settings.ShowTranslation) ? Visibility.Visible : Visibility.Collapsed;
         if (show)
         {

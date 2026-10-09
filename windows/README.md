@@ -6,7 +6,7 @@
 
 - Windows 分支：`feature/windows-mac-parity`；本轮核验起始快照为 `76356a978226619f4653e2bd8344bfb9815cb040`。PR [#5](https://github.com/resnowh/echo-mac-subtitle/pull/5) 尚未合并。
 - Mac 产品基线：`origin/main` `ae0359dc90da0ccb5e526a275da1747954a49a4f`。
-- 2026-10-10：97 项本地 CoreChecks、Release x64 构建和 PR 必需 CI 检查通过。源码检查和 CI 不代表真实音频设备或完整 GUI 验收。
+- 2026-10-10：99 项本地 CoreChecks、Release x64 构建和 PR 必需 CI 检查通过。源码检查和 CI 不代表真实音频设备或完整 GUI 验收。
 - Soniox 实时模型为 `stt-rt-v5`。Windows 在 WebSocket 握手发送 Bearer API Key，配置 JSON 不重复包含密钥；Mac 当前代码仍把密钥放在起始配置中。按项目约束不改 Mac，Windows 保持官方推荐的握手鉴权。官方迁移时间与测试证据见 [A37 Soniox protocol baseline](../docs/sources/windows-a37-soniox-auth-protocol-2026-10-10.md)。
 - 正式发行尚未就绪：真实浮层/多屏/音频验收、受信任发布者签名、干净机器安装升级和隐私政策仍待完成。Soniox 官方建议客户端使用临时 Key；当前项目没有签发临时 Key 的后端，Windows 采用个人自行填写的 Key 与本机 DPAPI 存储。Android/iOS 不在当前交付范围。
 
