@@ -32,4 +32,6 @@ GitHub Actions run [`37952567838`](https://github.com/resnowh/echo-mac-subtitle/
 
 修正提交 `fdb21da` 的 GitHub Actions run [`37953208733`](https://github.com/resnowh/echo-mac-subtitle/actions/runs/37953208733) 四个 job 全部成功：Mac Archive fixture、Mac Soniox production fixture、Windows CoreChecks/Release x64、Mac Archive 回读。该提交的 PR 检查中 Mac CI、unsigned package preflight 和另一轮 Windows CI 也全部成功。Soniox 对拍基于五条固定合成响应；真实云、音频、GUI 和完整 Soniox 序列仍未覆盖。
 
+后续扩展：固定输入现增至七条响应，增加已有 row 在下一条响应切换 speaker 的分支。Windows 静态 fixture/CoreChecks 已扩至 95 项通过；新的 Mac production 输出和 Actions runtime differential 尚待运行，不沿用五响应 run 的成功结论。
+
 该结果只证明固定合成输入下的生产处理器对拍，不代表真实云响应、音频、GUI 或所有 token 序列都已验收。

@@ -1,5 +1,5 @@
 {
-  "name": "Mac response snapshot, delayed translation, language finalization, endpoint, and speaker split",
+  "name": "Mac response snapshots, delayed translation, language finalization, endpoints, and response-scoped speaker behavior",
   "source": "macOS/ViewModels/SpeechViewModel.swift: handleSonioxMessage, ensureCurrentEntry, updateCurrentEntry, finalizeCurrentEntry",
   "events": [
     {
@@ -28,6 +28,25 @@
       "expected": [
         {"english":"Meeting started.","chinese":"会议开始了。","speaker":"Speaker 5","language":"ja","start":1.0,"end":2.2},
         {"english":"First speaker.Second speaker.","chinese":"第一位。第二位。","speaker":"Speaker 2","language":"ja","start":6.0,"end":8.0}
+      ]
+    },
+    {
+      "message": {"tokens": [{"text":"Third speaker.","is_final":true,"start_ms":9000,"end_ms":10000,"speaker":"3","language":"en"},{"text":"第三位。","is_final":true,"translation_status":"translation"}]},
+      "expectedFinalizations": 2,
+      "expected": [
+        {"english":"Meeting started.","chinese":"会议开始了。","speaker":"Speaker 5","language":"ja","start":1.0,"end":2.2},
+        {"english":"First speaker.Second speaker.","chinese":"第一位。第二位。","speaker":"Speaker 2","language":"ja","start":6.0,"end":8.0},
+        {"english":"Third speaker.","chinese":"第三位。","speaker":"Speaker 3","language":"en","start":9.0,"end":10.0}
+      ]
+    },
+    {
+      "message": {"tokens": [{"text":"Fourth speaker.","is_final":true,"start_ms":10500,"end_ms":11000,"speaker":"4","language":"ja"},{"text":"第四位。","is_final":true,"translation_status":"translation"},{"text":"<end>","is_final":true}]},
+      "expectedFinalizations": 4,
+      "expected": [
+        {"english":"Meeting started.","chinese":"会议开始了。","speaker":"Speaker 5","language":"ja","start":1.0,"end":2.2},
+        {"english":"First speaker.Second speaker.","chinese":"第一位。第二位。","speaker":"Speaker 2","language":"ja","start":6.0,"end":8.0},
+        {"english":"Third speaker.","chinese":"第三位。","speaker":"Speaker 3","language":"en","start":9.0,"end":10.0},
+        {"english":"Fourth speaker.","chinese":"第四位。","speaker":"Speaker 4","language":"ja","start":10.5,"end":11.0}
       ]
     }
   ]
