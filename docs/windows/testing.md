@@ -66,4 +66,4 @@ CoreChecks 使用合成采集器与本地 WebSocket：开始话筒模式后模�
 
 ## A60 默认音频端点变化（2026-10-10）
 
-延续 A59 的合成采集器和本机 loopback WebSocket：先模拟用户切换失败并恢复话筒，再注入 Windows 默认话筒变化事件。检查默认端点重启成功、活动设备 ID 更新、状态显示已跟随、后续 PCM 继续通过原 WebSocket，连接数仍为 1。完整原始输出见 [A60 测试日志](../sources/windows-a60-default-device-change-2026-10-10/test-results.txt)。本机 CoreChecks 141 项通过；Release x64 构建 0 警告、0 错误。此测试不创建麦克风/扬声器采集器、不调用云端、不保存音频；真实 WASAPI 移除、权限拒绝、硬件断连及声学间隙仍未验收。Mac 参考源码和各文件 SHA-256、日志 SHA-256 见 [A60 底稿](../sources/windows-a60-default-device-change-2026-10-10.md)。
+延续 A59 的合成采集器和本机 loopback WebSocket：先模拟用户切换失败并恢复话筒，再注入 Windows 默认话筒变化事件。检查默认端点重启成功、活动设备 ID 更新、状态显示已跟随、后续 PCM 继续通过原 WebSocket，连接数仍为 1。完整原始输出见 [A60 测试日志](../sources/windows-a60-default-device-change-2026-10-10/test-results.txt)。本机 CoreChecks 141 项通过；Release x64 构建 0 警告、0 错误。Actions run `37991017788` 的 Mac Soniox/Archive fixture、Windows CoreChecks/Release x64 和 Mac Archive 回读全部通过。此测试不创建麦克风/扬声器采集器、不调用云端、不保存音频；真实 WASAPI 移除、权限拒绝、硬件断连及声学间隙仍未验收。Mac 参考源码和各文件 SHA-256、日志 SHA-256 见 [A60 底稿](../sources/windows-a60-default-device-change-2026-10-10.md)。

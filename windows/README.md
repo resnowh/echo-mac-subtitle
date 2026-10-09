@@ -11,7 +11,7 @@
 - A51 对齐 Mac 音源模式顺序与默认话筒；录音中可在电脑音频、话筒和混合模式间切换，复用同一 Soniox 会话，失败时按原模式回滚。当前 130 项 CoreChecks 与 Release x64 构建通过；实际 WASAPI 设备和授权恢复尚未验收，见 [A51](../docs/sources/windows-a51-live-audio-mode-switch-2026-10-10.md)。A52/A53 为字幕纠正编辑器补上可折叠修订历史和受限滚动视口；A55 加入面板内校对术语并即时保存；动态 GUI 行为仍待隔离验收，见 [A53](../docs/sources/windows-a53-correction-editor-scroll-2026-10-10.md) 和 [A55](../docs/sources/windows-a55-inline-correction-term-2026-10-10.md)。A54 复核了自动/指定识别语言请求与 Soniox 当前协议，见 [A54](../docs/sources/windows-a54-soniox-refresh-2026-10-10.md)。
 - A56 修正字幕跟随状态：区分用户滚动和字幕内容扩展，避免查看历史时被增量更新拉回末尾；134 项 CoreChecks、Release x64 构建通过。鼠标/触控板真实滚动和列表虚拟化仍待 GUI 验收，详见 [A56](../docs/sources/windows-a56-transcript-follow-2026-10-10.md)。
 - A57 保持 Key 使用 DPAPI 加密；当当前用户无法解密现存密文时，保存其他设置不会清空它。替换值仍加密保存，正常 Key 可按空字段清除；138 项 CoreChecks 和 Release x64 构建通过，见 [A57](../docs/sources/windows-a57-dpapi-secret-recovery-2026-10-10.md)。
-- A60 追加默认话筒变化的合成会话验收：模拟端点事件后采集器重启、活动端点更新，并在同一 WebSocket 上继续发送 PCM；连同 A59 失败回滚，本机 141 项 CoreChecks 和 Release x64（0 警告/错误）通过。测试没有打开音频设备；真实设备拔插与授权仍待验收，原始日志和源码基线见 [A60](../docs/sources/windows-a60-default-device-change-2026-10-10.md)。
+- A60 追加默认话筒变化的合成会话验收：模拟端点事件后采集器重启、活动端点更新，并在同一 WebSocket 上继续发送 PCM；连同 A59 失败回滚，本机 141 项 CoreChecks 和 Release x64（0 警告/错误）通过，Actions run `37991017788` 通过。测试没有打开音频设备；真实设备拔插与授权仍待验收，原始日志和源码基线见 [A60](../docs/sources/windows-a60-default-device-change-2026-10-10.md)。
 - Soniox 实时模型为 `stt-rt-v5`。Windows 在 WebSocket 握手发送 Bearer API Key，配置 JSON 不重复包含密钥；Mac 当前代码仍把密钥放在起始配置中。按项目约束不改 Mac，Windows 保持官方推荐的握手鉴权。官方迁移时间与测试证据见 [A37 Soniox protocol baseline](../docs/sources/windows-a37-soniox-auth-protocol-2026-10-10.md)。
 - 正式发行尚未就绪：真实浮层/多屏/音频验收、受信任发布者签名、干净机器安装升级和隐私政策仍待完成。Soniox 官方建议客户端使用临时 Key；当前项目没有签发临时 Key 的后端，Windows 采用个人自行填写的 Key 与本机 DPAPI 存储。Android/iOS 不在当前交付范围。
 
