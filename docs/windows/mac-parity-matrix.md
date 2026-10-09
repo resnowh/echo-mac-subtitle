@@ -14,6 +14,7 @@ Windows 来源：当前 PR 分支 `feature/windows-mac-parity`；其历史迁移
 | Windows 检查底稿 | `docs/sources/windows-*` | 保留原有构建、核心检查和签名包记录 | 历史测试结论只适用于底稿注明的代码版本 |
 | AI 总结呈现 | Mac `EchoMacApp.swift`、`TranscriptViews.swift` | A29 记录 Markdown 分块、默认展开、收起/复制与 Windows 合成验证 | 尚无 GUI 视觉或剪贴板实测 |
 | Soniox 多响应处理 | Mac `SpeechViewModel.handleSonioxMessage` 等生产路径 | A35 七响应 production differential 已通过，覆盖同响应 speaker 合并与跨响应 speaker 切分 | 固定合成输入与真实云响应仍有差别；其他 token 序列仍待覆盖 |
+| Soniox 本地静默后备计时 | Mac 在错误/finished 早退后，对每条有效转写响应更新时间，包括空 token 响应和仅端点标记响应 | Windows 现按每条非错误、非 finished 的有效响应更新时间；不要求响应含普通语音 token | 之前仅普通文本 token 会刷新 Windows 计时，空响应期间可能比 Mac 提前本地切句；A39 已修正并以四类固定 JSON 检查 | 纯逻辑与 Release 构建已验证；真实服务空响应节奏和长时间静默仍未验 |
 | 双路 PCM 混音欠载行为 | Mac `PCM16TimelineMixer` 与 Windows `AudioCapture.ReadFrame` / `AudioFrameMixer` | A36 对照发现并修正 Windows 欠载时固定双路除数导致的音量衰减；97 项 CoreChecks 与 Windows Release 构建通过 | 确定性样本检查不替代真实 WASAPI 设备、时钟漂移及长时间采集验收；Mac 源码基线和 Windows 代码版本见 A36 |
 | 浮层语言可见性与长文本 | Mac 翻译关闭时即使“显示原文”开关关闭也显示原文；每路字幕最多两行并尾部截断 | Windows 现按 Mac 规则计算可见行，原文/译文/阴影均限制两行并省略尾部 | A38 修正源码差异，并以规则和 XAML 合成检查覆盖 | 浮层实际渲染、字体裁切和透明合成仍未 GUI 验收，见 A38 |
 | Soniox WebSocket 鉴权 | Mac `SpeechViewModel.openSonioxSocket` 仍把 `api_key` 放在起始配置 JSON；Windows 在握手发送 Bearer header，并从配置 JSON 排除密钥 | Windows 按 Soniox 当前推荐方式实现；保留 Mac 当前行为，不反向降级 Windows | 功能存在但行为不同 | 本地模拟 WebSocket 检查验证 Bearer header、配置不含密钥、握手后 401/402/403/429/503/413 错误分类；官方旧方式迁移时间及源码证据见 [A37](../sources/windows-a37-soniox-auth-protocol-2026-10-10.md) |
@@ -47,7 +48,7 @@ Windows 来源：当前 PR 分支 `feature/windows-mac-parity`；其历史迁移
 
 ## 最高优先级缺口
 
-1. P0：A35 已保存 Mac 生产 Soniox handler 与 Windows TokenAssembler 的逐响应 runtime fixture 和 SHA-256，speaker 行为修正后的 GitHub CI 通过。下一步扩大合成 token 序列及边界情况；真实用户历史 Archive 仍未覆盖。
+1. P0：A35 保存了 Mac 生产 Soniox handler 与 Windows TokenAssembler 的逐响应 fixture；A39 又对齐空响应触发的静默计时。下一步扩大合成 token 序列及边界情况；真实用户历史 Archive 与云端响应仍未覆盖。
 2. P1：主界面语言菜单、滚动跟随行为、四类设置和分段配置已接入；A33 完成 12 项启动/控件 UIA smoke，但窄窗口、视觉布局、字幕滚动手感、键盘和 Narrator 仍未实测。
 3. P1：A34 补上上次使用的显示器记忆、DPI/显示器配置变化重排以及跨 DPI 拖动基线；优先完成真实透明合成、点击穿透、多屏和全屏应用验收。悬浮字幕复用同一识别会话和当前字幕状态。
 4. P2：总结面板已补齐 Mac 风格 Markdown 分块、折叠/展开和复制；继续核验自动总结状态反馈、显示条件、主题和窄窗口布局。

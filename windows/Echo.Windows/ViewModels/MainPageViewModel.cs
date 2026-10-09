@@ -31,7 +31,7 @@ public partial class MainPageViewModel : ObservableObject
     private readonly DispatcherQueueTimer checkpoint;
     private readonly DispatcherQueueTimer segmentationTimer;
     private TranscriptSegmentationSettings activeSegmentation = new();
-    private DateTimeOffset? lastTokenReceivedAt;
+    private DateTimeOffset? lastResponseReceivedAt;
     private long sessionStartedTimestamp;
     private readonly HttpClient http = new() { Timeout = TimeSpan.FromSeconds(90) };
     private readonly OrderedPersistenceQueue<Archive> saves = new(snapshot => Task.Run(() => TranscriptFiles.Save(snapshot)));
@@ -142,19 +142,11 @@ public partial class MainPageViewModel : ObservableObject
     }
     private TokenAssembler CreateAssembler(Segment target) =>
         new(target, entry => Entries.Add(entry), SubtitleFinalized);
-    private static bool HasSpeechToken(System.Text.Json.JsonElement message)
-    {
-        if (!message.TryGetProperty("tokens", out var tokens) || tokens.ValueKind != System.Text.Json.JsonValueKind.Array) return false;
-        foreach (var token in tokens.EnumerateArray())
-            if (token.TryGetProperty("text", out var value) && value.GetString() is { Length: > 0 } text
-                && text is not ("<end>" or "<fin>")) return true;
-        return false;
-    }
     private void AutoFinalizeIfNeeded()
     {
         if (!IsRecording || segment?.Entries.LastOrDefault() is not { } latest || assembler is null) return;
         double elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(sessionStartedTimestamp).TotalSeconds;
-        double quiet = lastTokenReceivedAt is { } received ? (DateTimeOffset.UtcNow - received).TotalSeconds : 0;
+        double quiet = lastResponseReceivedAt is { } received ? (DateTimeOffset.UtcNow - received).TotalSeconds : 0;
         bool translationReady = !string.IsNullOrWhiteSpace(latest.Chinese);
         if (TranscriptSegmentationPolicy.Trigger(latest.English, Math.Max(0, elapsed - latest.Start), quiet,
             activeSegmentation, translationEnabled: activeTranslationEnabled, translationReady: translationReady) is null) return;
@@ -455,7 +447,7 @@ public partial class MainPageViewModel : ObservableObject
             if (string.IsNullOrWhiteSpace(key)) throw new InvalidOperationException("请先填写并保存 Soniox API Key。");
             activeTranslationEnabled = Config.Translate;
             activeSegmentation = Config.Segmentation.Copy().Validate();
-            lastTokenReceivedAt = null;
+            lastResponseReceivedAt = null;
             sessionStartedTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
             SubtitleOverlayFeed.Clear();
             if (SelectedArchive is null) { var a = new Archive(); Archives.Insert(0, a); SelectedArchive = a; }
@@ -486,7 +478,7 @@ public partial class MainPageViewModel : ObservableObject
         current.Message += json => ui.TryEnqueue(() =>
         {
             if (!ReferenceEquals(session, current)) return;
-            if (HasSpeechToken(json)) lastTokenReceivedAt = DateTimeOffset.UtcNow;
+            if (SonioxResponseActivity.ShouldResetQuietTimer(json)) lastResponseReceivedAt = DateTimeOffset.UtcNow;
             assembler?.Apply(json);
         });
         current.Level += value => ui.TryEnqueue(() => { if (ReferenceEquals(session, current)) Level = Math.Min(100, value * 100); });
@@ -536,7 +528,7 @@ public partial class MainPageViewModel : ObservableObject
                 try
                 {
                     activeSegmentation = Config.Segmentation.Copy().Validate();
-                    sessionStartedTimestamp = System.Diagnostics.Stopwatch.GetTimestamp(); lastTokenReceivedAt = null;
+                    sessionStartedTimestamp = System.Diagnostics.Stopwatch.GetTimestamp(); lastResponseReceivedAt = null;
                     await candidate.StartAsync(Config, activeSegmentation, key, ActiveAudioMode, ActiveOutputId, ActiveInputId, cancellation.Token);
                     cancellation.Token.ThrowIfCancellationRequested();
                     if (failure is not null) throw failure;

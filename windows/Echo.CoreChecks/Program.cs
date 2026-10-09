@@ -151,6 +151,15 @@ Check(unicodeSonioxTerms.Length == 2 && StringInfo.ParseCombiningCharacters(unic
     && unicodeSonioxTerms[1] == string.Concat(Enumerable.Repeat("👩‍🏫", 80)),
     "Soniox custom terms truncate by Unicode text elements like Swift Character without splitting combining marks or ZWJ emoji");
 var policySettings = new TranscriptSegmentationSettings();
+using var emptySonioxResponse = JsonDocument.Parse("""{"tokens":[]}""");
+using var endpointOnlySonioxResponse = JsonDocument.Parse("""{"tokens":[{"text":"<end>","is_final":true}]}""");
+using var finishedSonioxResponse = JsonDocument.Parse("""{"finished":true,"tokens":[]}""");
+using var errorSonioxResponse = JsonDocument.Parse("""{"error_message":"unavailable"}""");
+Check(SonioxResponseActivity.ShouldResetQuietTimer(emptySonioxResponse.RootElement)
+    && SonioxResponseActivity.ShouldResetQuietTimer(endpointOnlySonioxResponse.RootElement)
+    && !SonioxResponseActivity.ShouldResetQuietTimer(finishedSonioxResponse.RootElement)
+    && !SonioxResponseActivity.ShouldResetQuietTimer(errorSonioxResponse.RootElement),
+    "quiet-time tracking treats empty and endpoint responses as activity like Mac, but excludes finished and error responses");
 Check(TranscriptSegmentationPolicy.Trigger("one two three four five", 1, 4.5, policySettings) == TranscriptSegmentationTrigger.Silence
     && TranscriptSegmentationPolicy.Trigger("one two three four", 1, 10, policySettings) is null
     && TranscriptSegmentationPolicy.Trigger(new string('w', 1), 90, 0,
