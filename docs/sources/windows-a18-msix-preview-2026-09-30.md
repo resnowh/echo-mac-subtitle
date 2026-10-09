@@ -101,12 +101,25 @@ MSIX 版本从 `1.0.0.0` 递增到 `1.0.1.0`，并以 Release 输出为主、合
 - Release 构建通过，0 错误、10 条既有 NAudio `CS0618` 弃用警告。证书由本机 CurrentUser\My 提供私钥，证书有效期到 2027-09-16；Windows 对包返回 `UnknownError`，因为根不受信任。
 - 本轮未安装包、未导入或信任证书、未启动应用。A25 是本机测试签名候选，不满足公众可信签名、可信时间戳、干净机器安装升级或发布验收。
 
+## A26 当前本机候选包（2026-10-09）
+
+为包含 NAudio `WasapiRecorder` 输入/回环迁移的当前源码，将 MSIX 身份版本升至 `1.0.3.0`。使用 `BuildAndRun.ps1 -SkipRun`（Microsoft.WindowsAppSDK.Analyzers 已启用）生成 Release x64 输出，再调用 `windows/package-preview.ps1` 打包、签名、解包并对拍程序载荷；没有安装、改动信任存储或启动 Echo。
+
+- 路径：`windows/artifacts/Echo-Windows-x64-a26-20261009.msix`（本地忽略文件，不上传仓库）
+- 大小：108,214,565 bytes；SHA-256：`2DE451A59719B800DEC34E963894F06AC2227FDBEEC69618C50F8B4B7D2775A7`
+- 清单：Identity `B7582E49-F75A-4EFA-950C-C6754B9E496E`，版本 `1.0.3.0`，架构 `x64`，Publisher `CN=AppPublisher`。
+- Release `Echo.Windows.exe`：294,400 bytes，SHA-256 `3EE17DBA391B58AAA5810561ACBF07F9DBBEDDA8391D2E0D449A0947C5A446AE`。
+- Release `Echo.Windows.dll`：351,232 bytes，SHA-256 `8A24AE688E1835896001F059895E5868C275CECC666D0A28B4F501C8EB6B130A`。
+- 脚本签名前后解包核验 exe、dll 与 Release 输出哈希一致；签名者 thumbprint `ADDF31C7C19756CF27C37A6D72FBC5FAA3D95B69` 与 Publisher 匹配。`Get-AuthenticodeSignature` 为 `UnknownError`，因为本机自签名根不受信任。
+- CoreChecks 52 项通过；analyzer 启用的 Release x64 构建 0 警告、0 错误。未启用 `--audio`，未使用声卡、云服务或用户存档。
+- A26 仍是本机测试签名包，不满足公众可信签名、可信时间戳、干净机器安装/升级/回退或正式发布验收。
+
 ## 边界与未完成验收
 
 - 使用的是已有本地测试证书，不是正式个人/组织代码签名证书；本轮没有安装/信任该证书，没有安装或启动 MSIX，也未修改系统证书信任存储。
 - 没有可信时间戳；正式分发前必须用长期有效的发布身份重新签名并带可信时间戳。
 - 未在干净机器安装、升级、启动、填写 API Key、读取旧档或卸载回退。A18 仍未通过。
-- 旧版、A17/A20/A21/A22/A23/A24/A25 预览包与 PFX 均保留在 `windows/artifacts` 忽略目录，不提交到 Git；A20 已明确作废，A25 为最新本机候选，哈希及可复核元数据写入本底稿。
+- 旧版、A17/A20/A21/A22/A23/A24/A25/A26 预览包与 PFX 均保留在 `windows/artifacts` 忽略目录，不提交到 Git；A20 已明确作废，A26 为最新本机候选，哈希及可复核元数据写入本底稿。
 
 ## 数据留存
 

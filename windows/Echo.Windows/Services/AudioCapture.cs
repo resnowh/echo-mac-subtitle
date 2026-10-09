@@ -1,6 +1,7 @@
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
+using System.Buffers;
 
 namespace Echo_Windows.Services;
 
@@ -84,13 +85,13 @@ public sealed class AudioCapture : IDisposable
             {
                 var device = outputId is null ? enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia) : enumerator.GetDevice(outputId);
                 nextRoutes.Add(new(DataFlow.Render, outputId, device.ID, device.FriendlyName));
-                Add(new WasapiLoopbackCapture(device));
+                Add(new WasapiRecorderBuilder().WithDevice(device).WithLoopbackCapture().Build());
             }
             if (mode is 1 or 2)
             {
                 var device = inputId is null ? enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Multimedia) : enumerator.GetDevice(inputId);
                 nextRoutes.Add(new(DataFlow.Capture, inputId, device.ID, device.FriendlyName));
-                Add(new WasapiCapture(device));
+                Add(new WasapiRecorderBuilder().WithDevice(device).Build());
             }
             foreach (var source in sources) source.Capture.StartRecording();
             lock (notificationGate) { routes = nextRoutes; notificationsEnabled = true; }
@@ -140,12 +141,12 @@ public sealed class AudioCapture : IDisposable
     {
         if (Interlocked.Exchange(ref failureRaised, 1) == 0) Failed?.Invoke(error);
     }
-    private void Add(WasapiCapture capture)
+    private void Add(WasapiRecorder capture)
     {
         var buffer = new BoundedAudioPrebuffer(capture.WaveFormat, PrebufferSeconds);
         var source = new Source(capture, buffer, ToMono16k(buffer.Samples));
         sources.Add(source);
-        source.DataHandler = (_, e) => { if (source.Stopping) return; try { buffer.AddSamples(e.Buffer, 0, e.BytesRecorded); } catch (Exception error) { if (!source.Stopping) ReportCaptureFailure(error); } };
+        source.DataHandler = (data, _, _, _) => { if (source.Stopping) return; try { buffer.AddSamples(data); } catch (Exception error) { if (!source.Stopping) ReportCaptureFailure(error); } };
         source.StoppedHandler = (_, e) => { if (!source.Stopping && !disposing) ReportCaptureFailure(e.Exception ?? new IOException("音频设备停止采集。")); };
         capture.DataAvailable += source.DataHandler;
         capture.RecordingStopped += source.StoppedHandler;
@@ -207,16 +208,16 @@ public sealed class AudioCapture : IDisposable
         }
         sources.Clear();
     }
-    private sealed class Source(WasapiCapture capture, BoundedAudioPrebuffer buffer, ISampleProvider resampled)
+    private sealed class Source(WasapiRecorder capture, BoundedAudioPrebuffer buffer, ISampleProvider resampled)
     {
-        public WasapiCapture Capture { get; } = capture;
+        public WasapiRecorder Capture { get; } = capture;
         public BoundedAudioPrebuffer Buffer { get; } = buffer;
         public ISampleProvider Resampled { get; } = resampled;
         public ClockDriftController Drift { get; } = new();
         public float[] InputFrame { get; } = new float[320 + ClockDriftController.MaximumFrameAdjustment];
         public float[] OutputFrame { get; } = new float[320];
         public volatile bool Stopping;
-        public EventHandler<WaveInEventArgs> DataHandler = null!;
+        public CaptureDataAvailableHandler DataHandler = null!;
         public EventHandler<StoppedEventArgs> StoppedHandler = null!;
         public void ReadOutputFrame()
         {
@@ -271,6 +272,20 @@ public sealed class BoundedAudioPrebuffer
         catch (InvalidOperationException error) when (error.Message == "Buffer full")
         {
             throw new AudioPrebufferOverflowException(CapacitySeconds, error);
+        }
+    }
+    public void AddSamples(ReadOnlySpan<byte> data)
+    {
+        if (data.IsEmpty) return;
+        var rented = ArrayPool<byte>.Shared.Rent(data.Length);
+        try
+        {
+            data.CopyTo(rented);
+            AddSamples(rented, 0, data.Length);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented, clearArray: true);
         }
     }
 }

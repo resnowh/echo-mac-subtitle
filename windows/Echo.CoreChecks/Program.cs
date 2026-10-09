@@ -581,6 +581,13 @@ Console.WriteLine($"A03 delayed source: expected onset=2400 samples, measured={f
 Check(firstDelayedTone is >= 1600 and <= 3200,
     "a 150 ms later-starting 48 kHz source retains its offset within the 50 ms timeline tolerance");
 var boundedPrebuffer = new BoundedAudioPrebuffer(new WaveFormat(16000, 16, 1));
+var spanPrebuffer = new BoundedAudioPrebuffer(new WaveFormat(16000, 16, 1));
+byte[] spanPcm = [0x00, 0x40, 0x00, 0xC0];
+spanPrebuffer.AddSamples(spanPcm.AsSpan());
+float[] spanSamples = new float[2];
+int spanRead = spanPrebuffer.Samples.Read(spanSamples.AsSpan());
+Check(spanRead == 2 && Math.Abs(spanSamples[0] - 0.5f) < 0.001f && Math.Abs(spanSamples[1] + 0.5f) < 0.001f,
+    "span-based WASAPI capture buffers copy PCM into the prebuffer before the callback returns");
 int fullPrebufferBytes = (int)(boundedPrebuffer.CapacitySeconds * boundedPrebuffer.WaveFormat.AverageBytesPerSecond);
 boundedPrebuffer.AddSamples(new byte[fullPrebufferBytes], 0, fullPrebufferBytes);
 bool overflowReported = false;
