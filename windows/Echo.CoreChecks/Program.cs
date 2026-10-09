@@ -80,6 +80,22 @@ var sonioxRequest = SonioxRequestBuilder.Build(requestPreferences, requestSegmen
 Check((int)sonioxRequest["max_endpoint_delay_ms"] == 1750 && (double)sonioxRequest["endpoint_sensitivity"] == .2
     && (int)sonioxRequest["endpoint_latency_adjustment_level"] == 2 && !sonioxRequest.ContainsKey("language_hints")
     && !sonioxRequest.ContainsKey("translation"), "Soniox request carries configured endpoint settings and omits disabled language and translation options");
+var sonioxContext = (Dictionary<string, object>)sonioxRequest["context"];
+var sonioxGeneral = (Dictionary<string, string>[])sonioxContext["general"];
+var sonioxTerms = (string[])sonioxContext["terms"];
+var sonioxTranslationTerms = (Dictionary<string, string>[])sonioxContext["translation_terms"];
+Check(sonioxGeneral.Length == 2 && sonioxGeneral[0]["value"] == "economics and finance"
+    && sonioxGeneral[1]["value"] == "economic research, markets, and financial analysis"
+    && sonioxTerms.Length == 39 && sonioxTranslationTerms.Length == 26
+    && ((string)sonioxContext["text"]).Contains("must not be confused with duty or duties", StringComparison.Ordinal),
+    "Soniox request preserves the Mac economics context, vocabulary, and translation pairs");
+var customSonioxRequest = SonioxRequestBuilder.Build(new Preferences { CorrectionTerms = "  Acme  \r\n\n" + new string('x', 90) + "\n" + string.Join("\n", Enumerable.Range(0, 101).Select(i => $"Term{i}")) }, new());
+var customSonioxContext = (Dictionary<string, object>)customSonioxRequest["context"];
+var customSonioxTerms = (string[])customSonioxContext["terms"];
+Check(customSonioxTerms.Length == 139 && customSonioxTerms[39] == "Acme"
+    && customSonioxTerms[40] == new string('x', 80) && customSonioxTerms[^1] == "Term97"
+    && JsonDocument.Parse(JsonSerializer.Serialize(customSonioxRequest)).RootElement.GetProperty("context").GetProperty("translation_terms").GetArrayLength() == 26,
+    "Soniox request appends normalized user terms with Mac line, length, and count limits and serializes valid context JSON");
 var policySettings = new TranscriptSegmentationSettings();
 Check(TranscriptSegmentationPolicy.Trigger("one two three four five", 1, 4.5, policySettings) == TranscriptSegmentationTrigger.Silence
     && TranscriptSegmentationPolicy.Trigger("one two three four", 1, 10, policySettings) is null
