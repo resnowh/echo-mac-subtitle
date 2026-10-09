@@ -222,16 +222,17 @@ public sealed class SpeechSession : IAsyncDisposable
                 } while (!part.EndOfMessage);
                 using var json = JsonDocument.Parse(message.ToArray());
                 var root = json.RootElement;
-                if (root.TryGetProperty("error_code", out var error))
+                if (SonioxResponseControl.IsServiceError(root))
                 {
-                    int? errorCode = error.ValueKind == JsonValueKind.Number && error.TryGetInt32(out var parsedCode) ? parsedCode : null;
+                    int? errorCode = root.TryGetProperty("error_code", out var error)
+                        && error.ValueKind == JsonValueKind.Number && error.TryGetInt32(out var parsedCode) ? parsedCode : null;
                     string? errorType = root.TryGetProperty("error_type", out var type) && type.ValueKind == JsonValueKind.String ? type.GetString() : null;
                     string? reason = root.TryGetProperty("error_message", out var detail) && detail.ValueKind == JsonValueKind.String ? detail.GetString() : null;
                     string? requestId = root.TryGetProperty("request_id", out var id) && id.ValueKind == JsonValueKind.String ? id.GetString() : null;
                     throw SpeechServiceException.FromApiError(errorCode, errorType, reason, requestId);
                 }
                 Message?.Invoke(root.Clone());
-                if (root.TryGetProperty("finished", out var done) && done.GetBoolean()) { finished.TrySetResult(); return; }
+                if (SonioxResponseControl.IsFinished(root)) { finished.TrySetResult(); return; }
             }
         }
         catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }

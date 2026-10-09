@@ -8,10 +8,7 @@ public static class SonioxResponseActivity
     public static bool ShouldResetQuietTimer(JsonElement response)
     {
         if (response.ValueKind != JsonValueKind.Object) return false;
-        if (response.TryGetProperty("error_message", out var errorMessage)
-            && errorMessage.ValueKind == JsonValueKind.String)
-            return false;
-        return !response.TryGetProperty("finished", out var finished)
-            || finished.ValueKind != JsonValueKind.True;
+        return !SonioxResponseControl.IsServiceError(response)
+            && !SonioxResponseControl.IsFinished(response);
     }
 }

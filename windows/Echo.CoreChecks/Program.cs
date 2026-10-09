@@ -185,6 +185,15 @@ Check(SonioxResponseActivity.ShouldResetQuietTimer(emptySonioxResponse.RootEleme
     && !SonioxResponseActivity.ShouldResetQuietTimer(finishedSonioxResponse.RootElement)
     && !SonioxResponseActivity.ShouldResetQuietTimer(errorSonioxResponse.RootElement),
     "quiet-time tracking treats empty and endpoint responses as activity like Mac, but excludes finished and error responses");
+using var malformedFinishedSonioxResponse = JsonDocument.Parse("""{"finished":"true"}""");
+using var codeOnlySonioxErrorResponse = JsonDocument.Parse("""{"error_code":503}""");
+using var malformedErrorSonioxResponse = JsonDocument.Parse("""{"error_message":503}""");
+Check(SonioxResponseControl.IsFinished(finishedSonioxResponse.RootElement)
+    && !SonioxResponseControl.IsFinished(malformedFinishedSonioxResponse.RootElement)
+    && SonioxResponseControl.IsServiceError(errorSonioxResponse.RootElement)
+    && SonioxResponseControl.IsServiceError(codeOnlySonioxErrorResponse.RootElement)
+    && !SonioxResponseControl.IsServiceError(malformedErrorSonioxResponse.RootElement),
+    "Soniox control parsing accepts only boolean finished and string error messages while retaining error-code frames");
 Check(TranscriptSegmentationPolicy.Trigger("one two three four five", 1, 4.5, policySettings) == TranscriptSegmentationTrigger.Silence
     && TranscriptSegmentationPolicy.Trigger("one two three four", 1, 10, policySettings) is null
     && TranscriptSegmentationPolicy.Trigger(new string('w', 1), 90, 0,
@@ -799,6 +808,76 @@ foreach (var (statusCode, errorType, serviceMessage, expectedGuidance, retryable
 }
 Check(serviceErrorsClassified,
     "Soniox WebSocket uses Authorization Bearer without placing the API key in config and gives actionable, non-retryable auth/quota errors");
+async Task<bool> CheckMessageOnlyServiceErrorFrameAsync()
+{
+    var portProbe = new TcpListener(IPAddress.Loopback, 0); portProbe.Start();
+    int port = ((IPEndPoint)portProbe.LocalEndpoint).Port; portProbe.Stop();
+    using var listener = new HttpListener(); listener.Prefixes.Add($"http://127.0.0.1:{port}/"); listener.Start();
+    using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+    var server = Task.Run(async () =>
+    {
+        var context = await listener.GetContextAsync().WaitAsync(timeout.Token);
+        using var socket = (await context.AcceptWebSocketAsync(null)).WebSocket;
+        var packet = new byte[65536];
+        var config = await socket.ReceiveAsync(new ArraySegment<byte>(packet), timeout.Token);
+        var frame = JsonSerializer.SerializeToUtf8Bytes(new Dictionary<string, object?>
+        {
+            ["error_message"] = "Synthetic service failure",
+            ["request_id"] = "message-only-request"
+        });
+        await socket.SendAsync(frame.AsMemory(), WebSocketMessageType.Text, true, timeout.Token);
+    }, timeout.Token);
+    var failure = new TaskCompletionSource<Exception>(TaskCreationOptions.RunContinuationsAsynchronously);
+    bool deliveredAsTranscript = false;
+    await using var session = new SpeechSession(new Uri($"ws://127.0.0.1:{port}/"), captureEnabled: false);
+    session.Failure += error => failure.TrySetResult(error);
+    session.Message += _ => deliveredAsTranscript = true;
+    await session.StartAsync(new Preferences(), "synthetic", 0, null, null);
+    var received = await failure.Task.WaitAsync(timeout.Token);
+    await server; listener.Stop();
+    return received is SpeechServiceException serviceError && serviceError.StatusCode is null
+        && serviceError.RequestId == "message-only-request" && !serviceError.Retryable
+        && serviceError.Message.Contains("Synthetic service failure") && !deliveredAsTranscript;
+}
+Check(await CheckMessageOnlyServiceErrorFrameAsync(),
+    "Soniox string error_message without error_code is surfaced as a service error and never reaches transcript parsing");
+async Task<bool> CheckMalformedFinishedFrameAsync()
+{
+    var portProbe = new TcpListener(IPAddress.Loopback, 0); portProbe.Start();
+    int port = ((IPEndPoint)portProbe.LocalEndpoint).Port; portProbe.Stop();
+    using var listener = new HttpListener(); listener.Prefixes.Add($"http://127.0.0.1:{port}/"); listener.Start();
+    using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+    var server = Task.Run(async () =>
+    {
+        var context = await listener.GetContextAsync().WaitAsync(timeout.Token);
+        using var socket = (await context.AcceptWebSocketAsync(null)).WebSocket;
+        var packet = new byte[65536];
+        await socket.ReceiveAsync(new ArraySegment<byte>(packet), timeout.Token); // config
+        await socket.ReceiveAsync(new ArraySegment<byte>(packet), timeout.Token); // finish marker
+        byte[] malformed = Encoding.UTF8.GetBytes("""{"finished":"true"}""");
+        await socket.SendAsync(malformed.AsMemory(), WebSocketMessageType.Text, true, timeout.Token);
+        await Task.Delay(50, timeout.Token);
+        byte[] valid = Encoding.UTF8.GetBytes("""{"finished":true}""");
+        await socket.SendAsync(valid.AsMemory(), WebSocketMessageType.Text, true, timeout.Token);
+    }, timeout.Token);
+    var failure = new TaskCompletionSource<Exception>(TaskCreationOptions.RunContinuationsAsynchronously);
+    bool malformedDelivered = false, finishedDelivered = false;
+    await using var session = new SpeechSession(new Uri($"ws://127.0.0.1:{port}/"), captureEnabled: false);
+    session.Failure += error => failure.TrySetResult(error);
+    session.Message += message =>
+    {
+        if (!message.TryGetProperty("finished", out var finished)) return;
+        malformedDelivered |= finished.ValueKind == JsonValueKind.String;
+        finishedDelivered |= finished.ValueKind == JsonValueKind.True;
+    };
+    await session.StartAsync(new Preferences(), "synthetic", 0, null, null);
+    bool stopped = true;
+    try { await session.StopAsync(); } catch { stopped = false; }
+    await server; listener.Stop();
+    return stopped && malformedDelivered && finishedDelivered && !failure.Task.IsCompleted;
+}
+Check(await CheckMalformedFinishedFrameAsync(),
+    "non-boolean finished is ignored safely and a later finished:true completes the stop handshake");
 var sanitizedServiceError = SpeechServiceException.FromApiError(401, "unauthenticated", "Invalid\r\nkey", "request\r\nid");
 Check(!sanitizedServiceError.Message.Contains('\r') && !sanitizedServiceError.Message.Contains('\n')
     && sanitizedServiceError.Message.Contains("requestid"),
