@@ -581,10 +581,19 @@ public sealed partial class MainPage : Page
         body.Children.Add(updateNotice); body.Children.Add(reload); body.Children.Add(source); body.Children.Add(translation);
         if (entry.Correction is { } correction)
         {
-            body.Children.Add(new TextBlock { Text = "识别稿（保留原始识别）", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
-            body.Children.Add(new TextBlock { Text = $"{correction.RawSource}\n{correction.RawTranslation}", TextWrapping = TextWrapping.Wrap, Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"] });
-            if (correction.History.Count > 0)
-                body.Children.Add(new TextBlock { Text = $"可撤销修改：{correction.History.Count} 次" });
+            var history = new StackPanel { Spacing = 8 };
+            history.Children.Add(new TextBlock { Text = "识别稿（未应用手动纠正）", FontWeight = FontWeights.SemiBold });
+            history.Children.Add(new TextBlock { Text = correction.RawSource, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true });
+            history.Children.Add(new TextBlock { Text = correction.RawTranslation, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true });
+            foreach (var version in correction.History)
+            {
+                history.Children.Add(new Rectangle { Height = 1, Fill = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"] });
+                history.Children.Add(new TextBlock { Text = version.Date.ToLocalTime().ToString("t"), FontSize = 12,
+                    Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"] });
+                history.Children.Add(new TextBlock { Text = version.Source, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true });
+                history.Children.Add(new TextBlock { Text = version.Translation, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true });
+            }
+            body.Children.Add(new Expander { Header = "识别稿与修改前版本", Content = history, IsExpanded = false });
         }
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         var ai = new Button { Content = "AI 校对" };

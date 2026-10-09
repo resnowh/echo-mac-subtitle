@@ -68,6 +68,15 @@ var audioModeControl = audioModePageXaml.Descendants(XName.Get("ComboBox", "http
 Check(audioModeControl?.Attribute("SelectionChanged")?.Value == "AudioMode_SelectionChanged"
     && audioModeControl.Attribute("IsEnabled")?.Value.Contains("CanChangeAudioMode", StringComparison.Ordinal) == true,
     "audio input mode remains available during recording and routes selections through the live switch handler");
+string correctionEditorSource = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "MainPage.xaml.cs"));
+Check(correctionEditorSource.Contains("new Expander { Header = \"识别稿与修改前版本\"", StringComparison.Ordinal)
+    && correctionEditorSource.Contains("correction.RawSource", StringComparison.Ordinal)
+    && correctionEditorSource.Contains("correction.RawTranslation", StringComparison.Ordinal)
+    && correctionEditorSource.Contains("foreach (var version in correction.History)", StringComparison.Ordinal)
+    && correctionEditorSource.Contains("version.Date.ToLocalTime().ToString(\"t\")", StringComparison.Ordinal)
+    && correctionEditorSource.Contains("version.Source", StringComparison.Ordinal)
+    && correctionEditorSource.Contains("version.Translation", StringComparison.Ordinal),
+    "subtitle correction editor exposes the original recognition and each dated revision like the Mac disclosure group");
 Check(ThemePreference.IndexFor("Light") == 0 && ThemePreference.IndexFor("Dark") == 1 && ThemePreference.IndexFor("Default") == 2
     && ThemePreference.Next("Dark") == "Default" && ThemePreference.Next("Default") == "Light" && ThemePreference.Next("Light") == "Dark",
     "theme choices and main-window cycling follow the Mac light, dark, system order");
