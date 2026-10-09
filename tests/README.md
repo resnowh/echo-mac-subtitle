@@ -7,12 +7,18 @@ segmentation, UserDefaults persistence, and Soniox endpoint request settings.
 No DeepSeek calls are made; these checks do not establish real AI correction
 quality.
 
+The macOS CI run also emits a synthetic Archive through the production Mac
+encoder and its SRT exporter. The Windows job imports that exact fixture,
+re-encodes it, and compares its SRT with Mac output; a final macOS job reads the
+Windows-written JSON with the production Mac decoder. The fixture contains no
+user data, audio, or credentials.
+
 Run `python3 tests/run_stream_checks.py` on macOS with Xcode selected.
 If local Command Line Tools and Xcode disagree, set `DEVELOPER_DIR` to the
 installed Xcode developer directory for this command only.
 
-The script compiles production PCM and transport sources in a temporary
-directory. It checks 30 minutes of **synthetic** dual-input sample/timeline
+The script compiles production PCM, transport, archive model, and storage code
+in a temporary directory. It checks 30 minutes of **synthetic** dual-input sample/timeline
 continuity, reset, prebuffer bounds, 20 loopback WebSocket reconnects,
 ordered audio/end-of-stream delivery, cancellation and overflow failure.
 The server binds only to an ephemeral localhost port. No credentials,

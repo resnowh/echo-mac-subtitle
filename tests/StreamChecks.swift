@@ -3,7 +3,10 @@ import Foundation
 @main
 struct StreamChecks {
     static func main() throws {
-        try CorrectionChecks.run()
+        let fixtureDirectory = CommandLine.arguments.count > 2
+            ? URL(fileURLWithPath: CommandLine.arguments[2], isDirectory: true)
+            : nil
+        try CorrectionChecks.run(archiveFixtureDirectory: fixtureDirectory)
         let pcm = PCM16TimelineMixer.self
         let samples: [Int16] = [.min, -1, 0, 1, .max]
         precondition(pcm.samples(from: pcm.data(from: samples)) == samples)

@@ -5,6 +5,7 @@ from pathlib import Path
 import socketserver
 import struct
 import subprocess
+import sys
 import tempfile
 import threading
 
@@ -53,12 +54,14 @@ class WebSocketFixture(socketserver.StreamRequestHandler):
 
 root = Path(__file__).resolve().parents[1]
 with tempfile.TemporaryDirectory(prefix="echo-stream-checks-") as folder:
+    fixture_directory = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(folder) / "archive-fixture"
     executable = str(Path(folder) / "checks")
     sdk = subprocess.check_output(["xcrun", "--sdk", "macosx", "--show-sdk-path"], text=True).strip()
     subprocess.run(["xcrun", "swiftc", "-sdk", sdk, "-O", "-o", executable,
                     str(root / "macOS/Audio/PCM16AudioPipeline.swift"),
                     str(root / "macOS/Services/SonioxWebSocketClient.swift"),
                     str(root / "macOS/Models/TranscriptModels.swift"),
+                    str(root / "macOS/Storage/TranscriptArchiveStore.swift"),
                     str(root / "macOS/Services/SonioxRequestBuilder.swift"),
                     str(root / "macOS/Services/DeepSeekService.swift"),
                     str(root / "macOS/Services/SRTExporter.swift"),
@@ -69,6 +72,9 @@ with tempfile.TemporaryDirectory(prefix="echo-stream-checks-") as folder:
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:
-            subprocess.run([executable, str(server.server_address[1])], check=True, timeout=120)
+            subprocess.run([executable, str(server.server_address[1]), str(fixture_directory)], check=True, timeout=120)
         finally:
             server.shutdown()
+    for fixture in (fixture_directory / "mac-archive.json", fixture_directory / "mac-archive.srt"):
+        data = fixture.read_bytes()
+        print(f"Mac contract fixture {fixture.name}: {len(data)} bytes, sha256={hashlib.sha256(data).hexdigest()}")

@@ -16,7 +16,14 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Check PCM and loopback WebSocket transport
-        run: python3 tests/run_stream_checks.py
+        run: python3 tests/run_stream_checks.py "${RUNNER_TEMP}/echo-mac-archive-fixture"
+
+      - name: Upload production Mac Archive fixture
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-archive-contract-fixture
+          path: ${{ runner.temp }}/echo-mac-archive-fixture/
+          if-no-files-found: error
 
       - name: Build Debug
         run: >-
@@ -39,11 +46,18 @@ jobs:
           build
 
   windows-build:
+    needs: macos-build
     runs-on: windows-latest
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Download production Mac Archive fixture
+        uses: actions/download-artifact@v4
+        with:
+          name: mac-archive-contract-fixture
+          path: tests/fixtures/mac-archive
 
       - name: Set up .NET 10
         uses: actions/setup-dotnet@v4
@@ -55,9 +69,42 @@ jobs:
 
       - name: Run core checks without audio devices or cloud services
         run: dotnet run --project windows/Echo.CoreChecks -c Release --no-restore
+        env:
+          ECHO_MAC_ARCHIVE_FIXTURE: tests/fixtures/mac-archive/mac-archive.json
+
+      - name: Upload Windows Archive round-trip
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-archive-roundtrip
+          path: tests/fixtures/mac-archive/windows-roundtrip.json
+          if-no-files-found: error
 
       - name: Restore WinUI app with locked dependencies
         run: dotnet restore windows/Echo.Windows/Echo.Windows.csproj --locked-mode /p:Platform=x64 /p:Configuration=Release /p:RuntimeIdentifier=win-x64
 
       - name: Build Release x64 without signing or launching
         run: dotnet build windows/Echo.Windows/Echo.Windows.csproj -c Release --no-restore /p:Platform=x64 /p:RuntimeIdentifier=win-x64
+
+  macos-roundtrip:
+    needs: windows-build
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Download Windows-written Archive
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-archive-roundtrip
+          path: ${{ runner.temp }}/windows-roundtrip
+
+      - name: Read Windows Archive with production Mac decoder
+        run: |
+          SDK_PATH="$(xcrun --sdk macosx --show-sdk-path)"
+          xcrun swiftc -sdk "$SDK_PATH" -O -o "$RUNNER_TEMP/archive-roundtrip-checks" \
+            macOS/Models/TranscriptModels.swift \
+            macOS/Storage/TranscriptArchiveStore.swift \
+            macOS/Services/SRTExporter.swift \
+            tests/ArchiveRoundTripChecks.swift
+          "$RUNNER_TEMP/archive-roundtrip-checks" "$RUNNER_TEMP/windows-roundtrip/windows-roundtrip.json"

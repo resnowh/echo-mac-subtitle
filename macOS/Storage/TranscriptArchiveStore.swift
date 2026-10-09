@@ -14,18 +14,25 @@ final class TranscriptArchiveStore {
 
     func load() -> [TranscriptArchive] {
         guard let urls = try? FileManager.default.contentsOfDirectory(at: folderURL, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]) else { return [] }
-        let decoder = JSONDecoder()
         return urls.filter { $0.pathExtension == "json" }.compactMap { url in
             guard let data = try? Data(contentsOf: url) else { return nil }
-            return try? decoder.decode(TranscriptArchive.self, from: data)
+            return try? Self.decode(data)
         }.sorted { $0.updatedAt > $1.updatedAt }
     }
 
     func save(_ archive: TranscriptArchive) throws {
         try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
+        let data = try Self.encode(archive)
+        try data.write(to: folderURL.appendingPathComponent("\(archive.id.uuidString).json"), options: .atomic)
+    }
+
+    static func encode(_ archive: TranscriptArchive) throws -> Data {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        let data = try encoder.encode(archive)
-        try data.write(to: folderURL.appendingPathComponent("\(archive.id.uuidString).json"), options: .atomic)
+        return try encoder.encode(archive)
+    }
+
+    static func decode(_ data: Data) throws -> TranscriptArchive {
+        try JSONDecoder().decode(TranscriptArchive.self, from: data)
     }
 }

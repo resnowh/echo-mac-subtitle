@@ -137,6 +137,25 @@ Check(macParsed.CreatedAt == 0 && macParsed.Segments[0].StartedAt == 0
     && macRoundTrip.Segments[0].Entries[1].Correction?.History[0].Date == Archive.AppleEpoch
     && macWindowsSrt == macReferenceSrt,
     "Swift Codable-shaped archive preserves Apple epoch and correction history, and Windows SRT matches Mac speaker, offset, and millisecond formatting");
+string? runtimeMacFixturePath = Environment.GetEnvironmentVariable("ECHO_MAC_ARCHIVE_FIXTURE");
+if (!string.IsNullOrWhiteSpace(runtimeMacFixturePath))
+{
+    runtimeMacFixturePath = Path.GetFullPath(runtimeMacFixturePath);
+    var runtimeMacArchive = TranscriptFiles.Parse(File.ReadAllText(runtimeMacFixturePath));
+    string runtimeMacSrt = TranscriptFiles.Srt(runtimeMacArchive).Replace("\r\n", "\n");
+    string runtimeMacExpectedSrt = File.ReadAllText(Path.ChangeExtension(runtimeMacFixturePath, ".srt")).Replace("\r\n", "\n");
+    string runtimeWindowsJson = JsonSerializer.Serialize(TranscriptFiles.Snapshot(runtimeMacArchive), TranscriptFiles.Json);
+    var runtimeWindowsArchive = TranscriptFiles.Parse(runtimeWindowsJson);
+    string windowsRoundTripPath = Path.Combine(Path.GetDirectoryName(runtimeMacFixturePath)!, "windows-roundtrip.json");
+    TranscriptFiles.AtomicWrite(windowsRoundTripPath, runtimeWindowsJson);
+    Check(runtimeMacArchive.Id == Guid.Parse("11111111-1111-1111-1111-111111111111")
+        && runtimeMacArchive.CreatedAt == 0
+        && runtimeMacArchive.Segments[0].Entries[1].RecordedAt == 2.3456
+        && runtimeWindowsArchive.Segments[0].Entries[1].Correction?.History[0].Date == Archive.AppleEpoch
+        && runtimeMacSrt == runtimeMacExpectedSrt,
+        "Windows reads a JSON fixture emitted by the production Mac encoder, preserves it on re-encode, and matches Mac runtime SRT byte-for-byte");
+    Console.WriteLine($"A17 Windows round-trip fixture: {new FileInfo(windowsRoundTripPath).Length} bytes");
+}
 var legacyIsoRevisionDate = JsonSerializer.Deserialize<DateTimeOffset>("\"2026-09-30T00:00:00+00:00\"", TranscriptFiles.Json);
 Check(legacyIsoRevisionDate == new DateTimeOffset(2026, 9, 30, 0, 0, 0, TimeSpan.Zero),
     "Windows correction history still reads existing ISO-8601 revision dates after enabling Apple epoch dates");

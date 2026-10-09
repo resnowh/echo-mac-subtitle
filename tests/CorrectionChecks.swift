@@ -1,9 +1,10 @@
 import Foundation
 
 enum CorrectionChecks {
-    static func run() throws {
+    static func run(archiveFixtureDirectory: URL? = nil) throws {
         try segmentationChecks()
         try recognitionConfigChecks()
+        try archiveContractChecks(outputDirectory: archiveFixtureDirectory)
         var entry = SubtitleEntry(start: 1, end: 3, english: "material", chinese: "材料", speaker: "Speaker 1", language: "en")
         let original = entry
         entry.edit(source: "maturity day", translation: "材料")
@@ -70,6 +71,61 @@ enum CorrectionChecks {
             catch { /* Expected rejection; never modify the transcript. */ }
         }
         print("PASS: manual field locks, late recognition, undo/revision guard, legacy/new archive, corrected SRT, structured AI response validation")
+    }
+
+    private static func archiveContractChecks(outputDirectory: URL?) throws {
+        let reference = Date(timeIntervalSinceReferenceDate: 0)
+        let correction = SubtitleCorrection(
+            rawSource: "Recognized",
+            rawTranslation: "识别译文",
+            sourceLocked: true,
+            translationLocked: false,
+            revision: UUID(uuidString: "55555555-5555-5555-5555-555555555555")!,
+            history: [.init(source: "Earlier", translation: "之前", date: reference)]
+        )
+        let archive = TranscriptArchive(
+            id: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
+            title: "Mac Codable fixture",
+            createdAt: reference,
+            updatedAt: reference.addingTimeInterval(1),
+            segments: [TranscriptSegment(
+                id: UUID(uuidString: "22222222-2222-2222-2222-222222222222")!,
+                startedAt: reference,
+                updatedAt: reference.addingTimeInterval(1),
+                entries: [
+                    ArchivedSubtitle(
+                        id: UUID(uuidString: "33333333-3333-3333-3333-333333333333")!,
+                        start: 0, end: 1, recordedAt: reference,
+                        english: "", chinese: "译文先到"
+                    ),
+                    ArchivedSubtitle(
+                        id: UUID(uuidString: "44444444-4444-4444-4444-444444444444")!,
+                        start: 2.3456, end: 3.5801,
+                        recordedAt: reference.addingTimeInterval(2.3456),
+                        english: "Hello", chinese: "你好", speaker: "Speaker 1", language: "en",
+                        correction: correction
+                    )
+                ]
+            )]
+        )
+        let encoded = try TranscriptArchiveStore.encode(archive)
+        let decoded = try TranscriptArchiveStore.decode(encoded)
+        let reencoded = try TranscriptArchiveStore.encode(decoded)
+        precondition(decoded.id == archive.id && decoded.createdAt == reference)
+        precondition(decoded.segments[0].entries[1].recordedAt?.timeIntervalSinceReferenceDate == 2.3456)
+        precondition(decoded.segments[0].entries[1].correction?.history[0].date == reference)
+        precondition(reencoded == encoded)
+
+        let expectedSRT = "1\n00:00:02,345 --> 00:00:03,580\n[Speaker 1]\nHello\n你好\n"
+        let srt = SRTExporter.archiveText(decoded)
+        precondition(srt == expectedSRT)
+
+        if let outputDirectory {
+            try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+            try encoded.write(to: outputDirectory.appendingPathComponent("mac-archive.json"), options: .atomic)
+            try Data(srt.utf8).write(to: outputDirectory.appendingPathComponent("mac-archive.srt"), options: .atomic)
+        }
+        print("PASS: production Mac Archive encoder/decoder and SRT fixture")
     }
 
     private static func recognitionConfigChecks() throws {
