@@ -509,7 +509,9 @@ public partial class MainPageViewModel : ObservableObject
         catch (Exception e)
         {
             if (current is not null) await current.DisposeAsync();
-            session = null; IsRecording = false; Status = "无法开始：" + e.Message; Save();
+            session = null; IsRecording = false;
+            Status = "无法开始：" + AudioCaptureErrorPresentation.GetUserMessage(e, microphoneRequested: mode is 1 or 2);
+            Save();
         }
         finally
         {
@@ -540,11 +542,15 @@ public partial class MainPageViewModel : ObservableObject
     private void HandleSessionFailure(SpeechSession failed, Exception error)
     {
         if (!ReferenceEquals(session, failed)) return;
-        failure = error;
+        bool accessDenied = AudioCaptureErrorPresentation.IsAccessDenied(error);
+        Exception reported = accessDenied
+            ? new IOException(AudioCaptureErrorPresentation.GetUserMessage(error, microphoneRequested: ActiveAudioMode is 1 or 2), error)
+            : error;
+        failure = reported;
         if (IsBusy) return;
         if (IsRecording && SpeechRetryPolicy.IsTransient(error) && recoveryCancellation is null)
         {
-            recoveryTask = RecoverRecordingAsync(failed, error);
+            recoveryTask = RecoverRecordingAsync(failed, reported);
             return;
         }
         _ = StopAsync();
@@ -637,8 +643,16 @@ public partial class MainPageViewModel : ObservableObject
         }
         catch (AudioDeviceSwitchException e)
         {
-            Status = e.Message;
-            if (!e.CaptureRestored) { failure = e; stopAfterFailure = true; }
+            bool accessDenied = AudioCaptureErrorPresentation.IsAccessDenied(e);
+            string guidance = accessDenied
+                ? AudioCaptureErrorPresentation.GetUserMessage(e, microphoneRequested: inputId is not null || ActiveAudioMode is 1 or 2)
+                : e.Message;
+            Status = accessDenied && e.CaptureRestored ? guidance + "已恢复原音源，录音继续。" : guidance;
+            if (!e.CaptureRestored)
+            {
+                failure = accessDenied ? new IOException(guidance + "原音源也无法恢复。", e) : e;
+                stopAfterFailure = true;
+            }
         }
         catch (Exception e) { Status = "切换失败，录音仍使用原设备：" + e.Message; }
         finally { IsBusy = false; }
@@ -666,8 +680,16 @@ public partial class MainPageViewModel : ObservableObject
         }
         catch (AudioDeviceSwitchException e)
         {
-            Status = e.Message;
-            if (!e.CaptureRestored) { failure = e; stopAfterFailure = true; }
+            bool accessDenied = AudioCaptureErrorPresentation.IsAccessDenied(e);
+            string guidance = accessDenied
+                ? AudioCaptureErrorPresentation.GetUserMessage(e, microphoneRequested: selection.Mode is 1 or 2)
+                : e.Message;
+            Status = accessDenied && e.CaptureRestored ? guidance + "已恢复原音源，录音继续。" : guidance;
+            if (!e.CaptureRestored)
+            {
+                failure = accessDenied ? new IOException(guidance + "原音源也无法恢复。", e) : e;
+                stopAfterFailure = true;
+            }
         }
         catch (Exception e) { Status = "切换失败，录音仍使用原音频来源：" + e.Message; }
         finally { IsBusy = false; }

@@ -2,6 +2,8 @@ using NAudio.CoreAudioApi;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 using System.Buffers;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
 using Echo_Windows.Core;
 
 namespace Echo_Windows.Services;
@@ -37,6 +39,29 @@ public static class AudioEndpointChangePolicy
         => role == Role.Multimedia && route.Flow == flow && route.SelectedId is null && route.ActiveId != newDefaultId;
 
     public static bool ShouldRefreshDefaultAfterUnavailable(AudioDeviceRoute route) => route.SelectedId is null;
+}
+
+public static class AudioCaptureErrorPresentation
+{
+    private const int ErrorAccessDenied = 5;
+    private const int EAccessDenied = unchecked((int)0x80070005);
+
+    public static bool IsAccessDenied(Exception error)
+    {
+        if (error is UnauthorizedAccessException
+            || error is Win32Exception { NativeErrorCode: ErrorAccessDenied }
+            || error is COMException { HResult: EAccessDenied }) return true;
+        if (error is AggregateException aggregate && aggregate.InnerExceptions.Any(IsAccessDenied)) return true;
+        return error.InnerException is not null && IsAccessDenied(error.InnerException);
+    }
+
+    public static string GetUserMessage(Exception error, bool microphoneRequested)
+    {
+        if (!IsAccessDenied(error)) return error.Message;
+        return microphoneRequested
+            ? "Windows 拒绝了 Echo 访问麦克风。请打开“设置 → 隐私和安全性 → 麦克风”，启用“麦克风访问”和“让桌面应用访问麦克风”，然后重试。"
+            : "Windows 拒绝了 Echo 访问音频设备。请检查设备状态和 Windows 音频隐私设置后重试。";
+    }
 }
 
 public sealed class AudioCapture : ISpeechSessionCapture

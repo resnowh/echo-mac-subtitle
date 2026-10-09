@@ -13,6 +13,7 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Security.AccessControl;
 using System.Security.Principal;
+using System.Runtime.InteropServices;
 using System.Xml.Linq;
 
 if (args.Length == 4 && args[0] == "--atomic-write-crash-child")
@@ -1138,6 +1139,14 @@ Check(AudioEndpointChangePolicy.FindUnavailableRoute([defaultRoute], "old-defaul
     && !AudioEndpointChangePolicy.IsFollowingDefault(defaultRoute, DataFlow.Capture, Role.Console, "new-default-mic")
     && !AudioEndpointChangePolicy.IsFollowingDefault(defaultRoute, DataFlow.Capture, Role.Multimedia, "old-default-mic"),
     "endpoint notifications ignore active/unknown devices, unrelated flows and roles, and unchanged default IDs");
+var accessDeniedCom = new COMException("synthetic access denied", unchecked((int)0x80070005));
+var wrappedAccessDenied = new AudioCaptureFailureException("audio capture failed", accessDeniedCom);
+Check(AudioCaptureErrorPresentation.IsAccessDenied(new UnauthorizedAccessException("synthetic"))
+    && AudioCaptureErrorPresentation.IsAccessDenied(wrappedAccessDenied)
+    && AudioCaptureErrorPresentation.GetUserMessage(wrappedAccessDenied, microphoneRequested: true).Contains("让桌面应用访问麦克风", StringComparison.Ordinal)
+    && AudioCaptureErrorPresentation.GetUserMessage(wrappedAccessDenied, microphoneRequested: false).Contains("音频设备", StringComparison.Ordinal)
+    && AudioCaptureErrorPresentation.GetUserMessage(new IOException("synthetic device error"), microphoneRequested: true) == "synthetic device error",
+    "microphone access denial gives Windows privacy guidance while unrelated capture errors retain their original message");
 var sleepState = new SleepRecoveryState();
 bool endForSleep = sleepState.BeginSleep(recordingIntended: true);
 bool scheduleWake = sleepState.BeginWake(); bool beginWakeRecovery = sleepState.BeginRecovery(); sleepState.FinishRecovery();
