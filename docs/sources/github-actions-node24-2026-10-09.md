@@ -16,4 +16,6 @@ artifact v7/v8 使用 Node 24，并要求 Actions runner `2.327.1` 或更新版�
 ## 本轮实施与验证
 
 - 更新 `.github/workflows/ci.yml` 中全部 checkout、artifact upload/download 和 setup-dotnet action 主版本；不改变 job 依赖、命令、artifact 名称或路径。
-- 触发后的 GitHub Actions 结果会追加在此处。该工作流会执行真实 Mac Debug/Release 构建、无设备核心检查、Windows Release x64 构建和跨平台 Archive 往返；不会签名、安装或启动 Echo。
+- `git diff --check` 通过。仓库主机没有安装本地 YAML/actionlint 校验器，语法与 action 输入由推送后的 GitHub Actions 实跑验证。
+- GitHub Actions [37911231390](https://github.com/resnowh/echo-mac-subtitle/actions/runs/37911231390)：Mac Debug/Release 构建、PCM/loopback 传输检查及夹具上传通过；Windows 无设备核心检查、artifact 上传/下载与 Release x64 构建通过；Mac 生产 decoder 读取 Windows 往返存档通过。全部 3 个 job 成功，未出现 Node 20 弃用告警；仅有 GitHub-hosted macOS runner 容量提示。
+- 工作流只构建与测试，不签名、安装或启动 Echo；未访问云服务或音频设备。
