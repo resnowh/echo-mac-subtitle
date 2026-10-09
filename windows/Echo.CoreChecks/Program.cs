@@ -1159,6 +1159,56 @@ var userStoppedAfterWake = new SleepRecoveryState();
 userStoppedAfterWake.BeginSleep(recordingIntended: true); userStoppedAfterWake.BeginWake(); userStoppedAfterWake.CancelByUser();
 Check(recoveredCycles == 10 && !userStoppedAfterWake.BeginRecovery(),
     "ten simulated sleep/wake cycles recover an intended session, while a user stop after wake cancels pending recovery");
+var switchPortProbe = new TcpListener(IPAddress.Loopback, 0); switchPortProbe.Start();
+int switchPort = ((IPEndPoint)switchPortProbe.LocalEndpoint).Port; switchPortProbe.Stop();
+using (var switchListener = new HttpListener())
+using (var switchTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(12)))
+{
+    switchListener.Prefixes.Add($"http://127.0.0.1:{switchPort}/"); switchListener.Start();
+    int switchConnections = 0, switchAudioFrames = 0, switchConfigValid = 0;
+    var switchServer = Task.Run(async () =>
+    {
+        var context = await switchListener.GetContextAsync().WaitAsync(switchTimeout.Token);
+        using var socket = (await context.AcceptWebSocketAsync(null)).WebSocket;
+        Interlocked.Increment(ref switchConnections);
+        var packet = new byte[4096];
+        var configResult = await socket.ReceiveAsync(new ArraySegment<byte>(packet), switchTimeout.Token);
+        using var config = JsonDocument.Parse(packet.AsMemory(0, configResult.Count));
+        if (configResult.MessageType == WebSocketMessageType.Text
+            && context.Request.Headers["Authorization"] == "Bearer synthetic"
+            && config.RootElement.GetProperty("sample_rate").GetInt32() == 16000)
+            Volatile.Write(ref switchConfigValid, 1);
+        while (true)
+        {
+            var result = await socket.ReceiveAsync(new ArraySegment<byte>(packet), switchTimeout.Token);
+            if (result.Count == 0) break;
+            Interlocked.Increment(ref switchAudioFrames);
+        }
+        byte[] finished = Encoding.UTF8.GetBytes("""{"finished":true}""");
+        await socket.SendAsync(finished.AsMemory(), WebSocketMessageType.Text, true, switchTimeout.Token);
+    }, switchTimeout.Token);
+    var syntheticCapture = new SyntheticSpeechSessionCapture { FailNextRestart = true };
+    int switchSessionFailureCount = 0;
+    await using (var switchSession = new SpeechSession(new Uri($"ws://127.0.0.1:{switchPort}/"), captureEnabled: true, capture: syntheticCapture))
+    {
+        switchSession.Failure += _ => Interlocked.Increment(ref switchSessionFailureCount);
+        await switchSession.StartAsync(new Preferences(), "synthetic", 1, null, null, switchTimeout.Token);
+        AudioDeviceSwitchException? switchError = null;
+        try { await switchSession.SwitchDevicesAsync("new-speaker", null, newMode: 0); }
+        catch (AudioDeviceSwitchException error) { switchError = error; }
+        DateTime frameDeadline = DateTime.UtcNow.AddSeconds(2);
+        while (syntheticCapture.FramesReadAfterRestore == 0 && DateTime.UtcNow < frameDeadline)
+            await Task.Delay(20, switchTimeout.Token);
+        bool rolledBackAndContinued = switchError?.CaptureRestored == true
+            && syntheticCapture.IsRunning && syntheticCapture.Mode == 1
+            && syntheticCapture.FramesReadAfterRestore > 0 && Volatile.Read(ref switchSessionFailureCount) == 0;
+        await switchSession.StopAsync();
+        await switchServer.WaitAsync(switchTimeout.Token); switchListener.Stop();
+        Check(rolledBackAndContinued && Volatile.Read(ref switchConfigValid) == 1
+            && Volatile.Read(ref switchConnections) == 1 && Volatile.Read(ref switchAudioFrames) > 0,
+            "synthetic live audio switch failure restores the old input and keeps sending audio on the same recognition WebSocket");
+    }
+}
 if (args.Contains("--audio"))
 {
     Console.WriteLine($"Devices: render={AudioCapture.Devices(DataFlow.Render).Count}, capture={AudioCapture.Devices(DataFlow.Capture).Count}");
@@ -1307,4 +1357,47 @@ sealed class FiniteToneSampleProvider(int sampleRate, int channels, double durat
         position += available;
         return available;
     }
+}
+
+sealed class SyntheticSpeechSessionCapture : ISpeechSessionCapture
+{
+    private int tailFrames;
+    private bool readingAfterRestore;
+    private bool restorePending;
+    public event Action<Exception>? Failed { add { } remove { } }
+    public event Action<DataFlow>? DefaultDeviceChanged { add { } remove { } }
+    public string? ActiveOutputId { get; private set; }
+    public string? ActiveInputId { get; private set; }
+    public double BufferedSeconds => 0;
+    public int TailFrames => tailFrames;
+    public bool IsRunning { get; private set; }
+    public int Mode { get; private set; }
+    private int framesReadAfterRestore;
+    public int FramesReadAfterRestore => Volatile.Read(ref framesReadAfterRestore);
+    public bool FailNextRestart { get; set; }
+    public bool IsFollowingDefault(DataFlow flow) => false;
+    public void Start(int mode, string? outputId, string? inputId)
+    {
+        Mode = mode; ActiveOutputId = mode is 0 or 2 ? outputId : null;
+        ActiveInputId = mode is 1 or 2 ? inputId : null;
+        IsRunning = true; readingAfterRestore = restorePending; restorePending = false;
+    }
+    public void Restart(int mode, string? outputId, string? inputId)
+    {
+        if (FailNextRestart)
+        {
+            FailNextRestart = false; restorePending = true;
+            throw new IOException("synthetic endpoint rejected startup");
+        }
+        Start(mode, outputId, inputId);
+    }
+    public byte[] ReadFrame(out double level)
+    {
+        level = 0.1;
+        if (tailFrames > 0) tailFrames--;
+        else if (IsRunning && readingAfterRestore) Interlocked.Increment(ref framesReadAfterRestore);
+        return new byte[640];
+    }
+    public void StopInputs() { IsRunning = false; tailFrames = 1; }
+    public void Dispose() { IsRunning = false; }
 }

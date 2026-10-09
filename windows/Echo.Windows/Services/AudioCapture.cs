@@ -13,6 +13,21 @@ public sealed record AudioDevice(string Id, string Name)
 
 public sealed record AudioDeviceRoute(DataFlow Flow, string? SelectedId, string ActiveId, string Name);
 
+public interface ISpeechSessionCapture : IDisposable
+{
+    event Action<Exception>? Failed;
+    event Action<DataFlow>? DefaultDeviceChanged;
+    string? ActiveOutputId { get; }
+    string? ActiveInputId { get; }
+    double BufferedSeconds { get; }
+    int TailFrames { get; }
+    bool IsFollowingDefault(DataFlow flow);
+    void Start(int mode, string? outputId, string? inputId);
+    void Restart(int mode, string? outputId, string? inputId);
+    byte[] ReadFrame(out double level);
+    void StopInputs();
+}
+
 public static class AudioEndpointChangePolicy
 {
     public static AudioDeviceRoute? FindUnavailableRoute(IEnumerable<AudioDeviceRoute> routes, string deviceId, DeviceState state)
@@ -24,7 +39,7 @@ public static class AudioEndpointChangePolicy
     public static bool ShouldRefreshDefaultAfterUnavailable(AudioDeviceRoute route) => route.SelectedId is null;
 }
 
-public sealed class AudioCapture : IDisposable
+public sealed class AudioCapture : ISpeechSessionCapture
 {
     public const double PrebufferSeconds = 2.5;
     private readonly object gate = new();

@@ -59,3 +59,7 @@ Windows 仓库已有 `windows/Echo.CoreChecks/Program.cs`，覆盖转写 token �
 ## A58 原生浮层适配工作区变化（2026-10-10）
 
 新增 CoreChecks 消息接线断言：确认 `WM_SETTINGCHANGE` 仅在 `wParam == SPI_SETWORKAREA` 时与 `WM_DISPLAYCHANGE` 一起进入浮层位置重算。该检查覆盖源码分支，不模拟任务栏或多屏系统事件；真实 GUI 验收仍待隔离环境执行。本轮 CoreChecks、Release x64 构建和 Actions 结果见 [A58 底稿](../sources/windows-a58-overlay-work-area-2026-10-10.md)。
+
+## A59 音源切换失败回滚（2026-10-10）
+
+CoreChecks 使用合成采集器与本地 WebSocket：开始话筒模式后模拟切换至电脑音频失败，检查旧输入恢复、`SpeechSession` 未发失败事件、恢复后继续发送 PCM，且全程只建立一个连接。本机 140 项 CoreChecks 与 Release x64 构建通过。没有访问真实音频设备或 Soniox；真实切换连续性、权限拒绝与拔插仍待验收。CI 结果和源码基线见 [A59 底稿](../sources/windows-a59-audio-switch-rollback-2026-10-10.md)。

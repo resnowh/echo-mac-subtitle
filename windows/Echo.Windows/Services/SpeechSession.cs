@@ -12,11 +12,16 @@ public sealed class SpeechSession : IAsyncDisposable
     private readonly Uri endpoint;
     private readonly bool captureEnabled;
     public SpeechSession() : this(new Uri("wss://stt-rt.soniox.com/transcribe-websocket"), captureEnabled: true) { }
-    internal SpeechSession(Uri endpoint, bool captureEnabled = false) { this.endpoint = endpoint; this.captureEnabled = captureEnabled; }
+    internal SpeechSession(Uri endpoint, bool captureEnabled = false, ISpeechSessionCapture? capture = null)
+    {
+        this.endpoint = endpoint;
+        this.captureEnabled = captureEnabled;
+        this.capture = capture ?? new AudioCapture();
+    }
     private readonly ClientWebSocket socket = new();
     private readonly CancellationTokenSource lifetime = new();
     private readonly CancellationTokenSource audioStop = new();
-    private readonly AudioCapture capture = new();
+    private readonly ISpeechSessionCapture capture;
     private readonly TaskCompletionSource<Exception> captureFailureSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly SemaphoreSlim audioGate = new(1, 1);
     private readonly TaskCompletionSource finished = new(TaskCreationOptions.RunContinuationsAsynchronously);
