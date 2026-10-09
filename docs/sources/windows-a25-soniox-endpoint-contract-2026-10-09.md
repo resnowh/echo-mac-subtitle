@@ -15,8 +15,8 @@
 
 ## 对 Windows 实现的影响
 
-- Mac `SpeechViewModel.handleTranscriptResponse` 对 `<end>` 和 `<fin>` 不检查 token lane，统一触发当前双语字幕的结束处理。
-- Windows `TokenAssembler` 也统一将端点标记视为整条双语流的边界；`translation_status` 不改变端点游标。
+- Mac `SpeechViewModel.handleTranscriptResponse` 对 `<end>` 和 `<fin>` 不检查 token lane；它记录本条 WebSocket 响应是否出现端点，在处理完整条响应后最多结束当前双语字幕一次。
+- Windows `TokenAssembler` 采用相同的响应级结束语义；`translation_status` 不改变端点游标。同一响应里多次出现端点也只结束一次，响应中后续 token 仍聚合到该字幕行。
 - 译文可以在原文 token 之后到达，但按官方实时翻译流顺序，端点标记属于整个定稿 segment 的尾部。若翻译在端点之后才到达，不属于该协议说明的标准顺序；Mac 当前实现也不会把这种 token 回填到前一条已结束字幕。
 - 连续的空 `<end>`/`<fin>` 不应跳过字幕索引或生成空行；Windows 回归对此单独检查。
 - Mac `SpeechViewModel.handleTranscriptResponse` 在 provisional token 上只填入尚为空的 speaker/language 标签；final token 才能更新已存在的标签。Windows 逐字幕行实现相同语言规则，并以 `en` provisional → `ja` provisional → `ja` final 的固定序列验证。
@@ -26,6 +26,6 @@
 
 ## 本轮验证与留存
 
-- 采用合成 token，仅在 Windows CoreChecks 中验证原文后到达译文、带可选 lane 元数据的 endpoint、连续空端点和下一句游标。
+- 采用固定合成 token，在 Windows CoreChecks 中验证原文后到达译文、带可选 lane 元数据的 endpoint、同一响应多端点只结束一次、跨响应下一句游标和连续空端点。
 - 所有输入均为固定合成内容，不含用户数据或凭据；测试会随 `windows/Echo.CoreChecks/Program.cs` 保留。
 - 本底稿只记录官方协议文字和实现推论；macOS/Windows 完整 token 输出对拍仍记为尚未验证。

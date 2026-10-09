@@ -124,8 +124,10 @@ Apply("""{"tokens":[{"text":"Hello","is_final":true,"start_ms":0,"end_ms":400},{
 Check(segment.Entries[0].English == "Hello world", "provisional replacement without duplicated prefix");
 Apply("""{"tokens":[{"text":" there.","is_final":true,"start_ms":400,"end_ms":800}]}""");
 Apply("""{"tokens":[{"text":"你好。","is_final":true,"translation_status":"translation"}]}""");
-Apply("""{"tokens":[{"text":"<end>","is_final":true},{"text":"Next.","is_final":true,"start_ms":1500,"end_ms":2000}]}""");
-Check(segment.Entries[0].English == "Hello there." && segment.Entries[0].Chinese == "你好。" && segment.Entries[1].Chinese == "", "translation arriving after source but before the authoritative endpoint stays paired with its utterance");
+Apply("""{"tokens":[{"text":"<end>","is_final":true}]}""");
+Apply("""{"tokens":[{"text":"Next.","is_final":true,"start_ms":1500,"end_ms":2000}]}""");
+Check(segment.Entries.Count == 2 && segment.Entries[0].English == "Hello there." && segment.Entries[0].Chinese == "你好。"
+    && segment.Entries[1].English == "Next.", "translation arriving before the endpoint stays paired, and the next response starts a new row");
 using var translationOnlyRequest = SubtitleCorrectionService.CreateRequest("test-key", "Exact source", "旧译文", "nearby context", "term", "zh", translationOnly: true);
 using var translationOnlyBody = JsonDocument.Parse(await translationOnlyRequest.Content!.ReadAsStringAsync());
 var translationOnlyMessages = translationOnlyBody.RootElement.GetProperty("messages");
@@ -155,9 +157,8 @@ catch (JsonException) { missingUncertainRejected = true; }
 Check(missingUncertainRejected, "DeepSeek correction response requires the Mac Codable uncertain field instead of silently defaulting to false");
 var taggedEndpointSegment = new Segment(); var taggedEndpointAssembler = new TokenAssembler(taggedEndpointSegment, _ => { });
 using (var taggedEndpointTurn = JsonDocument.Parse("""{"tokens":[{"text":"One","is_final":true,"translation_status":"original"},{"text":"一","is_final":true,"translation_status":"translation"},{"text":"<end>","is_final":true,"translation_status":"original"},{"text":"Two","is_final":true,"translation_status":"original"},{"text":"二","is_final":true,"translation_status":"translation"},{"text":"<end>","is_final":true}]}""")) taggedEndpointAssembler.Apply(taggedEndpointTurn.RootElement);
-Check(taggedEndpointSegment.Entries.Count == 2 && taggedEndpointSegment.Entries[0].English == "One" && taggedEndpointSegment.Entries[0].Chinese == "一"
-    && taggedEndpointSegment.Entries[1].English == "Two" && taggedEndpointSegment.Entries[1].Chinese == "二",
-    "endpoint markers advance the complete bilingual stream regardless of optional lane metadata");
+Check(taggedEndpointSegment.Entries.Count == 1 && taggedEndpointSegment.Entries[0].English == "OneTwo" && taggedEndpointSegment.Entries[0].Chinese == "一二",
+    "multiple endpoint markers in one response finalize once after the complete bilingual response, matching Mac");
 var emptyEndpointSegment = new Segment(); var emptyEndpointAssembler = new TokenAssembler(emptyEndpointSegment, _ => { });
 using (var emptyEndpointTurn = JsonDocument.Parse("""{"tokens":[{"text":"<end>","is_final":true},{"text":"<fin>","is_final":true},{"text":"Real first entry","is_final":true}]}""")) emptyEndpointAssembler.Apply(emptyEndpointTurn.RootElement);
 Check(emptyEndpointSegment.Entries.Count == 1 && emptyEndpointSegment.Entries[0].English == "Real first entry",
@@ -198,8 +199,11 @@ Check(edited.UndoCorrection() && edited.English == "Recognized" && edited.Correc
 ApplyEdited("""{"tokens":[{"text":"Late recognition","is_final":false}]}""");
 Check(edited.English == "Recognized" && edited.Correction?.RawSource == "Late recognition", "late recognition cannot overwrite text after undo");
 var bilingual = new Segment(); var bilingualAssembler = new TokenAssembler(bilingual, _ => { });
-using (var turn = JsonDocument.Parse("""{"tokens":[{"text":"First","is_final":true},{"text":"一","is_final":true,"translation_status":"translation"},{"text":"<end>","is_final":true},{"text":"Second","is_final":true},{"text":"二","is_final":true,"translation_status":"translation"}]}""")) bilingualAssembler.Apply(turn.RootElement);
-Check(bilingual.Entries.Count == 2 && bilingual.Entries[1].Chinese == "二", "untagged endpoint advances both transcript and translation");
+using (var turn = JsonDocument.Parse("""{"tokens":[{"text":"First","is_final":true},{"text":"一","is_final":true,"translation_status":"translation"},{"text":"<end>","is_final":true}]}""")) bilingualAssembler.Apply(turn.RootElement);
+using (var nextTurn = JsonDocument.Parse("""{"tokens":[{"text":"Second","is_final":true},{"text":"二","is_final":true,"translation_status":"translation"}]}""")) bilingualAssembler.Apply(nextTurn.RootElement);
+Check(bilingual.Entries.Count == 2 && bilingual.Entries[0].English == "First" && bilingual.Entries[0].Chinese == "一"
+    && bilingual.Entries[1].English == "Second" && bilingual.Entries[1].Chinese == "二",
+    "one response-level endpoint advances both transcript and translation before the next response");
 int finalizedCount = 0; var finalizedSegment = new Segment(); var finalizedAssembler = new TokenAssembler(finalizedSegment, _ => { }, _ => finalizedCount++);
 using (var finalTurn = JsonDocument.Parse("""{"tokens":[{"text":"finished sentence","is_final":true},{"text":"<end>","is_final":true}]}""")) finalizedAssembler.Apply(finalTurn.RootElement);
 Check(finalizedCount == 1, "transcript final boundary triggers a single opt-in correction job");

@@ -521,6 +521,7 @@ public sealed class TokenAssembler(Segment segment, Action<Subtitle> added, Acti
             return;
         }
         int provisionalSource = sourceCursor, provisionalTranslation = translationCursor;
+        bool reachedEndpoint = false;
         var changedRows = new HashSet<int>();
         foreach (var token in tokens.EnumerateArray())
         {
@@ -529,17 +530,10 @@ public sealed class TokenAssembler(Segment segment, Action<Subtitle> added, Acti
             bool final = token.TryGetProperty("is_final", out var f) && f.GetBoolean();
             if (text is "<end>" or "<fin>")
             {
-                // Mac treats either marker as the boundary for the active bilingual entry.
-                // Soniox emits <end>/<fin> as final markers after the whole stream segment,
-                // so the marker is not owned by the original or translation lane.
-                int completed = Math.Max(sourceCursor, translationCursor);
-                if (completed >= segment.Entries.Count) continue;
-                ApplyRecognition(completed);
-                changedRows.Remove(completed);
-                finalized?.Invoke(segment.Entries[completed]);
-                sourceCursor = translationCursor = completed + 1;
-                provisionalSource = provisionalTranslation = completed + 1;
-                ForgetRow(completed);
+                // Mac records endpoint presence for the whole WebSocket response
+                // and finalizes once after consuming every token in that response.
+                // Keep the flag response-scoped instead of advancing per marker.
+                reachedEndpoint = true;
                 continue;
             }
             if (text.Length == 0 || text.StartsWith('<')) continue;
@@ -592,6 +586,7 @@ public sealed class TokenAssembler(Segment segment, Action<Subtitle> added, Acti
                 || !string.IsNullOrEmpty(translationFinal.GetValueOrDefault(activeRow))))
             changedRows.Add(activeRow);
         foreach (int index in changedRows.OrderBy(i => i)) ApplyRecognition(index);
+        if (reachedEndpoint) FinalizeCurrent();
         segment.UpdatedAt = Archive.Now;
     }
 }
