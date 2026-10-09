@@ -134,6 +134,9 @@ Check(mainPageCode.Contains("DirectManipulationStarted") && mainPageCode.Contain
     && mainPageCode.Contains("PointerWheelChanged") && mainPageCode.Contains("PreviewKeyDown")
     && mainPageCode.Contains("transcriptFollowState.ViewChanged"),
     "transcript follow state tracks direct, wheel and keyboard scrolling separately from content layout changes");
+Check(mainPageCode.Contains("Preferences.UpdateProtectedSecret") && mainPageCode.Contains("sonioxSecretUnreadable")
+    && mainPageCode.Contains("deepSeekSecretUnreadable") && mainPageCode.Contains("密文已保留"),
+    "settings preserve an unreadable DPAPI secret until the user replaces it");
 var transcriptFollow = new TranscriptFollowState();
 Check(transcriptFollow.ContentChanged() && transcriptFollow.IsAtEnd && !transcriptFollow.HasNewContent,
     "new transcript content stays followed when the user is at the live end");
@@ -822,6 +825,13 @@ Check(SpeechRetryPolicy.MaxRetries == 2 && SpeechRetryPolicy.Delay(1) == TimeSpa
     && !SpeechRetryPolicy.IsTransient(new AudioCaptureFailureException("device failed", new IOException())), "network retry policy is bounded and excludes service/device errors");
 string secret = "synthetic-local-test-not-an-api-key";
 Check(Preferences.Unprotect(Preferences.Protect(secret)) == secret, "current-user DPAPI credential round trip");
+Check(Preferences.UpdateProtectedSecret("unreadable-ciphertext", "", currentSecretCannotBeUnprotected: true) == "unreadable-ciphertext",
+    "saving unrelated settings preserves a DPAPI secret that could not be decrypted");
+string replacementSecret = Preferences.UpdateProtectedSecret("unreadable-ciphertext", " replacement-key ", currentSecretCannotBeUnprotected: true);
+Check(Preferences.Unprotect(replacementSecret) == "replacement-key",
+    "a replacement API key encrypts normally after an unreadable stored value");
+Check(Preferences.UpdateProtectedSecret(Preferences.Protect("existing-key"), "", currentSecretCannotBeUnprotected: false) == "",
+    "clearing a readable API key keeps the normal empty-field behavior");
 bool rejected = false; try { TranscriptFiles.Parse("{}"); } catch { rejected = true; }
 Check(rejected, "malformed archive is rejected rather than silently imported");
 rejected = false;

@@ -43,6 +43,8 @@ public sealed partial class MainPage : Page
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? transcriptScrollIdleTimer;
     private bool isDirectlyManipulatingTranscript;
     private bool isDiscreteTranscriptScrollActive;
+    private bool sonioxSecretUnreadable;
+    private bool deepSeekSecretUnreadable;
     private readonly HashSet<Guid> observedSubtitleIds = [];
     private bool initialized;
     private bool syncingAudioMode;
@@ -62,8 +64,21 @@ public sealed partial class MainPage : Page
         AutoSummary.IsOn = c.AutoSummaryEnabled;
         AutoCorrection.IsOn = c.AutoCorrectionEnabled;
         Translate.IsOn = c.Translate; Speakers.IsOn = c.Speakers; Strict.IsOn = c.Strict;
-        try { SonioxKey.Password = Preferences.Unprotect(c.SonioxSecret); DeepSeekKey.Password = Preferences.Unprotect(c.DeepSeekSecret); }
-        catch { ViewModel.Status = "密钥无法解密，请重新输入并保存。"; }
+        var unreadableSecrets = new List<string>();
+        try { SonioxKey.Password = Preferences.Unprotect(c.SonioxSecret); }
+        catch { sonioxSecretUnreadable = true; unreadableSecrets.Add("Soniox"); }
+        try { DeepSeekKey.Password = Preferences.Unprotect(c.DeepSeekSecret); }
+        catch { deepSeekSecretUnreadable = true; unreadableSecrets.Add("DeepSeek"); }
+        if (unreadableSecrets.Count > 0)
+            ViewModel.Status = $"{string.Join("、", unreadableSecrets)} API Key 无法解密；未重新填写时会保留原密文。";
+        SonioxKey.PasswordChanged += (_, _) =>
+        {
+            if (SonioxKey.Password.Length > 0) sonioxSecretUnreadable = false;
+        };
+        DeepSeekKey.PasswordChanged += (_, _) =>
+        {
+            if (DeepSeekKey.Password.Length > 0) deepSeekSecretUnreadable = false;
+        };
         ThemeChoice.SelectedIndex = ThemePreference.IndexFor(c.Theme);
         TranscriptFolderPath.Text = TranscriptFiles.Root;
         SettingsSections.SelectedItem = SettingsGeneral;
@@ -798,7 +813,8 @@ public sealed partial class MainPage : Page
         {
             if (Translate.IsOn && string.IsNullOrWhiteSpace(ViewModel.Config.TargetLanguage)) throw new InvalidOperationException("请填写翻译目标语言。");
             var c = ViewModel.Config;
-            c.SonioxSecret = Preferences.Protect(SonioxKey.Password.Trim()); c.DeepSeekSecret = Preferences.Protect(DeepSeekKey.Password.Trim());
+            c.SonioxSecret = Preferences.UpdateProtectedSecret(c.SonioxSecret, SonioxKey.Password, sonioxSecretUnreadable);
+            c.DeepSeekSecret = Preferences.UpdateProtectedSecret(c.DeepSeekSecret, DeepSeekKey.Password, deepSeekSecretUnreadable);
             c.CorrectionTerms = CorrectionTerms.Text.Trim();
             c.Translate = Translate.IsOn; c.Strict = Strict.IsOn; c.Speakers = Speakers.IsOn;
             if (SettingsSourceLanguage.SelectedItem is LanguageChoice source) c.SourceLanguage = source.Code ?? string.Empty;
@@ -819,6 +835,10 @@ public sealed partial class MainPage : Page
             c.AutoSummaryEnabled = AutoSummary.IsOn;
             c.Theme = ThemePreference.FromIndex(ThemeChoice.SelectedIndex);
             c.Save();
+            bool sonioxStillUnreadable = sonioxSecretUnreadable && SonioxKey.Password.Trim().Length == 0;
+            bool deepSeekStillUnreadable = deepSeekSecretUnreadable && DeepSeekKey.Password.Trim().Length == 0;
+            sonioxSecretUnreadable = sonioxStillUnreadable;
+            deepSeekSecretUnreadable = deepSeekStillUnreadable;
             ViewModel.RefreshSummaryPanelVisibility();
             loadingSettings = true;
             LoadSegmentationSettings(c.Segmentation);
@@ -826,7 +846,9 @@ public sealed partial class MainPage : Page
             ApplyWindowTheme();
             UpdateAudioDisplay();
             UpdateLanguageHeaders();
-            ViewModel.Status = "设置已保存，Key 使用当前 Windows 用户加密。";
+            ViewModel.Status = sonioxStillUnreadable || deepSeekStillUnreadable
+                ? "设置已保存；无法解密的 Key 密文已保留，请重新填写后再使用。"
+                : "设置已保存，Key 使用当前 Windows 用户加密。";
             Back_Click(sender, e);
         }
         catch (Exception error) { ViewModel.Status = "设置保存失败：" + error.Message; }

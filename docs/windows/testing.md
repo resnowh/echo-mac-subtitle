@@ -44,6 +44,7 @@ Windows 仓库已有 `windows/Echo.CoreChecks/Program.cs`，覆盖转写 token �
 21. A50 新增 `DisplayDeviceName` 首选显示器持久化与旧配置兼容检查；原有 `DisplayId` 字段保持可读。最终本机验证：CoreChecks 123 项通过且无警告，Release x64 构建 0 警告/0 错误，UI smoke PowerShell 语法通过，`git diff --check` 通过。x86 构建未通过：当前 `project.assets.json` 未包含 win-x86 目标；已在代码中按进程位数分别绑定 `Get/SetWindowLongPtrW` 与 x86 的 `Get/SetWindowLongW`，x86 运行时行为仍未实测。
 22. A51 对照 Mac `AudioInputMode` 与 `SpeechViewModel.setInputMode`，补齐 Windows 录音中的模式切换和 Mac 默认话筒。126 项 CoreChecks、Release x64（0 警告、0 错误）通过。模式切换未连接真实 Soniox、录音设备或保存音频，故仅验证设置、来源路由计划和 XAML 切换事件；WASAPI 实机切换、授权拒绝、失败恢复与声音连续性仍待验。源码哈希和范围见 [A51 底稿](../sources/windows-a51-live-audio-mode-switch-2026-10-10.md)。
 23. A56 复核 Mac `SynchronizedTranscriptView` 与 Windows 列表滚动。Windows 现在区分 Direct Manipulation/滚轮/键盘输入和被动内容布局变化，只有用户滚离底部才暂停实时跟随。134 项 CoreChecks 与 Release x64 构建（0 警告、0 错误）通过，`git diff --check` 通过。没有对前台隔离 A50 进程做 UIA；触控板惯性、鼠标滚轮与虚拟化列表仍待验。Microsoft Learn 两个官方页面原件、长度、SHA-256、Mac/Windows 源码哈希见 [A56 底稿](../sources/windows-a56-transcript-follow-2026-10-10.md)。
+24. A57 对照 Mac `SpeechViewModel.saveAPIKey/saveSummarySettings` 和 Windows DPAPI。Mac 源码写入 UserDefaults；Windows 保持 DPAPI，并在解密失败时保留密文，防止用户只改其他设置就覆盖掉。138 项 CoreChecks 覆盖保留、替换、清空及 UI 接线；Release x64 构建 0 警告/0 错误。未读取或修改用户 Key；实际设置 UI 和故障账户环境仍待隔离验收。源码哈希和行为记录见 [A57 底稿](../sources/windows-a57-dpapi-secret-recovery-2026-10-10.md)。
 
 ## 尚未验证
 

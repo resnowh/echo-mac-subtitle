@@ -31,6 +31,11 @@ public sealed class Preferences
     public TranscriptSegmentationSettings Segmentation { get; set; } = new();
     public static string Protect(string value) => value.Length == 0 ? "" : Convert.ToBase64String(ProtectedData.Protect(Encoding.UTF8.GetBytes(value), null, DataProtectionScope.CurrentUser));
     public static string Unprotect(string value) => value.Length == 0 ? "" : Encoding.UTF8.GetString(ProtectedData.Unprotect(Convert.FromBase64String(value), null, DataProtectionScope.CurrentUser));
+    public static string UpdateProtectedSecret(string currentSecret, string replacement, bool currentSecretCannotBeUnprotected)
+    {
+        string trimmed = replacement.Trim();
+        return currentSecretCannotBeUnprotected && trimmed.Length == 0 ? currentSecret : Protect(trimmed);
+    }
     public static Preferences Load()
     {
         string file = Path.Combine(TranscriptFiles.Root, "settings.json");
