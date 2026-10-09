@@ -302,6 +302,20 @@ enum CorrectionChecks {
         reducer.finalize(originalOnly, translationEnabled: false, at: Date(timeIntervalSince1970: 100))
         precondition(reducer.current?.remainsVisible(at: Date(timeIntervalSince1970: 104), retention: 5) == true)
         precondition(reducer.current?.remainsVisible(at: Date(timeIntervalSince1970: 105), retention: 5) == false)
+        // Late translation of an already-finalized entry must be visible long
+        // enough to read; redundant callbacks must not extend the retention.
+        let lateID = UUID()
+        let lateOriginal = SubtitleEntry(id: lateID, start: 0, end: 1, english: "Final words", chinese: "")
+        reducer.update(lateOriginal, translationEnabled: true, at: Date(timeIntervalSince1970: 99))
+        reducer.finalize(lateOriginal, translationEnabled: true, at: Date(timeIntervalSince1970: 100))
+        precondition(!reducer.current!.remainsVisible(at: Date(timeIntervalSince1970: 106), retention: 5))
+        let lateTranslated = SubtitleEntry(id: lateID, start: 0, end: 1, english: "Final words", chinese: "迟到译文")
+        reducer.update(lateTranslated, translationEnabled: true, at: Date(timeIntervalSince1970: 106))
+        precondition(reducer.current?.isFinal == true)
+        precondition(reducer.current?.remainsVisible(at: Date(timeIntervalSince1970: 110), retention: 5) == true)
+        reducer.update(lateTranslated, translationEnabled: true, at: Date(timeIntervalSince1970: 110))
+        precondition(reducer.current?.remainsVisible(at: Date(timeIntervalSince1970: 111), retention: 5) == false,
+                     "Identical finalized updates must not reset expiry")
         let replacement = SubtitleEntry(id: UUID(), start: 1, end: 2, english: "Next", chinese: "下一句")
         reducer.update(replacement, translationEnabled: true)
         precondition(reducer.current?.entryID == replacement.id && reducer.current?.isFinal == false)
