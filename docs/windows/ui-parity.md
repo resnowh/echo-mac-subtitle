@@ -34,13 +34,13 @@ Windows 当前分支已实现独立顶层窗口，显示原文与译文两行，
 
 原文与译文各自最多显示两行，超出部分在尾部省略。翻译关闭时始终显示原文，即使保存的“显示原文”开关为关闭；这样不会让用户在无译文可显示时得到空白浮层。A38 增加了可见行逻辑和 XAML 行数/尾部省略契约检查；该检查不证明实际字体布局或透明合成。
 
-窗口使用 WinUI `Window` + `AppWindow`，代码尝试设置 layered、no-activate、点击穿透和 DWM frame；主菜单可开关、进入/退出调整，设置面板可改两种文字显示、字号、透明度、宽度、保留时间、阴影、点击穿透和位置锁定，也可恢复默认或重置位置。A34 增加上次显示器 ID 保存；拖动进入异 DPI 屏幕后重新计算尺寸，拖动/缩放采用屏幕物理坐标并在跨屏时重设输入起点。
+字幕内容现在由独立原生 Win32 layered HWND 承载；主界面仍为 WinUI 3。窗口用 Win2D（Direct2D/DirectWrite）渲染预乘 BGRA 像素，再交给 `UpdateLayeredWindow(ULW_ALPHA)` 合成，因此字幕外区域可以保持透明。主菜单可开关、进入/退出调整，设置面板可改两种文字显示、字号、透明度、宽度、保留时间、阴影、点击穿透和位置锁定，也可恢复默认或重置位置。位置记忆显示器设备名与规范化坐标，旧 `DisplayId` 配置继续兼容。
 
 窗口只订阅当前活动字幕 entry：临时识别持续更新；最终文本开始倒计时；有意义的迟到翻译或更正重置倒计时；相同文本更新不重置。禁止为浮层另建录音、音频采集器或 Soniox 连接。
 
-A49 首次在独立包和临时数据目录启动浮层，UIA 确认双语文字可见；Win32 检查发现点击穿透标志存在、浮层位于主窗上方，但实际扩展样式缺少 `WS_EX_LAYERED`。浮层区域截图显示不透明黑底，遮住后方内容。WinUI 3 XAML 透明 root 无法提供当前需要的透明字幕合成效果；Microsoft 也记录了 WinUI 3 输出表面保持主题不透明背景的限制，见 [WinUI/XAML 透明输出讨论](https://github.com/microsoft/microsoft-ui-xaml/issues/11134)。用户已选择下一轮以原生 Win32/Direct2D 实现透明悬浮层，主界面继续使用 WinUI。A49 同时修复 `DisplayArea.FindAll()` 枚举造成的启动崩溃；显示器变化后的真实重排、多屏/DPI、虚拟桌面和全屏行为仍未验证。完整结果与合成画面见 [A49 实测底稿](../sources/windows-a49-overlay-ui-2026-10-10.md)。
+A49 首次在独立包和临时数据目录启动浮层，实际扩展样式缺少 `WS_EX_LAYERED`，黑底遮挡后方内容。A50 已替换为上述原生 layered HWND。隔离 GUI 共 10 项通过：确认 layered/tool/no-activate 样式、主窗口上方、可见、点击穿透、合成双语文字、透明/可见像素、预乘 Alpha，以及调整模式取消点击穿透并在退出后恢复。测试缓冲区为 1920×225，透明像素 418,425、可见像素 13,575，未发现非预乘像素。测试未保存桌面截图；缓冲区统计不等同于 Mac 并排视觉验收。多显示器/DPI 切换、全屏和虚拟桌面仍待验证。详细结果和 SHA-256 见 [A50 底稿](../sources/windows-a50-native-overlay-2026-10-10.md)。
 
-实现参考（Microsoft 官方文档，读取日期：2026-10-09）：[WinUI Windowing overview](https://learn.microsoft.com/en-us/windows/apps/develop/ui/windowing-overview)、[AppWindow API](https://learn.microsoft.com/en-us/windows/windows-app-sdk/api/winrt/microsoft.ui.windowing.appwindow?view=windows-app-sdk-1.8)、[AppWindow.Changed](https://learn.microsoft.com/en-us/windows/windows-app-sdk/api/winrt/microsoft.ui.windowing.appwindow.changed?view=windows-app-sdk-2.0)、[DisplayAreaWatcher](https://learn.microsoft.com/en-us/windows/windows-app-sdk/api/winrt/microsoft.ui.windowing.displayareawatcher?view=windows-app-sdk-2.0)、[High DPI desktop development](https://learn.microsoft.com/en-us/windows/win32/hidpi/high-dpi-desktop-application-development-on-windows)、[Win32 extended window styles](https://learn.microsoft.com/en-us/windows/win32/winmsg/extended-window-styles)、[layered window behavior](https://learn.microsoft.com/en-us/windows/win32/winmsg/window-features)、[SetLayeredWindowAttributes](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setlayeredwindowattributes)。
+实现参考：[UpdateLayeredWindow](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-updatelayeredwindow)、[Win2D alpha modes](https://learn.microsoft.com/en-us/windows/apps/develop/win2d/premultiplied-alpha)、[Win2D](https://microsoft.github.io/Win2D/)。历史 WinUI windowing 与 DPI 参考见前版记录。
 
 ## 视觉与无障碍验收
 

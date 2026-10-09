@@ -39,10 +39,13 @@ Windows 仓库已有 `windows/Echo.CoreChecks/Program.cs`，覆盖转写 token �
 - A32 在 Windows CI 增加 macOS fixture 生产与回读 job：使用未修改的 Mac 生产 ArchiveStore/SRTExporter 生成双段合成档案，Windows CoreChecks 解析并回写，随后 Mac 生产 decoder 再读并逐字段/SRT 校验。
 - 当前提交的 GitHub Actions run `37948130637` 中，`generate-mac-archive-fixture`、`build-and-check`、`verify-mac-archive-roundtrip` 三个 job 均成功；PR 所需 Mac CI 与分发预检也通过。Mac 源 fixture、SRT 和 Windows round-trip JSON 已保存在 `docs/sources/windows-a32-runtime-fixtures-2026-10-09/`，文件长度与 SHA-256 登记在 `windows-a32-archive-runtime-pipeline-2026-10-09.md`。
 
+20. A50 在独立 MSIX 身份与临时数据目录运行原生 Win32/Win2D 浮层，未启动正式包、录音或调用云服务。隔离 UI smoke 10/10 通过：`WS_EX_LAYERED|TOOLWINDOW|NOACTIVATE`、Z 序位于主窗上方、可见、点击穿透、合成双语窗口名、缓冲区透明与可见像素、预乘 BGRA 正确；调整模式取消点击穿透且整窗命中，退出后恢复。原始缓冲统计为 1920×225，432,000 总像素、418,425 透明、13,575 可见、0 个非预乘像素。结果与哈希见 [A50 底稿](../sources/windows-a50-native-overlay-2026-10-10.md)。未保留桌面截图，因此未覆盖并排视觉、多显示器/DPI 切换、全屏与虚拟桌面。
+
+21. A50 新增 `DisplayDeviceName` 首选显示器持久化与旧配置兼容检查；原有 `DisplayId` 字段保持可读。最终本机验证：CoreChecks 123 项通过且无警告，Release x64 构建 0 警告/0 错误，UI smoke PowerShell 语法通过，`git diff --check` 通过。x86 构建未通过：当前 `project.assets.json` 未包含 win-x86 目标；已在代码中按进程位数分别绑定 `Get/SetWindowLongPtrW` 与 x86 的 `Get/SetWindowLongW`，x86 运行时行为仍未实测。
+
 ## 尚未验证
 
-- Mac 所需的透明渲染尚未实现；当前 WinUI 浮层实测黑底。点击穿透只检查了 HWND 扩展样式，鼠标命中/失焦仍待 GUI 验收。
-- 原生 Win32/Direct2D 替换后的多显示器/DPI、虚拟桌面、全屏应用及实际字幕生命周期 GUI smoke。
+- 原生 Win32/Direct2D 浮层的 Mac 并排视觉对照、多显示器/DPI、虚拟桌面、全屏应用、显示器移除恢复及真实字幕生命周期 GUI smoke。
 - 新版矩阵覆盖每个 Mac 行为的自动化契约。
 - 真实 Soniox/DeepSeek 云响应；本地模拟服务不等于云端验收。
 - Windows GUI 的字体、窗口缩放、键盘、Narrator、高对比度与多 DPI，包括 125%、150%、200%。

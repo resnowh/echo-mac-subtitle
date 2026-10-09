@@ -62,10 +62,11 @@ Check(overlayAt100 == new OverlayPlacement(240, 833, 1440, 150)
     && overlayAt150 == new OverlayPlacement(-2240, 1086, 1920, 225)
     && overlayAt200 == new OverlayPlacement(2240, -200, 960, 300),
     "overlay placement scales with DPI, supports negative multi-monitor origins, and clamps to short work areas");
-var savedDisplaySettings = JsonSerializer.Deserialize<DesktopSubtitleOverlaySettings>(JsonSerializer.Serialize(new DesktopSubtitleOverlaySettings { DisplayId = 42 }, TranscriptFiles.Json), TranscriptFiles.Json);
+var savedDisplaySettings = JsonSerializer.Deserialize<DesktopSubtitleOverlaySettings>(JsonSerializer.Serialize(new DesktopSubtitleOverlaySettings { DisplayId = 42, DisplayDeviceName = @"\\.\DISPLAY2" }, TranscriptFiles.Json), TranscriptFiles.Json);
 var legacyOverlaySettings = JsonSerializer.Deserialize<DesktopSubtitleOverlaySettings>("{}", TranscriptFiles.Json);
-Check(savedDisplaySettings?.DisplayId == 42 && legacyOverlaySettings?.DisplayId is null,
-    "overlay display preference round-trips while older settings remain compatible");
+Check(savedDisplaySettings is not null && savedDisplaySettings.DisplayId == 42 && savedDisplaySettings.DisplayDeviceName == @"\\.\DISPLAY2"
+    && legacyOverlaySettings is not null && legacyOverlaySettings.DisplayId is null && legacyOverlaySettings.DisplayDeviceName is null,
+    "overlay monitor identity round-trips while older settings remain compatible");
 overlaySettings.ShowOriginal = false; overlaySettings.ShowTranslation = false; overlaySettings.Opacity = double.NaN; overlaySettings.Validate();
 Check(overlaySettings.ShowOriginal && overlaySettings.Opacity == 1, "overlay settings retain a visible language and repair invalid persisted values");
 var translationOnlySettings = new DesktopSubtitleOverlaySettings { ShowOriginal = false, ShowTranslation = true };

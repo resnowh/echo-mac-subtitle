@@ -1,0 +1,52 @@
+[
+  {
+    "name": "Overlay is layered, a tool window, and does not activate",
+    "status": "PASS",
+    "detail": "extendedStyle=0x80800A8"
+  },
+  {
+    "name": "Overlay remains above the main window in z-order",
+    "status": "PASS",
+    "detail": "Compared by adjacent top-level window order."
+  },
+  {
+    "name": "Overlay is visible",
+    "status": "PASS",
+    "detail": "Native HWND is visible."
+  },
+  {
+    "name": "Click-through state matches test expectation",
+    "status": "PASS",
+    "detail": "expected=True; actual=True"
+  },
+  {
+    "name": "Synthetic source and translation appear in the accessible window name",
+    "status": "PASS",
+    "detail": "Echo overlay preview | 双语悬浮字幕预览"
+  },
+  {
+    "name": "Render target has both fully transparent and visible text pixels",
+    "status": "PASS",
+    "detail": "size=1920x225; transparent=418425; visible=13575"
+  },
+  {
+    "name": "Direct2D output satisfies premultiplied BGRA alpha",
+    "status": "PASS",
+    "detail": "alphaMode=premultiplied-bgra8; invalidPixels=0"
+  },
+  {
+    "name": "Adjustment mode receives pointer input by removing click-through",
+    "status": "PASS",
+    "detail": "extendedStyle=0x8080088"
+  },
+  {
+    "name": "Adjustment hit-test surface is present across the overlay bounds",
+    "status": "PASS",
+    "detail": "visible=432000/432000"
+  },
+  {
+    "name": "Leaving adjustment mode restores configured click-through",
+    "status": "PASS",
+    "detail": "expected=True; actual=True"
+  }
+]

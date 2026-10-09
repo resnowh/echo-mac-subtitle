@@ -1,6 +1,7 @@
 using Echo_Windows.Core;
 using Echo_Windows.Services;
 using Echo_Windows.ViewModels;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
@@ -22,7 +23,7 @@ public sealed record LanguageChoice(string? Code, string Title);
 public sealed partial class MainPage : Page
 {
     private readonly List<Border> waveform = [];
-    private DesktopSubtitleOverlayWindow? subtitleOverlayWindow;
+    private NativeDesktopSubtitleOverlayWindow? subtitleOverlayWindow;
     private static readonly LanguageChoice[] SourceLanguages =
     [
         new(null, "自动识别"), new("en", "English"), new("zh", "简体中文"), new("ja", "日本語"),
@@ -377,8 +378,9 @@ public sealed partial class MainPage : Page
     private async void OverlaySettings_Click(object sender, RoutedEventArgs e) => await ShowOverlaySettingsAsync();
     private void ShowSubtitleOverlay()
     {
-        subtitleOverlayWindow ??= new DesktopSubtitleOverlayWindow(
-            ViewModel.SubtitleOverlayFeed, ViewModel.Config.SubtitleOverlay, PersistOverlayPlacement);
+        subtitleOverlayWindow ??= new NativeDesktopSubtitleOverlayWindow(
+            ViewModel.SubtitleOverlayFeed, ViewModel.Config.SubtitleOverlay, PersistOverlayPlacement,
+            DispatcherQueue.GetForCurrentThread(), App.WindowHandle);
         subtitleOverlayWindow.ApplySettings(ViewModel.Config.SubtitleOverlay, reposition: true);
         subtitleOverlayWindow.ShowOverlay();
     }
@@ -428,7 +430,7 @@ public sealed partial class MainPage : Page
         AutomationProperties.SetAutomationId(resetPosition, "ResetSubtitleOverlayPosition");
         resetPosition.Click += (_, _) =>
         {
-            current.DisplayId = null; current.NormalizedX = .5; current.NormalizedBottom = .09;
+            current.DisplayId = null; current.DisplayDeviceName = null; current.NormalizedX = .5; current.NormalizedBottom = .09;
             SaveOverlaySettings(current);
             subtitleOverlayWindow?.ApplySettings(current, reposition: true);
         };
@@ -444,7 +446,8 @@ public sealed partial class MainPage : Page
         if (result == ContentDialogResult.Secondary)
         {
             SaveOverlaySettings(new DesktopSubtitleOverlaySettings { Enabled = current.Enabled,
-                DisplayId = current.DisplayId, NormalizedX = current.NormalizedX, NormalizedBottom = current.NormalizedBottom });
+                DisplayId = current.DisplayId, DisplayDeviceName = current.DisplayDeviceName,
+                NormalizedX = current.NormalizedX, NormalizedBottom = current.NormalizedBottom });
             return;
         }
         if (result != ContentDialogResult.Primary) return;
