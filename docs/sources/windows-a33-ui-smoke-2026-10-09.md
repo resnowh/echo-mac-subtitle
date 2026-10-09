@@ -34,6 +34,8 @@ Echo_Windows.App.OnLaunched in App.xaml.cs:71
 
 留存的机器可读结果 `ui-smoke-results.json` 为 923 bytes，SHA-256：`08A0EA020BB809D269EB99C27052851E40668361C36E292E1791AE48004443A9`。
 
+修复提交 `8f7dc771315a7247f75d5418fe17b85883e211ee` 的 GitHub Actions run `37948130637` 三个跨平台 Archive parity job 全部通过；同一 PR 的 Mac CI 和 unsigned-package preflight 也通过。
+
 ## 本机数据与留存边界
 
 应用启动时从 MSIX 包隔离目录载入了此前存在的本机 Archive 内容。为避免提交本机字幕，测试只检查控件状态；生成的原始截图与 UIA 全树因包含该页面文字已删除，不在仓库留底。仓库仅保存上述不含文字稿的 12 项通过结果；启动异常以本文件中的 WER/triage 摘要记录，原始进程转储不纳入仓库。未打开归档文件或复制其内容，未保存设置或音频。

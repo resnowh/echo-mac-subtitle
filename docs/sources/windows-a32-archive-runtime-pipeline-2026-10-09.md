@@ -28,4 +28,5 @@ fixture 仅含固定合成文本，不含用户 Archive、录音、凭据或云�
 
 - Windows 本机可运行 CoreChecks 和 Release 构建，但当前主机没有 Mac Swift runtime；生产生成/解码由本次 GitHub macOS runner job 验证。
 - GitHub Actions run `37944556906` 三个 job 全部成功；artifact 与文件哈希见上方留存清单。
+- A33 修复后的当前提交再次通过 run `37948130637` 三个 Archive parity job；同一 PR 的 Mac CI 与 unsigned-package preflight 也通过。此轮不重新下载相同的合成样本，底稿继续以首个留存 run 的 artifact 和哈希为准。
 - 未读取用户 Archive、未启动 Echo、未改 Mac app 源码、Xcode 工程或 `tests/`。

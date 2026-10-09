@@ -7,7 +7,7 @@
 - 以 Mac 的 `handleSonioxMessage` 和 Soniox 当前事件协议为参考，为 Windows 建立相同输入序列：每条响应都整体替换 provisional 原文/译文快照、final 追加、speaker/语言元数据变化、原文后到达的翻译、统一双语端点及重连边界。provisional 语言只初始化空标签，final token 才能更新既有标签；Mac 将 `<end>`/`<fin>` 作为响应级标记，Windows 在完整处理响应后最多结束当前双语字幕一次，不由可选的 `translation_status` 决定游标。
 - A30 Windows fixture 已逐响应检查五条合成消息，包括 provisional 译文被新快照清空、跨响应迟到译文、final 元数据、时间戳、同响应 speaker split 和端点回调。期望从 Mac 生产源码静态推导；Mac handler 的 runtime 对拍仍待合法 Mac 环境验证，不能视为两端端到端已完成。来源清单见 [A30 Soniox stream fixture](../sources/windows-a30-soniox-stream-parity-fixture-2026-10-09.md)。
 - Mac 对经济学/微积分识别结果的强语境词汇纠正和 Soniox 请求上下文（领域、主题、背景文本、39 个术语、26 组中英译词及用户自定义词）已移植到 Windows；请求契约、自定义词边界（含组合字符/ZWJ emoji 截断）及纠正规则有自动检查。数据底稿见 [A26 Soniox context baseline](../sources/windows-a26-soniox-context-2026-10-09.md)。仍需在合法 Mac 环境运行生产 handler 的 A30 序列，并将纠正前后真实 handler 输出对拍；普通语境不误修已有独立合成检查。
-- A32 跨平台 CI 现为双段合成 Archive 使用 Mac 生产 encoder/SRTExporter 生成数据，经 Windows 导入回写，再用 Mac 生产 decoder/SRTExporter 检查 ID、日期、metadata、校对历史与 SRT。当前 HEAD 的三个相关 Actions job 在 run `37945218699` 均通过；真实用户历史 Archive 仍需广泛互操作验证。来源清单见 [A27 archive order baseline](../sources/windows-a27-archive-order-multisegment-2026-10-09.md) 与 [A32 runtime pipeline](../sources/windows-a32-archive-runtime-pipeline-2026-10-09.md)。
+- A32 跨平台 CI 现为双段合成 Archive 使用 Mac 生产 encoder/SRTExporter 生成数据，经 Windows 导入回写，再用 Mac 生产 decoder/SRTExporter 检查 ID、日期、metadata、校对历史与 SRT。当前提交的三个相关 Actions job 在 run `37948130637` 均通过；真实用户历史 Archive 仍需广泛互操作验证。来源清单见 [A27 archive order baseline](../sources/windows-a27-archive-order-multisegment-2026-10-09.md) 与 [A32 runtime pipeline](../sources/windows-a32-archive-runtime-pipeline-2026-10-09.md)。
 - 保持存档原子写入、备份和恢复行为；发现损坏文件时明示，不静默覆盖。
 - Soniox/API 错误按 HTTP 状态、断线、超时分类；仅对可重试错误有限重试，并显示用户可理解的错误。
 
