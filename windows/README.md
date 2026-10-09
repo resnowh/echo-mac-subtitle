@@ -52,9 +52,9 @@ NuGet 版本记录在 `packages.lock.json`。GitHub Actions 在 Windows runner �
 
 ## 测试签名安装包
 
-最新本机候选：`windows/artifacts/Echo-Windows-x64-a24-20260930.msix`，约 103 MiB，包含运行时；SHA-256 和逐版信息见 [A18 打包底稿](../docs/sources/windows-a18-msix-preview-2026-09-30.md)。附带 `Echo-preview.cer` 公钥证书。**这是自签名测试包，不是公众发行证书，也不是商店上架版本。**
+最新本机候选：`windows/artifacts/Echo-Windows-x64-a25-20261009.msix`（版本 1.0.2.0，108,214,409 bytes），包含运行时；SHA-256 和逐版信息见 [A18 打包底稿](../docs/sources/windows-a18-msix-preview-2026-09-30.md)。附带 `Echo-preview.cer` 公钥证书。**这是自签名测试包，不是公众发行证书，也不是商店上架版本。**
 
-其他测试机器需要先审查并信任该测试发布者证书，再安装 MSIX；普通用户直接双击可能被不受信任证书拦截。此前候选包曾通过开发注册启动；当前 A24 预览包没有安装或启动，`Get-AuthenticodeSignature` 显示证书链终止于未受信任根。尚未用另一台干净机器验证安装。不要把本机的 `.pfx` 私钥发给测试用户或提交到 Git。安装包和私钥均被 Git 忽略。
+其他测试机器需要先审查并信任该测试发布者证书，再安装 MSIX；普通用户直接双击可能被不受信任证书拦截。此前候选包曾通过开发注册启动；当前 A25 预览包没有安装或启动，`Get-AuthenticodeSignature` 显示证书链终止于未受信任根。尚未用另一台干净机器验证安装。不要把本机的 `.pfx` 私钥发给测试用户或提交到 Git。安装包和私钥均被 Git 忽略。
 
 在当前 Release 构建输出、Windows SDK Build Tools 与测试签名证书已就绪后，可用打包脚本生成新包。输出路径必须唯一；脚本会校验清单、签名者和包内 exe/dll 与当前构建一致，且不会启动或安装应用：
 
@@ -70,6 +70,8 @@ NuGet 版本记录在 `packages.lock.json`。GitHub Actions 在 Windows runner �
 ## 本次验证与边界
 
 2026-09-30：A15 无障碍语义修正后的 Windows Release x64 输出生成签名候选 A24 `windows/artifacts/Echo-Windows-x64-a24-20260930.msix`（108,211,492 bytes）。打包脚本已在签名前后核对清单和 exe/dll 哈希；包 SHA-256、签名状态与安装限制见 `docs/sources/windows-a18-msix-preview-2026-09-30.md`。自签名链仍不受信任，未安装、导入证书或启动 Echo。
+
+2026-10-09：为包含 A17 runtime 对拍与 A15 动态控件标识修正的当前源码，将包版本递增至 1.0.2.0，并生成 A25 `windows/artifacts/Echo-Windows-x64-a25-20261009.msix`（108,214,409 bytes）。WinUI analyzer 启用时 Release x64 构建成功，打包脚本完成签名后解包，exe/dll 哈希均与 Release 输出相同。测试证书根仍不受信任；未安装、信任证书或启动 Echo。包哈希和二进制哈希见 `docs/sources/windows-a18-msix-preview-2026-09-30.md`。
 
 2026-09-17：Release 构建成功；14 项本地核心/采集/模拟协议检查通过；9 项 UI 冒烟检查通过；另通过实际文件选择器完成示例 JSON 导入及 SRT 导出，核对三段原文、译文与时间戳。已实际打开窗口并检查主界面、设置界面截图，修复高 DPI 下字幕区域高度问题。按用户选定的 Mac 风格重做双栏字幕、底部控制、薄荷绿主题和居中设置面板；原界面已备份。窗口中的“示例”存档为人工测试文字，不是真实语音识别结果。
 

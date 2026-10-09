@@ -88,12 +88,25 @@ MSIX 版本从 `1.0.0.0` 递增到 `1.0.1.0`，并以 Release 输出为主、合
 - 打包脚本在打包前和签名后解包阶段都确认 `Echo.Windows.exe`、`Echo.Windows.dll` 与 Release 输出哈希匹配。
 - A24 未安装、未导入/信任证书、未启动应用；真实安装升级仍待当前用户回应证书信任提示。
 
+## A25 当前本机候选包（2026-10-09）
+
+为包含 A17 双向存档检查和 A15 动态控件 AutomationId 修复的当前源码，将 MSIX 身份版本升至 `1.0.2.0`，随后通过 WinUI 开发脚本的 `-SkipRun` 构建，并用 `windows/package-preview.ps1` 打包、签名和解包核验。构建过程启用了 Microsoft.WindowsAppSDK.Analyzers；没有启动 Echo。
+
+- 路径：`windows/artifacts/Echo-Windows-x64-a25-20261009.msix`（本地忽略文件，不上传仓库）
+- 大小：108,214,409 bytes；SHA-256：`741CB4EFE600DA42CD923421823C8DEDBCCCDACD8D869B07CF316BF466589BED`
+- 清单：Identity `B7582E49-F75A-4EFA-950C-C6754B9E496E`，版本 `1.0.2.0`，架构 `x64`，Publisher `CN=AppPublisher`。
+- Release `Echo.Windows.exe`：294,400 bytes，SHA-256 `EC8B0F47DA34AEC4EF497DEE2ACBA8BE1642ED914FB4146D5C54569CA94A1F53`。
+- Release `Echo.Windows.dll`：351,232 bytes，SHA-256 `9F488F2C6FB382AD89192FED80E02D1C0AB25EC45ADC6D749108E7D83FD19347`。
+- 打包脚本签名前后解包，并确认 exe、dll 均与 Release 输出哈希一致；签名者 thumbprint `ADDF31C7C19756CF27C37A6D72FBC5FAA3D95B69` 与 Publisher 一致。
+- Release 构建通过，0 错误、10 条既有 NAudio `CS0618` 弃用警告。证书由本机 CurrentUser\My 提供私钥，证书有效期到 2027-09-16；Windows 对包返回 `UnknownError`，因为根不受信任。
+- 本轮未安装包、未导入或信任证书、未启动应用。A25 是本机测试签名候选，不满足公众可信签名、可信时间戳、干净机器安装升级或发布验收。
+
 ## 边界与未完成验收
 
 - 使用的是已有本地测试证书，不是正式个人/组织代码签名证书；本轮没有安装/信任该证书，没有安装或启动 MSIX，也未修改系统证书信任存储。
 - 没有可信时间戳；正式分发前必须用长期有效的发布身份重新签名并带可信时间戳。
 - 未在干净机器安装、升级、启动、填写 API Key、读取旧档或卸载回退。A18 仍未通过。
-- 旧版、A17/A20/A21/A22/A23/A24 预览包与 PFX 均保留在 `windows/artifacts` 忽略目录，不提交到 Git；A20 已明确作废，A24 为最新候选，哈希及可复核元数据写入本底稿。
+- 旧版、A17/A20/A21/A22/A23/A24/A25 预览包与 PFX 均保留在 `windows/artifacts` 忽略目录，不提交到 Git；A20 已明确作废，A25 为最新本机候选，哈希及可复核元数据写入本底稿。
 
 ## 数据留存
 
