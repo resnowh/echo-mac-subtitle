@@ -21,6 +21,7 @@
 		40 /* SpeechViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41 /* SpeechViewModel.swift */; };
 		42 /* LifecycleRecoveryState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43 /* LifecycleRecoveryState.swift */; };
 		44 /* MacLifecycleObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45 /* MacLifecycleObserver.swift */; };
+		47 /* APIKeyVault.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48 /* APIKeyVault.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -40,6 +41,7 @@
 		41 /* SpeechViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewModels/SpeechViewModel.swift; sourceTree = "<group>"; };
 		43 /* LifecycleRecoveryState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/LifecycleRecoveryState.swift; sourceTree = "<group>"; };
 		45 /* MacLifecycleObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/MacLifecycleObserver.swift; sourceTree = "<group>"; };
+		48 /* APIKeyVault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/APIKeyVault.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -87,6 +89,7 @@
 				41 /* SpeechViewModel.swift */,
 				43 /* LifecycleRecoveryState.swift */,
 				45 /* MacLifecycleObserver.swift */,
+				48 /* APIKeyVault.swift */,
 			);
 			name = Echo;
 			path = .;
@@ -173,6 +176,7 @@
 				40 /* SpeechViewModel.swift in Sources */,
 				42 /* LifecycleRecoveryState.swift in Sources */,
 				44 /* MacLifecycleObserver.swift in Sources */,
+				47 /* APIKeyVault.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

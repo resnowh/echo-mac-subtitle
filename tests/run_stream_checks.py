@@ -57,7 +57,7 @@ with tempfile.TemporaryDirectory(prefix="echo-stream-checks-") as folder:
     fixture_directory = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(folder) / "archive-fixture"
     executable = str(Path(folder) / "checks")
     sdk = subprocess.check_output(["xcrun", "--sdk", "macosx", "--show-sdk-path"], text=True).strip()
-    subprocess.run(["xcrun", "swiftc", "-sdk", sdk, "-O", "-o", executable,
+    subprocess.run(["xcrun", "swiftc", "-sdk", sdk, "-O", "-framework", "Security", "-o", executable,
                     str(root / "macOS/Audio/PCM16AudioPipeline.swift"),
                     str(root / "macOS/Services/SonioxWebSocketClient.swift"),
                     str(root / "macOS/Models/TranscriptModels.swift"),
@@ -65,8 +65,10 @@ with tempfile.TemporaryDirectory(prefix="echo-stream-checks-") as folder:
                     str(root / "macOS/Storage/TranscriptArchiveStore.swift"),
                     str(root / "macOS/Services/SonioxRequestBuilder.swift"),
                     str(root / "macOS/Services/DeepSeekService.swift"),
+                    str(root / "macOS/Services/APIKeyVault.swift"),
                     str(root / "macOS/Services/SRTExporter.swift"),
                     str(root / "tests/CorrectionChecks.swift"),
+                    str(root / "tests/APIKeyVaultChecks.swift"),
                     str(root / "tests/LifecycleRecoveryChecks.swift"),
                     str(root / "tests/StreamChecks.swift")], check=True)
     with socketserver.ThreadingTCPServer(("127.0.0.1", 0), WebSocketFixture) as server:

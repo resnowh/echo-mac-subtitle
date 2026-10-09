@@ -3,6 +3,7 @@ import Foundation
 @main
 struct StreamChecks {
     static func main() throws {
+        try APIKeyVaultChecks.run()
         LifecycleRecoveryChecks.run()
         let fixtureDirectory = CommandLine.arguments.count > 2
             ? URL(fileURLWithPath: CommandLine.arguments[2], isDirectory: true)

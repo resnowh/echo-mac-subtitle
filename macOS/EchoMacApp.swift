@@ -368,10 +368,9 @@ struct SettingsView: View {
                     Text("设置").font(.title2.weight(.semibold))
                     Spacer()
                     Button("完成") {
-                        model.saveAPIKey()
-                        model.saveSummarySettings()
+                        let savedCredentials = model.saveCredentialSettings()
                         model.saveRecognitionSettings()
-                        dismiss()
+                        if savedCredentials { dismiss() }
                     }
                 }
 
@@ -513,11 +512,17 @@ struct SettingsView: View {
                 settingsSection("服务") {
                     SecureField("Soniox API Key", text: $model.sonioxAPIKey)
                         .textFieldStyle(.roundedBorder)
-                    Text("用于实时识别和翻译，只保存在本机。")
+                    Text("用于实时识别和翻译，保存在 macOS 钥匙串中。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     SecureField("DeepSeek API Key（可选）", text: $model.deepSeekAPIKey)
                         .textFieldStyle(.roundedBorder)
+                    if !model.credentialStorageStatus.isEmpty {
+                        Text(model.credentialStorageStatus)
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                            .accessibilityIdentifier("credentialStorageStatus")
+                    }
                     Toggle("停止录音后自动生成 AI 总结", isOn: $model.isSummaryEnabled)
                     Toggle("自动 AI 语境校对（仅生成建议）", isOn: $model.isAICorrectionEnabled)
                     Text("默认关闭。开启后将已分句文字及相邻上下文发送给 DeepSeek，可能产生费用；不发送音频。建议需人工确认，不会自动覆盖文字。")
@@ -528,7 +533,7 @@ struct SettingsView: View {
                         .overlay(RoundedRectangle(cornerRadius: 4).stroke(.secondary.opacity(0.3)))
                     Text("术语用于 AI 校对及下一次 Soniox 建连的识别提示，不作全局替换。")
                         .font(.caption).foregroundStyle(.secondary)
-                    Text("总结会把文字稿发送到云端 AI；API Key 只保存在本机。")
+                    Text("总结会把文字稿发送到云端 AI；API Key 只保存在本机钥匙串。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

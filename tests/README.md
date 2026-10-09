@@ -7,6 +7,11 @@ segmentation, UserDefaults persistence, and Soniox endpoint request settings.
 No DeepSeek calls are made; these checks do not establish real AI correction
 quality.
 
+`APIKeyVaultChecks.swift` exercises the production Keychain wrapper with an
+isolated service name: create, update, read, delete, and verified migration
+from a temporary `UserDefaults` suite. Test credentials are synthetic and are
+removed from the test keychain when the process exits; no provider is contacted.
+
 `LifecycleRecoveryChecks.swift` runs the production sleep/wake state machine
 through ten recovery cycles and checks that inactive wake events, duplicate
 notifications, user stops, and stale recovery results cannot restart recording.

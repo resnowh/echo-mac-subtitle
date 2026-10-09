@@ -40,6 +40,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     @Published var isSwitchingInput = false
     @Published var isSummaryEnabled: Bool
     @Published var deepSeekAPIKey: String
+    @Published private(set) var credentialStorageStatus = ""
     @Published var recognitionConfig: RecognitionConfig {
         didSet { recognitionConfig.save() }
     }
@@ -142,13 +143,16 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
 
     override init() {
         let environmentKey = ProcessInfo.processInfo.environment["SONIOX_API_KEY"] ?? ""
-        let savedKey = UserDefaults.standard.string(forKey: "sonioxAPIKey") ?? ""
-        sonioxAPIKey = savedKey.isEmpty ? environmentKey : savedKey
+        let defaults = UserDefaults.standard
+        let sonioxKey = APIKeyVault.standard.load(.soniox, migratingFrom: defaults)
+        let deepSeekKey = APIKeyVault.standard.load(.deepSeek, migratingFrom: defaults)
+        sonioxAPIKey = sonioxKey.value.isEmpty ? environmentKey : sonioxKey.value
         isAlwaysOnTop = UserDefaults.standard.object(forKey: "alwaysOnTop") as? Bool ?? true
         let savedInputMode = UserDefaults.standard.string(forKey: "audioInputMode") ?? AudioInputMode.microphone.rawValue
         inputMode = AudioInputMode(rawValue: savedInputMode) ?? .microphone
         isSummaryEnabled = UserDefaults.standard.bool(forKey: "aiSummaryEnabled")
-        deepSeekAPIKey = UserDefaults.standard.string(forKey: "deepSeekAPIKey") ?? ""
+        deepSeekAPIKey = deepSeekKey.value
+        credentialStorageStatus = [sonioxKey.warning, deepSeekKey.warning].compactMap { $0 }.joined(separator: "\n")
         transcriptSegmentationConfig = TranscriptSegmentationConfig.load()
         let loadedRecognitionConfig = RecognitionConfig.load()
         recognitionConfig = loadedRecognitionConfig
@@ -438,8 +442,6 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
             }
             return
         }
-        UserDefaults.standard.set(key, forKey: "sonioxAPIKey")
-
         let permission = AVAudioApplication.shared.recordPermission
         guard inputMode.requiresMicrophone else {
             beginCapture(apiKey: key)
@@ -1884,25 +1886,25 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         showTransientArchiveStatus("已拆出本段")
     }
 
-    func saveAPIKey() {
-        let key = sonioxAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        if key.isEmpty {
-            UserDefaults.standard.removeObject(forKey: "sonioxAPIKey")
-        } else {
-            UserDefaults.standard.set(key, forKey: "sonioxAPIKey")
+    func saveCredentialSettings() -> Bool {
+        var warnings: [String] = []
+        do {
+            try APIKeyVault.standard.save(sonioxAPIKey, for: .soniox, defaults: .standard)
+            sonioxAPIKey = sonioxAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        } catch {
+            warnings.append("Soniox API Key 未能保存到 macOS 钥匙串；输入仍保留在此设置页，旧值不会被清除。请检查钥匙串后重试。")
         }
-        sonioxAPIKey = key
-    }
 
-    func saveSummarySettings() {
-        let key = deepSeekAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        if key.isEmpty {
-            UserDefaults.standard.removeObject(forKey: "deepSeekAPIKey")
-        } else {
-            UserDefaults.standard.set(key, forKey: "deepSeekAPIKey")
+        do {
+            try APIKeyVault.standard.save(deepSeekAPIKey, for: .deepSeek, defaults: .standard)
+            deepSeekAPIKey = deepSeekAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        } catch {
+            warnings.append("DeepSeek API Key 未能保存到 macOS 钥匙串；输入仍保留在此设置页，旧值不会被清除。请检查钥匙串后重试。")
         }
+
         UserDefaults.standard.set(isSummaryEnabled, forKey: "aiSummaryEnabled")
-        deepSeekAPIKey = key
+        credentialStorageStatus = warnings.joined(separator: "\n")
+        return warnings.isEmpty
     }
 
     func saveRecognitionSettings() {
