@@ -126,6 +126,8 @@ string normalizedNativeOverlaySource = nativeOverlaySource.Replace("\r\n", "\n",
 Check(normalizedNativeOverlaySource.Contains("case WmSettingChange when wParam == SpiSetWorkArea:\n                OnDisplayConfigurationChanged();\n                return 0;", StringComparison.Ordinal)
     && normalizedNativeOverlaySource.Contains("case WmDisplayChange:\n                OnDisplayConfigurationChanged();\n                return 0;", StringComparison.Ordinal),
     "native overlay recomputes its placement when Windows reports display or work-area changes");
+Check(normalizedNativeOverlaySource.Contains("public void HideOverlay()\n    {\n        if (adjusting) SetAdjusting(false);", StringComparison.Ordinal),
+    "hiding the native overlay exits adjustment mode as Mac hide does");
 var savedDisplaySettings = JsonSerializer.Deserialize<DesktopSubtitleOverlaySettings>(JsonSerializer.Serialize(new DesktopSubtitleOverlaySettings { DisplayId = 42, DisplayDeviceName = @"\\.\DISPLAY2" }, TranscriptFiles.Json), TranscriptFiles.Json);
 var legacyOverlaySettings = JsonSerializer.Deserialize<DesktopSubtitleOverlaySettings>("{}", TranscriptFiles.Json);
 Check(savedDisplaySettings is not null && savedDisplaySettings.DisplayId == 42 && savedDisplaySettings.DisplayDeviceName == @"\\.\DISPLAY2"
@@ -158,6 +160,20 @@ var alwaysVisibleReturnButton = mainPageXaml.Descendants(presentationNamespace +
 Check(!alwaysVisibleReturnButton,
     "the main toolbar does not show a permanent return-to-latest button when Mac only shows it for unread content");
 var mainPageCode = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "MainPage.xaml.cs"));
+var overlayLockMenuItem = mainPageXaml.Descendants(presentationNamespace + "MenuFlyoutItem")
+    .FirstOrDefault(element => element.Attribute(xamlNamespace + "Name")?.Value == "LockOverlayMenuItem");
+int saveOverlayStart = mainPageCode.IndexOf("private void SaveOverlaySettings", StringComparison.Ordinal);
+int persistOverlayStart = mainPageCode.IndexOf("private void PersistOverlayPlacement", StringComparison.Ordinal);
+string saveOverlayBody = saveOverlayStart >= 0 && persistOverlayStart > saveOverlayStart
+    ? mainPageCode[saveOverlayStart..persistOverlayStart] : "";
+Check(overlayLockMenuItem?.Attribute("Click")?.Value == "ToggleOverlayLock_Click"
+    && overlayLockMenuItem.Attribute("AutomationProperties.AutomationId")?.Value == "ToggleSubtitleOverlayLock"
+    && mainPageCode.Contains("LockOverlayMenuItem.Text = ViewModel.Config.SubtitleOverlay.PositionLocked ? \"解锁位置\" : \"锁定位置\"", StringComparison.Ordinal)
+    && mainPageCode.Contains("bool positionLockChanged = current.PositionLocked != wasPositionLocked", StringComparison.Ordinal)
+    && mainPageCode.Contains("if (positionLockChanged && current.Enabled) subtitleOverlayWindow?.SetAdjusting(!current.PositionLocked)", StringComparison.Ordinal)
+    && mainPageCode.Contains("if (settings.Enabled) subtitleOverlayWindow?.SetAdjusting(unlock)", StringComparison.Ordinal)
+    && !saveOverlayBody.Contains("SetAdjusting", StringComparison.Ordinal),
+    "overlay menu exposes Mac-equivalent lock/unlock and appearance saves preserve the current adjustment mode");
 Check(mainPageCode.Contains("DirectManipulationStarted") && mainPageCode.Contains("DirectManipulationCompleted")
     && mainPageCode.Contains("PointerWheelChanged") && mainPageCode.Contains("PreviewKeyDown")
     && mainPageCode.Contains("transcriptFollowState.ViewChanged"),

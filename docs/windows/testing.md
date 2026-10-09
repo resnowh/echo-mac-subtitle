@@ -83,3 +83,7 @@ CoreChecks 构造历史段与当前会话段，验证增量总结只返回起始
 ## A64 AI 总结输入与提示词对齐（2026-10-10）
 
 与 Mac `SpeechViewModel.requestAISummary` 和 `DeepSeekService.request` 对照后，Windows 总结文字稿加入 1 起始编号、真实本地时间、中英双语文本；时间沿用 Mac 的首条/跨日 `MM-dd HH:mm:ss`、同日 `HH:mm:ss` 规则。新增内容、当前段和全存档分别使用 Mac 对应提示词，并统一 system prompt。CoreChecks 验证跨午夜格式、Archive 时间回退、双语内容、speaker 不混入，以及三种 scope 的提示词接线。150 项通过；Release x64 构建 0 警告、0 错误。未调用 DeepSeek、未保存音频；长归档分块会保留原有 18,000 字符上限，真实云端响应仍需使用者自己的 API Key 验收。底稿与哈希见 [A64](../sources/windows-a64-summary-input-parity-2026-10-10/README.md)。
+
+## A65 悬浮字幕锁定菜单与调整状态（2026-10-10）
+
+Mac 主菜单可独立切换锁定/解锁位置，改变锁状态时相应进入或退出调整模式；外观设置刷新不擅自改变当前调整状态；隐藏浮层会退出调整。Windows 新增对应菜单项，并将调整状态变化限定到显式锁值变化，关闭浮层时清除调整状态。CoreChecks 检查菜单 AutomationId/事件、动态锁定文案、设置保存接线与隐藏行为。152 项通过；Release x64 构建 0 警告、0 错误。本轮未启动应用，因此未把源码契约检查描述为 GUI 验收；独立包实际操作、多屏/DPI 和主窗口最小化后呈现仍待验证。证据见 [A65 底稿](../sources/windows-a65-overlay-lock-menu-2026-10-10/README.md)。

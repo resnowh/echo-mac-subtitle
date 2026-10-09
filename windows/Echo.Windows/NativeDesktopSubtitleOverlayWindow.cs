@@ -155,6 +155,7 @@ public sealed class NativeDesktopSubtitleOverlayWindow
 
     public void HideOverlay()
     {
+        if (adjusting) SetAdjusting(false);
         if (hwnd != 0) ShowWindow(hwnd, SwHide);
     }
 

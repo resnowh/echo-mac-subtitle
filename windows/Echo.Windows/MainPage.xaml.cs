@@ -97,6 +97,7 @@ public sealed partial class MainPage : Page
         {
             ApplyWindowTheme();
             if (ViewModel.Config.SubtitleOverlay.Enabled) ShowSubtitleOverlay();
+            UpdateOverlayMenuText();
             if (initialized) return;
             initialized = true;
             await ViewModel.LoadArchivesAsync();
@@ -458,6 +459,15 @@ public sealed partial class MainPage : Page
         subtitleOverlayWindow?.SetAdjusting(!wasAdjusting);
         UpdateOverlayMenuText();
     }
+    private void ToggleOverlayLock_Click(object sender, RoutedEventArgs e)
+    {
+        var settings = ViewModel.Config.SubtitleOverlay;
+        bool unlock = settings.PositionLocked;
+        settings.PositionLocked = !unlock;
+        SaveOverlaySettings(settings);
+        if (settings.Enabled) subtitleOverlayWindow?.SetAdjusting(unlock);
+        UpdateOverlayMenuText();
+    }
     private async void OverlaySettings_Click(object sender, RoutedEventArgs e) => await ShowOverlaySettingsAsync();
     private void ShowSubtitleOverlay()
     {
@@ -472,7 +482,6 @@ public sealed partial class MainPage : Page
         ViewModel.Config.SubtitleOverlay = settings.Validate();
         ViewModel.Config.Save();
         subtitleOverlayWindow?.ApplySettings(ViewModel.Config.SubtitleOverlay);
-        subtitleOverlayWindow?.SetAdjusting(!ViewModel.Config.SubtitleOverlay.PositionLocked);
         UpdateOverlayMenuText();
     }
     private void PersistOverlayPlacement(DesktopSubtitleOverlaySettings settings)
@@ -485,10 +494,12 @@ public sealed partial class MainPage : Page
     {
         ToggleOverlayMenuItem.Text = ViewModel.Config.SubtitleOverlay.Enabled ? "关闭悬浮字幕" : "开启悬浮字幕";
         AdjustOverlayMenuItem.Text = subtitleOverlayWindow?.IsAdjusting == true ? "完成调整" : "调整位置和大小";
+        LockOverlayMenuItem.Text = ViewModel.Config.SubtitleOverlay.PositionLocked ? "解锁位置" : "锁定位置";
     }
     private async Task ShowOverlaySettingsAsync()
     {
         var current = ViewModel.Config.SubtitleOverlay;
+        bool wasPositionLocked = current.PositionLocked;
         var enabled = new ToggleSwitch { Header = "启用悬浮字幕", IsOn = current.Enabled };
         var original = new ToggleSwitch { Header = "显示原文", IsOn = current.ShowOriginal };
         var translation = new ToggleSwitch { Header = "显示译文", IsOn = current.ShowTranslation };
@@ -540,8 +551,10 @@ public sealed partial class MainPage : Page
         current.Opacity = opacity.Value / 100; current.WidthFraction = width.Value / 100;
         current.RetentionSeconds = retention.Value; current.ShadowStrength = shadow.Value / 100;
         current.ClickThrough = clickThrough.IsOn; current.PositionLocked = locked.IsOn;
+        bool positionLockChanged = current.PositionLocked != wasPositionLocked;
         SaveOverlaySettings(current);
         if (current.Enabled) ShowSubtitleOverlay(); else subtitleOverlayWindow?.HideOverlay();
+        if (positionLockChanged && current.Enabled) subtitleOverlayWindow?.SetAdjusting(!current.PositionLocked);
     }
     private static Slider AddOverlaySlider(StackPanel content, string title, double value, double min, double max, string suffix)
     {
