@@ -377,10 +377,15 @@ if (!string.IsNullOrWhiteSpace(runtimeMacFixturePath))
     TranscriptFiles.AtomicWrite(windowsRoundTripPath, runtimeWindowsJson);
     Check(runtimeMacArchive.Id == Guid.Parse("11111111-1111-1111-1111-111111111111")
         && runtimeMacArchive.CreatedAt == 0
+        && runtimeMacArchive.Segments.Count == 2
         && runtimeMacArchive.Segments[0].Entries[1].RecordedAt == 2.3456
         && runtimeWindowsArchive.Segments[0].Entries[1].Correction?.History[0].Date == Archive.AppleEpoch
+        && runtimeWindowsArchive.Segments[1].Id == Guid.Parse("66666666-6666-6666-6666-666666666666")
+        && runtimeWindowsArchive.Segments[1].StartedAt == 100
+        && runtimeWindowsArchive.Segments[1].Entries[0].RecordedAt == 100
+        && runtimeWindowsArchive.Segments[1].Entries[0].Language == "zh"
         && runtimeMacSrt == runtimeMacExpectedSrt,
-        "Windows reads a JSON fixture emitted by the production Mac encoder, preserves it on re-encode, and matches Mac runtime SRT byte-for-byte");
+        "Windows imports a Mac production multi-segment Archive, preserves correction/date/metadata fields, and matches Mac production SRT byte-for-byte");
     Console.WriteLine($"A17 Windows round-trip fixture: {new FileInfo(windowsRoundTripPath).Length} bytes");
 }
 var legacyIsoRevisionDate = JsonSerializer.Deserialize<DateTimeOffset>("\"2026-09-30T00:00:00+00:00\"", TranscriptFiles.Json);

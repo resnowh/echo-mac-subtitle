@@ -19,6 +19,11 @@ Windows 仓库已有 `windows/Echo.CoreChecks/Program.cs`，覆盖转写 token �
 3. 执行 `git diff --check`，检查提交路径确保无 `macOS/`、`tests/` 文件。
 4. UI smoke 未运行：本轮不启动应用，因此 UI、Narrator、DPI、多屏、录音硬件均未验。
 
+## 跨平台 Archive runtime 对拍
+
+- A32 在 Windows CI 增加 macOS fixture 生产与回读 job：使用未修改的 Mac 生产 ArchiveStore/SRTExporter 生成双段合成档案，Windows CoreChecks 解析并回写，随后 Mac 生产 decoder 再读并逐字段/SRT 校验。
+- 本机 Windows 环境不能运行 Swift/macOS runtime；以本轮 PR 的 `generate-mac-archive-fixture`、`build-and-check`、`verify-mac-archive-roundtrip` 三个 GitHub job 结果为权威证据。该链路在此次提交后待 Actions 执行，完成后把生成 fixture 和 SHA-256 留存到 A32 数据底稿。
+
 ## 尚未验证
 
 - 透明渲染、悬浮窗口点击穿透/失焦、窗口位置和缩放的 GUI smoke。

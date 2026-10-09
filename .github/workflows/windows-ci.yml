@@ -8,7 +8,36 @@ on:
   pull_request:
 
 jobs:
+  generate-mac-archive-fixture:
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Compile the parity harness with production Mac Archive and SRT sources
+        run: >-
+          xcrun swiftc -parse-as-library -O
+          -o "$RUNNER_TEMP/archive-parity-checks"
+          macOS/Models/TranscriptModels.swift
+          macOS/Storage/TranscriptArchiveStore.swift
+          macOS/Services/SRTExporter.swift
+          windows/MacParityChecks/ArchiveParityChecks.swift
+
+      - name: Generate a Mac-encoded two-segment fixture
+        run: "$RUNNER_TEMP/archive-parity-checks" generate "$RUNNER_TEMP/echo-mac-archive-fixture"
+
+      - name: Upload Mac production fixture
+        uses: actions/upload-artifact@v4
+        with:
+          name: echo-mac-archive-fixture
+          path: |
+            ${{ runner.temp }}/echo-mac-archive-fixture/mac-archive.json
+            ${{ runner.temp }}/echo-mac-archive-fixture/mac-archive.srt
+          if-no-files-found: error
+
   build-and-check:
+    needs: generate-mac-archive-fixture
     runs-on: windows-latest
 
     steps:
@@ -26,8 +55,50 @@ jobs:
       - name: Restore core check dependencies
         run: dotnet restore windows/Echo.CoreChecks/Echo.CoreChecks.csproj --locked-mode
 
-      - name: Run core checks
-        run: dotnet run --project windows/Echo.CoreChecks -c Release --no-restore
+      - name: Download Mac production Archive fixture
+        uses: actions/download-artifact@v4
+        with:
+          name: echo-mac-archive-fixture
+          path: windows/Echo.CoreChecks/Fixtures/Runtime
+
+      - name: Run core checks including Mac Archive import and SRT comparison
+        run: |
+          $env:ECHO_MAC_ARCHIVE_FIXTURE = "windows/Echo.CoreChecks/Fixtures/Runtime/mac-archive.json"
+          dotnet run --project windows/Echo.CoreChecks -c Release --no-restore
+
+      - name: Upload Windows Archive round trip
+        uses: actions/upload-artifact@v4
+        with:
+          name: echo-windows-archive-roundtrip
+          path: windows/Echo.CoreChecks/Fixtures/Runtime/windows-roundtrip.json
+          if-no-files-found: error
 
       - name: Build Release x64
         run: dotnet build windows/Echo.Windows/Echo.Windows.csproj -c Release -p:Platform=x64 -p:PublishReadyToRun=false --no-restore
+
+  verify-mac-archive-roundtrip:
+    needs: build-and-check
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Download Mac fixture and Windows round trip
+        uses: actions/download-artifact@v4
+        with:
+          pattern: echo-*-archive-*
+          path: ${{ runner.temp }}/echo-archive-parity
+          merge-multiple: true
+
+      - name: Compile the parity harness with production Mac Archive and SRT sources
+        run: >-
+          xcrun swiftc -parse-as-library -O
+          -o "$RUNNER_TEMP/archive-parity-checks"
+          macOS/Models/TranscriptModels.swift
+          macOS/Storage/TranscriptArchiveStore.swift
+          macOS/Services/SRTExporter.swift
+          windows/MacParityChecks/ArchiveParityChecks.swift
+
+      - name: Verify Windows JSON with the production Mac decoder and SRT exporter
+        run: "$RUNNER_TEMP/archive-parity-checks" verify "$RUNNER_TEMP/echo-archive-parity"
