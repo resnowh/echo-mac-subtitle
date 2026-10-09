@@ -5,6 +5,7 @@
 macOS 源码基线：`origin/main` `ae0359dc90da0ccb5e526a275da1747954a49a4f`
 Windows 起始提交：`466b25c2fffde785d5e8d6aa89721becdcad8c85`
 Mac runtime 生成提交：`8ed340d946b575630ebed2689e038ba09140ad55`
+Windows parity 修正提交：`fdb21da03ce662b39d23ab24ade389695b06262f`
 
 ## 缺口
 
@@ -27,6 +28,8 @@ GitHub Actions run [`37952567838`](https://github.com/resnowh/echo-mac-subtitle/
 
 首轮 Windows CI 在第五响应发现真实差异：该响应从无活动行开始，包含两个说话人。Mac 在整个 token 循环结束后才创建/更新当前 entry，因此把两段 source 和两段 translation 合并成一条，保留最后的 `Speaker 2` / `ja`；Windows 原先在响应内拆成两条。Windows 已改为只对响应开始时已存在的活动行处理说话人切分，并按生产 Mac handler 的规则累计起点/终点。Mac 源码未修改。
 
-用下载的 Mac runtime artifact 本机运行 Windows CoreChecks：93 项通过；该运行直接覆盖上述五条逐响应对拍。无环境变量时的历史 fixture 也通过，Release x64 构建为 0 警告、0 错误。修正后的 GitHub CI 结果待提交后重跑。
+用下载的 Mac runtime artifact 本机运行 Windows CoreChecks：93 项通过；该运行直接覆盖上述五条逐响应对拍。无环境变量时的仓库 fixture 同样通过，Release x64 构建为 0 警告、0 错误。
+
+修正提交 `fdb21da` 的 GitHub Actions run [`37953208733`](https://github.com/resnowh/echo-mac-subtitle/actions/runs/37953208733) 四个 job 全部成功：Mac Archive fixture、Mac Soniox production fixture、Windows CoreChecks/Release x64、Mac Archive 回读。该提交的 PR 检查中 Mac CI、unsigned package preflight 和另一轮 Windows CI 也全部成功。Soniox 对拍基于五条固定合成响应；真实云、音频、GUI 和完整 Soniox 序列仍未覆盖。
 
 该结果只证明固定合成输入下的生产处理器对拍，不代表真实云响应、音频、GUI 或所有 token 序列都已验收。

@@ -19,7 +19,7 @@ Windows 仓库已有 `windows/Echo.CoreChecks/Program.cs`，覆盖转写 token �
 3. 执行 `git diff --check`，检查提交路径确保无 `macOS/`、`tests/` 文件。
 4. Windows 调试实例已启动并完成 `windows/ui-smoke.ps1` 的 12 项 UIA 检查：录音页、停止按钮隐藏、电脑音频默认项、源/目标语言可读标签、设置入口、AI 服务分类和 Soniox Key 控件存在、模型输入不开放、返回主界面、导出菜单及字幕列表。没有点击录音、保存设置或调用云端；应用加载了 MSIX 包隔离目录中的既有存档，因此原始截图和 UIA 全树未留存，避免把本机字幕纳入仓库。仅留检查名称/结果。A33 还记录首次启动的 NullReferenceException 及修复。UIA 通过不等于视觉、浮层透明、键盘、Narrator、DPI 或多屏验收。
 5. A34 本轮未启动 GUI 或已安装 Echo；显示器事件、透明像素与点击穿透在真实多屏设备上的行为仍待 UI 验收。
-6. A35 的 macOS runtime harness 从当前 `macOS/ViewModels/SpeechViewModel.swift` 临时提取生产处理函数，并与生产 `TranscriptModels.swift` 一起编译；只使用合成文本，不启动 Echo、不采集音频、不连接服务。Mac job 已通过；首轮 Windows CI 因 speaker 行为差异失败，Windows 已修正，本地 artifact 对拍通过，修正后的 CI 仍待复跑。
+6. A35 的 macOS runtime harness 从当前 `macOS/ViewModels/SpeechViewModel.swift` 临时提取生产处理函数，并与生产 `TranscriptModels.swift` 一起编译；只使用合成文本，不启动 Echo、不采集音频、不连接服务。首轮 CI 暴露同响应多 speaker 的差异；Windows 修正后 run `37953208733` 的 Mac 夹具生成、Windows 93 项对拍/Release x64 构建及 Mac Archive 回读全部通过。PR 的 Mac CI 与 unsigned package preflight 也通过。
 
 ## 跨平台 Archive runtime 对拍
 
