@@ -72,6 +72,10 @@ CoreChecks 使用合成采集器与本地 WebSocket：开始话筒模式后模�
 
 CoreChecks 合成 `UnauthorizedAccessException`、包装后的 COM `E_ACCESSDENIED`，并验证话筒模式显示 Windows 隐私设置指引、非话筒模式给出设备权限消息、普通设备异常保留原始消息。本机 142 项 CoreChecks 通过；Release x64 构建 0 警告、0 错误。没有触发真实权限拒绝、打开麦克风、请求云服务或保存用户音频。Windows 官方指引原始页、测试/构建日志、源码哈希及实机验收边界见 [A61 底稿](../sources/windows-a61-microphone-permission-2026-10-10.md)。
 
+## A70 录音中音源切换预启动（2026-10-10）
+
+Windows 现在先启动候选 WASAPI 来源并暂存它们；新源成功后才停止旧源、发送旧源缓冲尾部并提交替换。提交时清除候选源启动阶段的重叠缓冲，避免旧源尾部和新源预热数据重复一段时间轴。新源在打开或启动阶段失败时，旧源从未停止，原 Soniox WebSocket 继续发送 PCM。候选源意外停止或缓冲溢出会阻止提交/触发采集失败处理。156 项 CoreChecks 验证预启动失败后原采集器保持运行、没有调用停止旧源、同一 WebSocket 继续接收音频，并检查预热缓冲在切换时清空；Release x64 构建 0 警告、0 错误。没有打开真实 WASAPI 设备、录音或调用云端；实际设备重叠、默认端点热切换、拔插和声学间隙仍待实机验收。完整日志、源码哈希和边界见 [A70 底稿](../sources/windows-a70-staged-audio-switch-2026-10-10/README.md)。
+
 ## A62 丢弃过期的 AI 校对建议（2026-10-10）
 
 CoreChecks 单独改变源语言、目标语言、翻译开关、严格限制与说话人选项，验证每一项都会使 `CorrectionRecognitionSnapshot` 失效；源码接线检查确认 `MainPageViewModel` 在请求前捕获快照、响应后比较配置并报告旧建议已忽略。144 项 CoreChecks 与 Release x64 构建（0 警告、0 错误）通过。未调用 DeepSeek；GUI 异步请求交互仍待隔离验收。结果原件和源文件哈希见 [A62 底稿](../sources/windows-a62-stale-correction-suggestions-2026-10-10.md)。

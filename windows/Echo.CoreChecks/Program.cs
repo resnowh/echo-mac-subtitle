@@ -1243,6 +1243,10 @@ spanPrebuffer.AddSamples(spanPcm.AsSpan());
 int spanRead = spanPrebuffer.Samples.Read(spanSamples.AsSpan());
 Check(emptySpanRead == 0 && spanRead == 2 && Math.Abs(spanSamples[0] - 0.5f) < 0.001f && Math.Abs(spanSamples[1] + 0.5f) < 0.001f,
     "capture prebuffer reports starvation as unavailable frames and copies span-based PCM before the callback returns");
+spanPrebuffer.AddSamples(spanPcm.AsSpan());
+spanPrebuffer.Clear();
+Check(spanPrebuffer.BufferedSeconds == 0 && spanPrebuffer.Samples.Read(spanSamples.AsSpan()) == 0,
+    "a prepared audio source drops overlapping startup samples before the live mode switch commits");
 int fullPrebufferBytes = (int)(boundedPrebuffer.CapacitySeconds * boundedPrebuffer.WaveFormat.AverageBytesPerSecond);
 boundedPrebuffer.AddSamples(new byte[fullPrebufferBytes], 0, fullPrebufferBytes);
 bool overflowReported = false;
@@ -1339,7 +1343,7 @@ using (var switchTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(12))
         byte[] finished = Encoding.UTF8.GetBytes("""{"finished":true}""");
         await socket.SendAsync(finished.AsMemory(), WebSocketMessageType.Text, true, switchTimeout.Token);
     }, switchTimeout.Token);
-    var syntheticCapture = new SyntheticSpeechSessionCapture { FailNextRestart = true, FollowCaptureDefault = true };
+    var syntheticCapture = new SyntheticSpeechSessionCapture { FailNextPrepare = true, FollowCaptureDefault = true };
     int switchSessionFailureCount = 0;
     var switchStatuses = new ConcurrentQueue<string>();
     await using (var switchSession = new SpeechSession(new Uri($"ws://127.0.0.1:{switchPort}/"), captureEnabled: true, capture: syntheticCapture))
@@ -1347,15 +1351,17 @@ using (var switchTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(12))
         switchSession.Failure += _ => Interlocked.Increment(ref switchSessionFailureCount);
         switchSession.Status += message => switchStatuses.Enqueue(message);
         await switchSession.StartAsync(new Preferences(), "synthetic", 1, null, null, switchTimeout.Token);
+        int framesBeforeRejectedPrepare = syntheticCapture.FramesReadWhileRunning;
         AudioDeviceSwitchException? switchError = null;
         try { await switchSession.SwitchDevicesAsync("new-speaker", null, newMode: 0); }
         catch (AudioDeviceSwitchException error) { switchError = error; }
         DateTime frameDeadline = DateTime.UtcNow.AddSeconds(2);
-        while (syntheticCapture.FramesReadAfterRestore == 0 && DateTime.UtcNow < frameDeadline)
+        while (syntheticCapture.FramesReadWhileRunning <= framesBeforeRejectedPrepare && DateTime.UtcNow < frameDeadline)
             await Task.Delay(20, switchTimeout.Token);
-        bool rolledBackAndContinued = switchError?.CaptureRestored == true
+        bool failedPrepareKeptOldCapture = switchError?.CaptureRestored == true
             && syntheticCapture.IsRunning && syntheticCapture.Mode == 1
-            && syntheticCapture.FramesReadAfterRestore > 0 && Volatile.Read(ref switchSessionFailureCount) == 0;
+            && syntheticCapture.FramesReadWhileRunning > framesBeforeRejectedPrepare && syntheticCapture.StopInputsCount == 0
+            && Volatile.Read(ref switchSessionFailureCount) == 0;
         syntheticCapture.NotifyDefaultDeviceChanged(DataFlow.Capture);
         DateTime deviceChangeDeadline = DateTime.UtcNow.AddSeconds(2);
         while (syntheticCapture.SuccessfulRestarts == 0 && DateTime.UtcNow < deviceChangeDeadline)
@@ -1367,9 +1373,9 @@ using (var switchTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(12))
             && switchStatuses.Any(message => message.Contains("已跟随系统默认音频设备切换", StringComparison.Ordinal));
         await switchSession.StopAsync();
         await switchServer.WaitAsync(switchTimeout.Token); switchListener.Stop();
-        Check(rolledBackAndContinued && Volatile.Read(ref switchConfigValid) == 1
+        Check(failedPrepareKeptOldCapture && Volatile.Read(ref switchConfigValid) == 1
             && Volatile.Read(ref switchConnections) == 1 && Volatile.Read(ref switchAudioFrames) > 0,
-            "synthetic live audio switch failure restores the old input and keeps sending audio on the same recognition WebSocket");
+            "synthetic live audio switch preparation failure keeps the old input running and sends audio on the same recognition WebSocket");
         Check(defaultDeviceChangeContinued && Volatile.Read(ref switchConnections) == 1
             && Volatile.Read(ref switchAudioFrames) > 0,
             "synthetic default microphone change restarts capture on the new endpoint while preserving the recognition WebSocket and audio flow");
@@ -1541,9 +1547,13 @@ sealed class SyntheticSpeechSessionCapture : ISpeechSessionCapture
     public int Mode { get; private set; }
     private int framesReadAfterRestore;
     public int FramesReadAfterRestore => Volatile.Read(ref framesReadAfterRestore);
+    private int framesReadWhileRunning;
+    public int FramesReadWhileRunning => Volatile.Read(ref framesReadWhileRunning);
     private int successfulRestarts;
     public int SuccessfulRestarts => Volatile.Read(ref successfulRestarts);
-    public bool FailNextRestart { get; set; }
+    public bool FailNextPrepare { get; set; }
+    public int StopInputsCount { get; private set; }
+    private (int Mode, string? OutputId, string? InputId)? prepared;
     public bool FollowCaptureDefault { get; set; }
     public bool IsFollowingDefault(DataFlow flow) => FollowCaptureDefault && flow == DataFlow.Capture;
     public void NotifyDefaultDeviceChanged(DataFlow flow) => defaultDeviceChanged?.Invoke(flow);
@@ -1555,21 +1565,37 @@ sealed class SyntheticSpeechSessionCapture : ISpeechSessionCapture
     }
     public void Restart(int mode, string? outputId, string? inputId)
     {
-        if (FailNextRestart)
-        {
-            FailNextRestart = false; restorePending = true;
-            throw new IOException("synthetic endpoint rejected startup");
-        }
         Interlocked.Increment(ref successfulRestarts);
         Start(mode, outputId, inputId);
     }
+    public void PrepareRestart(int mode, string? outputId, string? inputId)
+    {
+        if (FailNextPrepare)
+        {
+            FailNextPrepare = false;
+            throw new IOException("synthetic endpoint rejected startup");
+        }
+        prepared = (mode, outputId, inputId);
+    }
+    public void CommitPreparedRestart()
+    {
+        if (prepared is not { } next) throw new InvalidOperationException("no prepared restart");
+        prepared = null;
+        Interlocked.Increment(ref successfulRestarts);
+        Start(next.Mode, next.OutputId, next.InputId);
+    }
+    public void AbortPreparedRestart() => prepared = null;
     public byte[] ReadFrame(out double level)
     {
         level = 0.1;
         if (tailFrames > 0) tailFrames--;
-        else if (IsRunning && readingAfterRestore) Interlocked.Increment(ref framesReadAfterRestore);
+        else if (IsRunning)
+        {
+            Interlocked.Increment(ref framesReadWhileRunning);
+            if (readingAfterRestore) Interlocked.Increment(ref framesReadAfterRestore);
+        }
         return new byte[640];
     }
-    public void StopInputs() { IsRunning = false; tailFrames = 1; }
+    public void StopInputs() { StopInputsCount++; IsRunning = false; tailFrames = 1; }
     public void Dispose() { IsRunning = false; }
 }

@@ -26,6 +26,9 @@ public interface ISpeechSessionCapture : IDisposable
     bool IsFollowingDefault(DataFlow flow);
     void Start(int mode, string? outputId, string? inputId);
     void Restart(int mode, string? outputId, string? inputId);
+    void PrepareRestart(int mode, string? outputId, string? inputId);
+    void CommitPreparedRestart();
+    void AbortPreparedRestart();
     byte[] ReadFrame(out double level);
     void StopInputs();
 }
@@ -69,6 +72,8 @@ public sealed class AudioCapture : ISpeechSessionCapture
     public const double PrebufferSeconds = 2.5;
     private readonly object gate = new();
     private readonly List<Source> sources = [];
+    private List<Source>? preparedSources;
+    private List<AudioDeviceRoute>? preparedRoutes;
     private readonly object notificationGate = new();
     private readonly MMDeviceEnumerator notificationEnumerator = new();
     private readonly MMDeviceNotificationClient notificationClient;
@@ -76,7 +81,6 @@ public sealed class AudioCapture : ISpeechSessionCapture
     private bool notificationsEnabled;
     private bool notificationDisposed;
     private int failureRaised;
-    private bool disposing;
     public event Action<Exception>? Failed;
     public event Action<DataFlow>? DefaultDeviceChanged;
     public AudioCapture()
@@ -114,11 +118,67 @@ public sealed class AudioCapture : ISpeechSessionCapture
             StartLocked(mode, outputId, inputId);
         }
     }
+    public void PrepareRestart(int mode, string? outputId, string? inputId)
+    {
+        lock (gate)
+        {
+            DisposePreparedSourcesLocked();
+            var nextSources = new List<Source>();
+            try
+            {
+                List<AudioDeviceRoute> nextRoutes = StartSourcesLocked(mode, outputId, inputId, nextSources, staged: true);
+                preparedSources = nextSources;
+                preparedRoutes = nextRoutes;
+            }
+            catch
+            {
+                DisposeSourceListLocked(nextSources);
+                throw;
+            }
+        }
+    }
+    public void CommitPreparedRestart()
+    {
+        lock (gate)
+        {
+            if (preparedSources is null || preparedRoutes is null)
+                throw new InvalidOperationException("没有可提交的音频源切换。");
+            Exception? startupFailure = preparedSources.Select(source => Volatile.Read(ref source.StartupFailure)).FirstOrDefault(error => error is not null);
+            if (startupFailure is not null) throw new IOException("新音源在切换前意外停止。", startupFailure);
+
+            DisposeSourcesLocked();
+            foreach (var source in preparedSources)
+            {
+                source.Buffer.Clear();
+                source.Staged = false;
+            }
+            sources.AddRange(preparedSources);
+            startupFailure = preparedSources.Select(source => Volatile.Read(ref source.StartupFailure)).FirstOrDefault(error => error is not null);
+            preparedSources = null;
+            lock (notificationGate) { routes = preparedRoutes; notificationsEnabled = true; }
+            preparedRoutes = null;
+            Interlocked.Exchange(ref failureRaised, 0);
+            if (startupFailure is not null) ReportCaptureFailure(startupFailure);
+        }
+    }
+    public void AbortPreparedRestart()
+    {
+        lock (gate) DisposePreparedSourcesLocked();
+    }
     private void StartLocked(int mode, string? outputId, string? inputId)
     {
-        using var enumerator = new MMDeviceEnumerator();
-        disposing = false;
+        DisposePreparedSourcesLocked();
         Interlocked.Exchange(ref failureRaised, 0);
+        try
+        {
+            List<AudioDeviceRoute> nextRoutes = StartSourcesLocked(mode, outputId, inputId, sources, staged: false);
+            lock (notificationGate) { routes = nextRoutes; notificationsEnabled = true; }
+        }
+        catch { DisposeSourcesLocked(); throw; }
+    }
+    private List<AudioDeviceRoute> StartSourcesLocked(int mode, string? outputId, string? inputId, List<Source> target, bool staged)
+    {
+        using var enumerator = new MMDeviceEnumerator();
         var nextRoutes = new List<AudioDeviceRoute>();
         try
         {
@@ -126,18 +186,22 @@ public sealed class AudioCapture : ISpeechSessionCapture
             {
                 var device = outputId is null ? enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia) : enumerator.GetDevice(outputId);
                 nextRoutes.Add(new(DataFlow.Render, outputId, device.ID, device.FriendlyName));
-                Add(new WasapiRecorderBuilder().WithDevice(device).WithLoopbackCapture().Build());
+                Add(new WasapiRecorderBuilder().WithDevice(device).WithLoopbackCapture().Build(), target, staged);
             }
             if (mode is 1 or 2)
             {
                 var device = inputId is null ? enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Multimedia) : enumerator.GetDevice(inputId);
                 nextRoutes.Add(new(DataFlow.Capture, inputId, device.ID, device.FriendlyName));
-                Add(new WasapiRecorderBuilder().WithDevice(device).Build());
+                Add(new WasapiRecorderBuilder().WithDevice(device).Build(), target, staged);
             }
-            foreach (var source in sources) source.Capture.StartRecording();
-            lock (notificationGate) { routes = nextRoutes; notificationsEnabled = true; }
+            foreach (var source in target.Skip(target.Count - nextRoutes.Count)) source.Capture.StartRecording();
+            return nextRoutes;
         }
-        catch { DisposeSourcesLocked(); throw; }
+        catch
+        {
+            if (staged) DisposeSourceListLocked(target);
+            throw;
+        }
     }
 
     private void OnDeviceStateChanged(object? sender, DeviceStateChangedEventArgs e)
@@ -182,13 +246,29 @@ public sealed class AudioCapture : ISpeechSessionCapture
     {
         if (Interlocked.Exchange(ref failureRaised, 1) == 0) Failed?.Invoke(error);
     }
-    private void Add(WasapiRecorder capture)
+    private void Add(WasapiRecorder capture, List<Source> target, bool staged)
     {
         var buffer = new BoundedAudioPrebuffer(capture.WaveFormat, PrebufferSeconds);
-        var source = new Source(capture, buffer, ToMono16k(buffer.Samples));
-        sources.Add(source);
-        source.DataHandler = (data, _, _, _) => { if (source.Stopping) return; try { buffer.AddSamples(data); } catch (Exception error) { if (!source.Stopping) ReportCaptureFailure(error); } };
-        source.StoppedHandler = (_, e) => { if (!source.Stopping && !disposing) ReportCaptureFailure(e.Exception ?? new IOException("音频设备停止采集。")); };
+        var source = new Source(capture, buffer, ToMono16k(buffer.Samples)) { Staged = staged };
+        target.Add(source);
+        source.DataHandler = (data, _, _, _) =>
+        {
+            if (source.Stopping) return;
+            try { buffer.AddSamples(data); }
+            catch (Exception error)
+            {
+                if (source.Stopping) return;
+                if (source.Staged) Interlocked.CompareExchange(ref source.StartupFailure, error, null);
+                else ReportCaptureFailure(error);
+            }
+        };
+        source.StoppedHandler = (_, e) =>
+        {
+            if (source.Stopping) return;
+            Exception error = e.Exception ?? new IOException("音频设备停止采集。");
+            if (source.Staged) Interlocked.CompareExchange(ref source.StartupFailure, error, null);
+            else ReportCaptureFailure(error);
+        };
         capture.DataAvailable += source.DataHandler;
         capture.RecordingStopped += source.StoppedHandler;
     }
@@ -220,6 +300,7 @@ public sealed class AudioCapture : ISpeechSessionCapture
     {
         lock (gate)
         {
+            DisposePreparedSourcesLocked();
             DisposeSourcesLocked();
             if (!notificationDisposed)
             {
@@ -233,7 +314,6 @@ public sealed class AudioCapture : ISpeechSessionCapture
     {
         lock (gate)
         {
-            disposing = true;
             lock (notificationGate) notificationsEnabled = false;
             foreach (var source in sources) { source.Stopping = true; try { source.Capture.StopRecording(); } catch { } }
         }
@@ -241,9 +321,18 @@ public sealed class AudioCapture : ISpeechSessionCapture
     public int TailFrames { get { lock (gate) return sources.Count == 0 ? 0 : Math.Min((int)Math.Ceiling(PrebufferSeconds * 50) + 2, (int)Math.Ceiling(sources.Max(s => s.Buffer.BufferedSeconds) * 50) + 2); } }
     private void DisposeSourcesLocked()
     {
-        disposing = true;
         lock (notificationGate) { notificationsEnabled = false; routes = []; }
-        foreach (var source in sources)
+        DisposeSourceListLocked(sources);
+    }
+    private void DisposePreparedSourcesLocked()
+    {
+        if (preparedSources is not null) DisposeSourceListLocked(preparedSources);
+        preparedSources = null;
+        preparedRoutes = null;
+    }
+    private static void DisposeSourceListLocked(List<Source> target)
+    {
+        foreach (var source in target)
         {
             source.Stopping = true;
             source.Capture.DataAvailable -= source.DataHandler;
@@ -251,7 +340,7 @@ public sealed class AudioCapture : ISpeechSessionCapture
             try { source.Capture.StopRecording(); } catch { }
             source.Capture.Dispose();
         }
-        sources.Clear();
+        target.Clear();
     }
     private sealed class Source(WasapiRecorder capture, BoundedAudioPrebuffer buffer, ISampleProvider resampled)
     {
@@ -262,6 +351,8 @@ public sealed class AudioCapture : ISpeechSessionCapture
         public float[] InputFrame { get; } = new float[320 + ClockDriftController.MaximumFrameAdjustment];
         public float[] OutputFrame { get; } = new float[320];
         public volatile bool Stopping;
+        public volatile bool Staged;
+        public Exception? StartupFailure;
         public CaptureDataAvailableHandler DataHandler = null!;
         public EventHandler<StoppedEventArgs> StoppedHandler = null!;
         public int ReadOutputFrame()
@@ -358,6 +449,7 @@ public sealed class BoundedAudioPrebuffer
             ArrayPool<byte>.Shared.Return(rented, clearArray: true);
         }
     }
+    public void Clear() => buffer.ClearBuffer();
 }
 
 public sealed class AudioPrebufferOverflowException : IOException

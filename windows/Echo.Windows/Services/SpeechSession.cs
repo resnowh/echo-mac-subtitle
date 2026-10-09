@@ -111,18 +111,29 @@ public sealed class SpeechSession : IAsyncDisposable
             if (!forceRestart && targetMode == mode && newOutputId == outputId && newInputId == inputId) return;
             int oldMode = mode;
             string? oldOutputId = capture.ActiveOutputId ?? outputId, oldInputId = capture.ActiveInputId ?? inputId;
+            try { await Task.Run(() => capture.PrepareRestart(targetMode, newOutputId, newInputId)); }
+            catch (Exception prepareError)
+            {
+                capture.AbortPreparedRestart();
+                throw new AudioDeviceSwitchException("新音源启动失败；旧音源仍在采集，录音继续。", true, prepareError);
+            }
             capture.StopInputs();
             try { await SendCaptureTailAsync(); }
-            catch (Exception e) { throw new AudioDeviceSwitchException("切换期间音频传输失败；正在保存已收到的文字并停止录音。", false, e); }
+            catch (Exception e)
+            {
+                capture.AbortPreparedRestart();
+                throw new AudioDeviceSwitchException("切换期间音频传输失败；正在保存已收到的文字并停止录音。", false, e);
+            }
             try
             {
-                await Task.Run(() => capture.Restart(targetMode, newOutputId, newInputId));
+                await Task.Run(capture.CommitPreparedRestart);
                 mode = targetMode;
                 outputId = newOutputId; inputId = newInputId;
             }
             catch (Exception switchError)
             {
-                try { await Task.Run(() => capture.Start(oldMode, oldOutputId, oldInputId)); }
+                capture.AbortPreparedRestart();
+                try { await Task.Run(() => capture.Restart(oldMode, oldOutputId, oldInputId)); }
                 catch (Exception restoreError)
                 {
                     throw new AudioDeviceSwitchException("新设备启动失败，原设备也无法恢复；正在保存已收到的文字并停止录音。", false,

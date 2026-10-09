@@ -21,7 +21,7 @@ Windows 来源：当前 PR 分支 `feature/windows-mac-parity`；其历史迁移
 | Soniox WebSocket 鉴权 | Mac `SpeechViewModel.openSonioxSocket` 仍把 `api_key` 放在起始配置 JSON；Windows 在握手发送 Bearer header，并从配置 JSON 排除密钥 | Windows 按 Soniox 当前推荐方式实现；保留 Mac 当前行为，不反向降级 Windows | 功能存在但行为不同 | 本地模拟 WebSocket 检查验证 Bearer header、配置不含密钥、握手后 401/402/403/429/503/413 错误分类；官方旧方式迁移时间及源码证据见 [A37](../sources/windows-a37-soniox-auth-protocol-2026-10-10.md) |
 | 默认主题与切换顺序 | Mac 默认深色，`AppThemeMode.allCases` 为浅色、深色、系统 | Windows 新配置/缺省字段默认深色，设置项和循环顺序与 Mac 一致；显式保存值保留 | 静态源码及 CoreChecks 通过；系统外观 GUI 尚未实测，见 A31 |
 | 跨显示器悬浮字幕布局与 DPI 变化 | Mac 监听显示器配置变化，按目标屏幕重新计算透明字幕窗位置和宽度，并恢复已保存的屏幕位置 | Windows 按设备名记住上次屏幕；处理 `WM_DISPLAYCHANGE`、`WM_DPICHANGED` 与 `SPI_SETWORKAREA`，重新计算物理像素矩形；拖动/缩放使用屏幕坐标 | A34 的 100/150/200% 合成布局与 A58 消息接线检查通过；真实异 DPI 显示器、拔插、任务栏/工作区变化仍待 GUI 验收 |
-| 音源模式：电脑音频、话筒、混合；录音中热切换与默认设备变化 | Mac 默认话筒并保存模式；录音中按需启动新来源，成功后再移除不需要的来源；授权/启动失败时保留旧模式和会话 | Windows 默认并持久化话筒；录音中模式菜单可用，当前 `SpeechSession` 暂停发送、排空采集尾部并重启 WASAPI 来源，不重建 Soniox WebSocket 或当前字幕段；新来源启动失败会回滚旧模式；跟随系统默认端点时响应设备变化；拒绝访问时显示隐私指引 | A59/A60 合成采集器与 loopback 验证启动失败回滚、默认话筒变化、恢复后 PCM 发送及同一连接；A61 验证拒绝异常的中文权限指引；142 项 CoreChecks、Release x64 通过。真实 WASAPI 拔插、隐私开关和声学连续性仍待验收，见 A51/A59/A60/A61 |
+| 音源模式：电脑音频、话筒、混合；录音中热切换与默认设备变化 | Mac 默认话筒并保存模式；录音中按需启动新来源，成功后再移除不需要的来源；授权/启动失败时保留旧模式和会话 | Windows 默认并持久化话筒；录音中先预启动目标 WASAPI 来源，成功后暂停发送、排空旧采集尾部、清除重叠预热样本并提交新来源，不重建 Soniox WebSocket 或当前字幕段；预启动失败时旧源持续采集；提交异常会尝试恢复旧源；跟随系统默认端点时响应设备变化；拒绝访问时显示隐私指引 | A70 合成采集器验证新源预启动失败时旧源和单一 WebSocket 保持运行，另检查预热缓冲清空；A59/A60 验证切换和默认话筒事件；A61 验证拒绝异常的中文权限指引；156 项 CoreChecks、Release x64 通过。真实 WASAPI 拔插、隐私开关和声学连续性仍待验收，见 A51/A59/A60/A61/A70 |
 
 本次核验前已执行 fetch 并以最新 `origin/main` 建立独立分支；没有把旧混合分支合并进来。旧分支曾含 Mac 源码提交，因此不得整体 cherry-pick 或合并。详细测试证据见 [testing.md](testing.md) 与 `docs/sources/windows-*`。
 
@@ -51,7 +51,7 @@ Windows 来源：当前 PR 分支 `feature/windows-mac-parity`；其历史迁移
 
 ## 最高优先级缺口
 
-1. P0：A35 七条、A42 十三条、A43 十八条 Mac production handler 对拍均通过。A39 对齐空响应静默计时，A42 对齐畸形字段安全回退，A43 对齐纠正规则，A44 对齐 error/finished 控制帧；A51/A59/A60 覆盖会话内模式切换、失败回滚和合成默认话筒端点变化，A61 覆盖拒绝异常的权限提示。下一步核验真实音频设备热切换、设备拔插恢复和 Windows 隐私开关拒绝/恢复；真实云响应仍未覆盖。
+1. P0：A35 七条、A42 十三条、A43 十八条 Mac production handler 对拍均通过。A39 对齐空响应静默计时，A42 对齐畸形字段安全回退，A43 对齐纠正规则，A44 对齐 error/finished 控制帧；A51/A59/A60/A70 覆盖会话内模式切换、预启动失败保留旧源、失败恢复和合成默认话筒端点变化，A61 覆盖拒绝异常的权限提示。下一步核验真实音频设备热切换、设备拔插恢复和 Windows 隐私开关拒绝/恢复；真实云响应仍未覆盖。
 2. P1：主界面语言菜单、滚动跟随行为、四类设置和分段配置已接入；A33 完成 12 项启动/控件 UIA smoke，但窄窗口、视觉布局、字幕滚动手感、键盘和 Narrator 仍未实测。
 3. P1：原生 Win32/Direct2D 浮层已替换活动 XAML 浮层，主界面继续使用 WinUI；透明像素、置顶、点击穿透与调整模式已隔离实测。下一步验收真实异 DPI 多屏、拔插、全屏应用，并做 Mac/Windows 视觉对照。浮层继续复用同一识别会话和当前字幕状态。
 4. P2：总结面板已补齐 Mac 风格 Markdown 分块、折叠/展开、复制、状态反馈和显示条件；继续核验主题与窄窗口布局。
