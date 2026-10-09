@@ -14,11 +14,12 @@ Windows 仓库已有 `windows/Echo.CoreChecks/Program.cs`，覆盖转写 token �
 
 ## 本轮已运行
 
-1. `dotnet run --project windows/Echo.CoreChecks/Echo.CoreChecks.csproj -c Release`：本轮 93 项通过，包括新增的 100%、150%、200% DPI、负坐标显示器、窄工作区边界以及显示器偏好 JSON 兼容检查。Soniox fixture 期望值按 Mac 源码静态推导，未运行 Mac handler。检查不调用云端，不保存真实音频。其他测试覆盖项和历史依据见 A24–A31 底稿。
+1. 本轮本机执行 `dotnet run --project windows/Echo.CoreChecks/Echo.CoreChecks.csproj -c Release`：93 项通过。此处未设置 `ECHO_MAC_SONIOX_FIXTURE`，Soniox 检查回退到仓库固定 fixture；提交后的 Windows CI 会下载 Mac 生产 handler 输出并通过同一检查逐响应对拍。Release x64 编译本轮 0 警告、0 错误。检查不调用云端，不保存真实音频。
 2. Windows Release x64 编译：执行 `dotnet build windows/Echo.Windows/Echo.Windows.csproj -c Release -p:Platform=x64 -p:PublishReadyToRun=false --no-restore`，本轮源码成功，0 警告、0 错误；编译没有启动应用。
 3. 执行 `git diff --check`，检查提交路径确保无 `macOS/`、`tests/` 文件。
 4. Windows 调试实例已启动并完成 `windows/ui-smoke.ps1` 的 12 项 UIA 检查：录音页、停止按钮隐藏、电脑音频默认项、源/目标语言可读标签、设置入口、AI 服务分类和 Soniox Key 控件存在、模型输入不开放、返回主界面、导出菜单及字幕列表。没有点击录音、保存设置或调用云端；应用加载了 MSIX 包隔离目录中的既有存档，因此原始截图和 UIA 全树未留存，避免把本机字幕纳入仓库。仅留检查名称/结果。A33 还记录首次启动的 NullReferenceException 及修复。UIA 通过不等于视觉、浮层透明、键盘、Narrator、DPI 或多屏验收。
 5. A34 本轮未启动 GUI 或已安装 Echo；显示器事件、透明像素与点击穿透在真实多屏设备上的行为仍待 UI 验收。
+6. A35 的 macOS runtime harness 从当前 `macOS/ViewModels/SpeechViewModel.swift` 临时提取生产处理函数，并与生产 `TranscriptModels.swift` 一起编译；只使用合成文本，不启动 Echo、不采集音频、不连接服务。Actions 尚未运行前，不宣称 Mac 生产 handler 与 Windows 对拍通过。
 
 ## 跨平台 Archive runtime 对拍
 

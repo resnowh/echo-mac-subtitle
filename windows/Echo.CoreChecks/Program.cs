@@ -254,7 +254,9 @@ bool previousTranslationCleared = provisionalSnapshotSegment.Entries[0].English 
 ApplyProvisionalSnapshot("""{"tokens":[{"text":"Hello there!","is_final":false},{"text":"你好！","is_final":false,"translation_status":"translation"}]}""");
 Check(previousTranslationCleared && provisionalSnapshotSegment.Entries[0].English == "Hello there!" && provisionalSnapshotSegment.Entries[0].Chinese == "你好！",
     "each Mac-style response replaces provisional source and translation as one snapshot, preventing stale opposite-lane text");
-var sonioxFixturePath = Path.Combine(AppContext.BaseDirectory, "Fixtures", "soniox-mac-parity-sequence.json");
+var sonioxFixturePath = Environment.GetEnvironmentVariable("ECHO_MAC_SONIOX_FIXTURE");
+if (string.IsNullOrWhiteSpace(sonioxFixturePath) || !File.Exists(sonioxFixturePath))
+    sonioxFixturePath = Path.Combine(AppContext.BaseDirectory, "Fixtures", "soniox-mac-parity-sequence.json");
 using (var sonioxFixture = JsonDocument.Parse(File.ReadAllText(sonioxFixturePath)))
 {
     int fixtureFinalized = 0;
