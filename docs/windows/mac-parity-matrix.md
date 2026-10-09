@@ -13,6 +13,7 @@ Windows 来源：当前 PR 分支 `feature/windows-mac-parity`；其历史迁移
 | Windows 实现 | 当前 PR 分支 `windows/`；历史迁移来源见上文 | 文件清单、现有能力、待对齐行为 | 没有运行 UI 或真实音频硬件 |
 | Windows 检查底稿 | `docs/sources/windows-*` | 保留原有构建、核心检查和签名包记录 | 历史测试结论只适用于底稿注明的代码版本 |
 | AI 总结呈现 | Mac `EchoMacApp.swift`、`TranscriptViews.swift` | A29 记录 Markdown 分块、默认展开、收起/复制与 Windows 合成验证 | 尚无 GUI 视觉或剪贴板实测 |
+| Soniox 多响应处理 | Mac `SpeechViewModel.handleSonioxMessage` 等生产路径 | A30 固定合成序列覆盖 Windows 五个响应后的字幕状态与结束回调 | 期望值按 Mac 源码静态推导；没有在 Mac 运行生产 handler |
 
 本次核验前已执行 fetch 并以最新 `origin/main` 建立独立分支；没有把旧混合分支合并进来。旧分支曾含 Mac 源码提交，因此不得整体 cherry-pick 或合并。详细测试证据见 [testing.md](testing.md) 与 `docs/sources/windows-*`。
 
@@ -27,7 +28,7 @@ Windows 来源：当前 PR 分支 `feature/windows-mac-parity`；其历史迁移
 | 主字幕区可选识别语言及翻译目标，录音中提示下次录音生效 | 主界面提供 Mac 同款 12 种语言、自动识别、不翻译选项；更改配置写入本地并提示下次录音生效 | 功能存在但行为不同 | Mac `macOS/Views/TranscriptViews.swift`、`macOS/Models/TranscriptModels.swift`；Windows `MainPage.xaml`、`MainPage.xaml.cs`、`Core/Preferences.cs`。Windows 仍保留“翻译”设置开关，菜单项会同步开关状态 |
 | 四个设置分类：常规、识别、分段、AI 服务 | WinUI SelectorBar 切换四类设置，参数修改后保存到本地 | 功能存在但行为不同 | Mac `macOS/EchoMacApp.swift`；Windows `windows/Echo.Windows/MainPage.xaml`、`MainPage.xaml.cs`。控件平台原生，实际键盘和 Narrator 行为未验 |
 | 音源：电脑音频、麦克风、混合；授权状态和音频电平 | WASAPI loopback、麦克风及本地混音；设备切换、恢复策略和电平已实现 | 部分实现 | `macOS/EchoMacApp.swift`；Windows `Services/AudioCapture.cs`、`SpeechSession.cs`、`MainPageViewModel.cs`。API 权限表达、声卡和睡眠行为尚未端到端对拍 |
-| Soniox 临时字幕更新、最终字幕落定、翻译迟到、双语端点、说话人/语言元数据、强语境经济学/微积分词汇纠正及请求上下文 | Token assembler 对原文和译文分游标；每条响应整体替换 provisional 双语快照；Mac 在响应级记录 `<end>`/`<fin>` 并于该响应处理完后最多结束一行；请求包含 Mac 相同的领域/主题/背景文本、39 个术语和 26 组译词，用户词按 Mac 上限追加 | 功能存在但行为不同 | Mac `SpeechViewModel.swift` 的 `openSonioxSocket`、`handleTranscriptResponse`、`correctEconomicTerms`、`correctEconomicTranslation`；Windows `Core/SonioxRequestBuilder.cs`、`Core/Transcript.cs`、`Services/SpeechSession.cs`、`Echo.CoreChecks/Program.cs`。本地请求形状、响应级端点与用户术语边界有回归；云端识别表现及 Mac/Windows 完整输出仍未对拍；见 A25/A26 底稿 |
+| Soniox 临时字幕更新、最终字幕落定、翻译迟到、双语端点、说话人/语言元数据、强语境经济学/微积分词汇纠正及请求上下文 | Token assembler 对原文和译文分游标；每条响应整体替换 provisional 双语快照；Mac 在响应级记录 `<end>`/`<fin>` 并于该响应处理完后最多结束一行；请求包含 Mac 相同的领域/主题/背景文本、39 个术语和 26 组译词，用户词按 Mac 上限追加 | 功能存在但行为不同 | Mac `SpeechViewModel.swift` 的 `handleSonioxMessage`、`ensureCurrentEntry`、`updateCurrentEntry`、`finalizeCurrentEntry`、`correctEconomicTerms`、`correctEconomicTranslation`；Windows `Core/SonioxRequestBuilder.cs`、`Core/Transcript.cs`、`Services/SpeechSession.cs`、`Echo.CoreChecks/Program.cs`。A30 五响应固定序列检查 Windows 的 provisional 替换、跨响应迟到译文、元数据、时间、speaker split 和双标记端点；期望值按 Mac 源码静态推导，生产 handler runtime 对拍、云端表现仍未验证；见 A25/A26/A30 |
 | 设置识别模式、优先语言、严格限制、翻译、目标语言、说话人 | 设置页语言选项、自动识别、不翻译、严格语言和说话人开关；开始会话时冻结翻译行为 | 功能存在但行为不同 | Mac `TranscriptModels.swift`、`EchoMacApp.swift`；Windows `Core/Preferences.cs`、`MainPage.xaml(.cs)`、`MainPageViewModel.cs`。UI smoke 和当前会话不变行为仍需验 |
 | Soniox 端点最大延迟、灵敏度、延迟级别、本地静音兜底、超长段兜底 | 按 Mac 默认值和范围保存；Soniox 请求发送三项端点参数；500ms 本地策略以相同词数/时长双阈值兜底，翻译开启时等待译文，语义端点优先 | 功能存在但行为不同 | Mac `macOS/Models/TranscriptModels.swift`、`SpeechViewModel.swift`、`SonioxRequestBuilder.swift`；Windows `Core/Preferences.cs`、`TranscriptSegmentationPolicy.cs`、`SonioxRequestBuilder.cs`、`MainPageViewModel.cs`。核心契约自动检查；见 A24 数据底稿，真实云端行为未验 |
 | 归档选择、新建、续录、导出、清空、拆分已完成段 | Mac 载入列表按 `updatedAt` 降序；归档中的多个 segment 按各自开始日期保留 | Windows 按 `updatedAt` 降序载入并在保存后移动更新项；多 segment JSON、字幕 metadata 和跨段 SRT 时间间隔有 Swift 形状合成 round-trip 检查 | 部分实现 | Mac `Storage/TranscriptArchiveStore.swift`、`SpeechViewModel.swift`、archive models；Windows `Core/Transcript.cs`、`MainPageViewModel.cs`、`Echo.CoreChecks/Program.cs`。多段验证仅为 Codable 形状夹具，仍缺真实 Mac 生产 encoder 生成的多段 fixture 和用户历史归档双向验证；见 A17/A27 |
@@ -41,7 +42,7 @@ Windows 来源：当前 PR 分支 `feature/windows-mac-parity`；其历史迁移
 
 ## 最高优先级缺口
 
-1. P0：补齐完整 Mac/Windows 合成 token 序列的自动输出对拍；A17 已验证的合成 Archive 双向 runtime fixture 已通过，但真实用户历史 Archive 仍未覆盖。
+1. P0：A30 已补充五响应 Soniox 序列和逐响应 Windows 状态回归；仍需在 Mac 合法构建环境运行生产 handler 获取同序列输出，形成真正的两端 runtime differential。A17 已验证的合成 Archive 双向 runtime fixture 已通过，但真实用户历史 Archive 仍未覆盖。
 2. P1：主界面语言菜单、滚动跟随行为、四类设置和分段配置已接入；需 GUI smoke 与同一 Soniox 事件序列对拍。
 3. P1：悬浮字幕逻辑和窗口已实现；优先完成透明合成、点击穿透、DPI、多屏和全屏应用验收。它复用同一识别会话和当前字幕状态。
 4. P2：总结面板已补齐 Mac 风格 Markdown 分块、折叠/展开和复制；继续核验自动总结状态反馈、显示条件、主题和窄窗口布局。

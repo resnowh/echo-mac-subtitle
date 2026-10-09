@@ -238,6 +238,34 @@ bool previousTranslationCleared = provisionalSnapshotSegment.Entries[0].English 
 ApplyProvisionalSnapshot("""{"tokens":[{"text":"Hello there!","is_final":false},{"text":"你好！","is_final":false,"translation_status":"translation"}]}""");
 Check(previousTranslationCleared && provisionalSnapshotSegment.Entries[0].English == "Hello there!" && provisionalSnapshotSegment.Entries[0].Chinese == "你好！",
     "each Mac-style response replaces provisional source and translation as one snapshot, preventing stale opposite-lane text");
+var sonioxFixturePath = Path.Combine(AppContext.BaseDirectory, "Fixtures", "soniox-mac-parity-sequence.json");
+using (var sonioxFixture = JsonDocument.Parse(File.ReadAllText(sonioxFixturePath)))
+{
+    int fixtureFinalized = 0;
+    int fixtureEventIndex = 0;
+    var fixtureSegment = new Segment { StartedAt = 800000000 };
+    var fixtureAssembler = new TokenAssembler(fixtureSegment, _ => { }, _ => fixtureFinalized++);
+    foreach (var step in sonioxFixture.RootElement.GetProperty("events").EnumerateArray())
+    {
+        using var response = JsonDocument.Parse(step.GetProperty("message").GetRawText());
+        fixtureAssembler.Apply(response.RootElement);
+        var expected = step.GetProperty("expected").EnumerateArray().ToArray();
+        bool stateMatches = expected.Length == fixtureSegment.Entries.Count
+            && expected.Select((entry, index) =>
+            {
+                var actual = fixtureSegment.Entries[index];
+                string? expectedString(string key) => entry.TryGetProperty(key, out var value) && value.ValueKind != JsonValueKind.Null ? value.GetString() : null;
+                return actual.English == expectedString("english")
+                    && actual.Chinese == expectedString("chinese")
+                    && actual.Speaker == expectedString("speaker")
+                    && actual.Language == expectedString("language")
+                    && Math.Abs(actual.Start - entry.GetProperty("start").GetDouble()) < 0.001
+                    && Math.Abs(actual.End - entry.GetProperty("end").GetDouble()) < 0.001;
+            }).All(matches => matches)
+            && fixtureFinalized == step.GetProperty("expectedFinalizations").GetInt32();
+        Check(stateMatches, $"Mac-derived Soniox fixture response {++fixtureEventIndex} matches snapshots, metadata, timestamps, and finalization callbacks");
+    }
+}
 var archive = new Archive { CreatedAt = 800000000, Summary = "已保存总结", SummarizedEntries = { [segment.Entries[0].Id] = TranscriptFiles.SummarySignature(segment.Entries[0].English) }, Segments = [segment, new Segment { StartedAt = 800000010, Entries = [new Subtitle { Start = 0, End = 1, English = "Again" }] }] };
 var archiveOrdering = ArchiveOrdering.NewestFirst([
     new Archive { UpdatedAt = 10, Title = "older" },

@@ -1,0 +1,35 @@
+{
+  "name": "Mac response snapshot, delayed translation, language finalization, endpoint, and speaker split",
+  "source": "macOS/ViewModels/SpeechViewModel.swift: handleSonioxMessage, ensureCurrentEntry, updateCurrentEntry, finalizeCurrentEntry",
+  "events": [
+    {
+      "message": {"tokens": [{"text":"Meet","is_final":false,"start_ms":1000,"end_ms":1400,"speaker":"4","language":"en"},{"text":"会","is_final":false,"translation_status":"translation"}]},
+      "expectedFinalizations": 0,
+      "expected": [{"english":"Meet","chinese":"会","speaker":"Speaker 4","language":"en","start":1.0,"end":1.4}]
+    },
+    {
+      "message": {"tokens": [{"text":"Meeting","is_final":false,"start_ms":1000,"end_ms":1800,"speaker":"5","language":"ja"}]},
+      "expectedFinalizations": 0,
+      "expected": [{"english":"Meeting","chinese":"","speaker":"Speaker 4","language":"en","start":1.0,"end":1.8}]
+    },
+    {
+      "message": {"tokens": [{"text":"Meeting started.","is_final":true,"start_ms":1000,"end_ms":2200,"speaker":"5","language":"ja"}]},
+      "expectedFinalizations": 0,
+      "expected": [{"english":"Meeting started.","chinese":"","speaker":"Speaker 5","language":"ja","start":1.0,"end":2.2}]
+    },
+    {
+      "message": {"tokens": [{"text":"会议开始了。","is_final":true,"translation_status":"translation"},{"text":"<end>","is_final":true},{"text":"<fin>","is_final":true}]},
+      "expectedFinalizations": 1,
+      "expected": [{"english":"Meeting started.","chinese":"会议开始了。","speaker":"Speaker 5","language":"ja","start":1.0,"end":2.2}]
+    },
+    {
+      "message": {"tokens": [{"text":"First speaker.","is_final":true,"start_ms":6000,"end_ms":7000,"speaker":"1","language":"en"},{"text":"Second speaker.","is_final":true,"start_ms":7200,"end_ms":8000,"speaker":"2","language":"ja"},{"text":"第一位。","is_final":true,"translation_status":"translation"},{"text":"第二位。","is_final":true,"translation_status":"translation"},{"text":"<end>","is_final":true}]},
+      "expectedFinalizations": 3,
+      "expected": [
+        {"english":"Meeting started.","chinese":"会议开始了。","speaker":"Speaker 5","language":"ja","start":1.0,"end":2.2},
+        {"english":"First speaker.","chinese":"","speaker":"Speaker 1","language":"en","start":6.0,"end":7.0},
+        {"english":"Second speaker.","chinese":"第一位。第二位。","speaker":"Speaker 2","language":"ja","start":7.2,"end":8.0}
+      ]
+    }
+  ]
+}
