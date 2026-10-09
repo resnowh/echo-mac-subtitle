@@ -67,6 +67,7 @@ public sealed partial class MainPage : Page
     public static Visibility HiddenWhen(bool value) => value ? Visibility.Collapsed : Visibility.Visible;
     public static bool Not(bool value) => !value;
     public static string AccessibleText(string role, string? value) => string.IsNullOrWhiteSpace(value) ? string.Empty : $"{role}：{value}";
+    public static string SubtitleEditAutomationId(Guid subtitleId) => $"EditSubtitle_{subtitleId:N}";
     private void UpdateLanguageHeaders()
     {
         SourceHeading.Text = ViewModel.Config.SourceLanguage switch { "en" => "English", "zh" => "简体中文", "ja" => "日本語", "" => "原文", var code => code };
@@ -172,6 +173,7 @@ public sealed partial class MainPage : Page
             var outputChoices = new List<AudioDevice>(choices);
             outputChoices.AddRange(ViewModel.Outputs);
             output = new ComboBox { Header = "电脑音频来源", ItemsSource = outputChoices, DisplayMemberPath = nameof(AudioDevice.Name), HorizontalAlignment = HorizontalAlignment.Stretch };
+            AutomationProperties.SetAutomationId(output, "SwitchOutputDevice");
             output.SelectedItem = outputChoices.FirstOrDefault(d => d.Id == ViewModel.ActiveOutputId) ?? outputChoices[0];
             content.Children.Add(output);
         }
@@ -180,6 +182,7 @@ public sealed partial class MainPage : Page
             var inputChoices = new List<AudioDevice> { new("", "系统默认设备") };
             inputChoices.AddRange(ViewModel.Inputs);
             input = new ComboBox { Header = "麦克风", ItemsSource = inputChoices, DisplayMemberPath = nameof(AudioDevice.Name), HorizontalAlignment = HorizontalAlignment.Stretch };
+            AutomationProperties.SetAutomationId(input, "SwitchInputDevice");
             input.SelectedItem = inputChoices.FirstOrDefault(d => d.Id == ViewModel.ActiveInputId) ?? inputChoices[0];
             content.Children.Add(input);
         }
@@ -201,6 +204,8 @@ public sealed partial class MainPage : Page
         if (sender is not Button { DataContext: Subtitle entry }) return;
         var source = new TextBox { Header = "原文", Text = entry.English, AcceptsReturn = true, MinHeight = 88, TextWrapping = TextWrapping.Wrap };
         var translation = new TextBox { Header = "译文", Text = entry.Chinese, AcceptsReturn = true, MinHeight = 88, TextWrapping = TextWrapping.Wrap };
+        AutomationProperties.SetAutomationId(source, "CorrectionSource");
+        AutomationProperties.SetAutomationId(translation, "CorrectionTranslation");
         var suggestionText = new TextBlock { TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
         var body = new StackPanel { Spacing = 10, MaxWidth = 620 };
         body.Children.Add(source); body.Children.Add(translation);
@@ -216,6 +221,10 @@ public sealed partial class MainPage : Page
         var translate = new Button { Content = "重新翻译" };
         var undo = new Button { Content = "撤销上次纠正", IsEnabled = entry.CanUndoCorrection };
         var accept = new Button { Content = "应用建议", IsEnabled = false };
+        AutomationProperties.SetAutomationId(ai, "RequestCorrection");
+        AutomationProperties.SetAutomationId(translate, "RetranslateSubtitle");
+        AutomationProperties.SetAutomationId(undo, "UndoCorrection");
+        AutomationProperties.SetAutomationId(accept, "ApplyCorrectionSuggestion");
         actions.Children.Add(ai); actions.Children.Add(translate); actions.Children.Add(undo); actions.Children.Add(accept);
         body.Children.Add(actions); body.Children.Add(suggestionText);
         suggestionText.Text = ViewModel.GetCorrectionStatus(entry) ?? "";

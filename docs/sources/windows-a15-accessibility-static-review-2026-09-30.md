@@ -26,3 +26,14 @@
 ## 未覆盖
 
 没有启动应用或运行 `windows/ui-smoke.ps1`。Narrator 实际播报、键盘全流程与焦点顺序、高对比度主题、100%～200% 缩放、多显示器 DPI 切换仍未验收；A15 仅完成源码层面的语义补齐。
+
+## 动态控件 AutomationId 复审（2026-10-09）
+
+静态代码审查发现字幕列表的编辑按钮在每个虚拟化条目中都复用 `EditSubtitle`，而运行时创建的校对对话框和切换设备对话框控件没有稳定 AutomationId。虽然这些控件有可见文本或 Header，但自动化无法可靠区分每条字幕，也无法用稳定标识定位对话框操作。
+
+- 字幕编辑按钮 ID 改为 `EditSubtitle_{subtitle UUID}`；字幕 ID 固定，因此同一存档内唯一且重载后稳定。
+- 切换设备下拉框分别标为 `SwitchOutputDevice`、`SwitchInputDevice`。
+- 校对对话框文本框标为 `CorrectionSource`、`CorrectionTranslation`，操作按钮标为 `RequestCorrection`、`RetranslateSubtitle`、`UndoCorrection`、`ApplyCorrectionSuggestion`。
+- Windows Release x64 后台构建通过，0 错误、10 条既有 NAudio 弃用警告；CoreChecks 共 51 项通过，包含存档、音频策略和生命周期回归。`git diff --check` 通过。
+
+按维护者要求没有启动 Echo 或 UI smoke。键盘遍历、Narrator、Accessibility Insights、真实高对比模式及多 DPI 仍需 UI 实机验收。
