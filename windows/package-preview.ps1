@@ -1,7 +1,9 @@
 param(
     [Parameter(Mandatory = $true)] [string] $BuildOutputPath,
     [Parameter(Mandatory = $true)] [string] $OutputPath,
-    [Parameter(Mandatory = $true)] [string] $SignerThumbprint
+    [Parameter(Mandatory = $true)] [string] $SignerThumbprint,
+    [string] $TimestampServer,
+    [switch] $RequireTrustedSignature
 )
 
 $ErrorActionPreference = 'Stop'
@@ -71,12 +73,30 @@ try {
     $packOutput = & (Join-Path $sdkTools 'makeappx.exe') pack /d $stageRoot /p $outputFullPath 2>&1
     if ($LASTEXITCODE -ne 0) { $packOutput | Select-Object -Last 20; throw "MakeAppx failed with exit code $LASTEXITCODE." }
 
-    $signOutput = & (Join-Path $sdkTools 'signtool.exe') sign /fd SHA256 /sha1 $SignerThumbprint $outputFullPath 2>&1
+    $signArguments = @('sign', '/fd', 'SHA256', '/sha1', $SignerThumbprint)
+    if (-not [string]::IsNullOrWhiteSpace($TimestampServer)) {
+        $timestampUri = [uri]::new($TimestampServer)
+        if ($timestampUri.Scheme -ne 'https') { throw 'TimestampServer must use HTTPS.' }
+        $signArguments += @('/tr', $TimestampServer, '/td', 'SHA256')
+    }
+    $signArguments += $outputFullPath
+    $signOutput = & (Join-Path $sdkTools 'signtool.exe') @signArguments 2>&1
     if ($LASTEXITCODE -ne 0) { $signOutput | Select-Object -Last 20; throw "SignTool failed with exit code $LASTEXITCODE." }
 
     $signature = Get-AuthenticodeSignature -FilePath $outputFullPath
     if (-not $signature.SignerCertificate -or $signature.SignerCertificate.Thumbprint -ne $SignerThumbprint) {
         throw 'The resulting package does not report the requested signing certificate.'
+    }
+    if ($RequireTrustedSignature -and $signature.Status -ne 'Valid') {
+        throw "The signed package is not trusted on this runner: $($signature.Status) $($signature.StatusMessage)"
+    }
+    $timestampThumbprint = if ($signature.TimeStamperCertificate) { $signature.TimeStamperCertificate.Thumbprint } else { $null }
+    if ($RequireTrustedSignature -and -not $timestampThumbprint) {
+        throw 'The signed package does not contain a verifiable RFC 3161 time-stamp certificate.'
+    }
+    if ($RequireTrustedSignature) {
+        $verifyOutput = & (Join-Path $sdkTools 'signtool.exe') verify /pa /all /v $outputFullPath 2>&1
+        if ($LASTEXITCODE -ne 0) { $verifyOutput | Select-Object -Last 20; throw "SignTool could not validate the trusted package signature (exit code $LASTEXITCODE)." }
     }
 
     $unpackOutput = & (Join-Path $sdkTools 'makeappx.exe') unpack /p $outputFullPath /d $verifyRoot 2>&1
@@ -105,6 +125,7 @@ try {
         PayloadMatchesBuild = $true
         SignatureStatus = $signature.Status
         SignerThumbprint = $signature.SignerCertificate.Thumbprint
+        TimestampThumbprint = $timestampThumbprint
     }
 }
 finally {

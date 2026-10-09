@@ -1,0 +1,2 @@
+PASS PowerShell AST: windows/package-preview.ps1
+PASS PowerShell AST: windows/package-release-candidate.ps1

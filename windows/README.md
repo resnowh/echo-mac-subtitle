@@ -97,6 +97,14 @@ NuGet 版本记录在 `packages.lock.json`。GitHub Actions 在 Windows runner �
 
 生产发布仍需确定发布者身份、正式代码签名或商店发行、安装升级测试、隐私政策及长时间稳定性验证。
 
+## 正式签名候选包
+
+仓库提供手动触发的 `.github/workflows/windows-release-candidate.yml`，只允许从 `main` 构建并上传 30 天有效的签名 MSIX artifact，不会创建公开 Release。触发前需将发布版本提交到 `Package.appxmanifest`，并在仓库 Actions secrets 设置 `WINDOWS_SIGNING_PFX_BASE64`（密码保护的 PFX 文件 Base64）与 `WINDOWS_SIGNING_PFX_PASSWORD`。PFX 对应证书必须含 Code Signing 用途，且 Subject 与清单 `Publisher` 完全一致；当前清单仍是占位值 `CN=AppPublisher`，需要用正式证书身份更新后才能出包。
+
+工作流使用 SHA-256 和 RFC 3161 HTTPS 时间戳，要求 Windows runner 将签名链判为 `Valid`，再通过 SignTool 验签并比较签名包中的 exe/dll 与 Release 构建。签名密钥只在打包步骤注入，临时 PFX 和导入到当前用户证书库的证书在步骤结束时清理；工作流不会把证书加入信任根。GitHub 单个 Secret 上限为 48 KB；若证书包超限，应改用受支持的托管签名服务，而不要把证书放进仓库。
+
+工作流与脚本尚未使用正式证书执行；当前 Actions secrets 未配置，公众信任链、可信时间戳、干净机器安装/升级仍未验收。证书 Subject 必须匹配 Publisher 的要求见 [Microsoft MSIX 证书说明](https://learn.microsoft.com/windows/msix/package/create-certificate-package-signing)；时间戳和签名算法依据见 [Microsoft SignTool 文档](https://learn.microsoft.com/en-us/windows/win32/seccrypto/signtool) 与 [MSIX 签名指南](https://learn.microsoft.com/en-us/windows/msix/package/sign-msix-package-guide)。GitHub 密钥配置规则见 [GitHub Actions secrets](https://docs.github.com/en/actions/reference/security/secrets)。
+
 ## 本次验证与边界
 
 2026-09-30：A15 无障碍语义修正后的 Windows Release x64 输出生成签名候选 A24 `windows/artifacts/Echo-Windows-x64-a24-20260930.msix`（108,211,492 bytes）。打包脚本已在签名前后核对清单和 exe/dll 哈希；包 SHA-256、签名状态与安装限制见 `docs/sources/windows-a18-msix-preview-2026-09-30.md`。自签名链仍不受信任，未安装、导入证书或启动 Echo。

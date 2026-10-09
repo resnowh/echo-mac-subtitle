@@ -98,4 +98,10 @@ Mac 使用不随应用失活隐藏的 floating panel；Windows 原生浮层创�
 
 ## A68 两小时 Soniox 大序列 Mac/Windows 生产对拍（2026-10-10）
 
-在 A67 合成输入上，GitHub macOS CI 将从当前 `SpeechViewModel.swift` 提取未修改的生产 handler，连续处理 14,400 条响应并只输出最终紧凑字幕数组；Windows CI 对生产 `TokenAssembler` 的 7,200 条结果逐条比较英文、中文、起止时间、speaker、language 和最终定稿数。Mac 期望结果作为 CI artifact 传递，不会产生 O(n²) 的逐响应快照。Windows 本机 155 项检查与 Release x64 构建通过；Mac/Windows 大序列对拍以该提交 Actions 结果为准。合成数据，不等待两小时、不调用云服务、不采集音频；单次性能观测不作为 SLA。可复现输入模式见 `windows/Echo.CoreChecks/Fixtures/soniox-two-hour-stress-mode.json`。
+在 A67 合成输入上，GitHub macOS CI 将从当前 `SpeechViewModel.swift` 提取未修改的生产 handler，连续处理 14,400 条响应并只输出最终紧凑字幕数组；Windows CI 对生产 `TokenAssembler` 的 7,200 条结果逐条比较英文、中文、起止时间、speaker、language 和最终定稿数。Mac 期望结果作为 CI artifact 传递，不会产生 O(n²) 的逐响应快照。Windows 本机 155 项检查与 Release x64 构建通过；Actions run `37998251868` 已验证 Mac/Windows 7,200 行全字段对拍与 Mac Archive/SRT 回读。相同代码在当前 PR head 的 run `37998929503` 再次全绿。合成数据，不等待两小时、不调用云服务、不采集音频；单次性能观测不作为 SLA。可复现输入模式见 `windows/Echo.CoreChecks/Fixtures/soniox-two-hour-stress-mode.json`。
+
+## A69 Windows 正式签名候选包流程（2026-10-10）
+
+新增仅手动触发、仅允许 `main` 的 `Windows Signed Release Candidate`。流程从 Actions secrets 读取密码保护的 Base64 PFX，在临时 runner 上导入发布证书；校验证书 Code Signing EKU、有效期、Subject/清单 Publisher 一致，使用 SHA-256 与 RFC 3161 HTTPS 时间戳签 MSIX；随后要求 Authenticode 状态为 `Valid`、SignTool 验签通过，并对比包内 exe/dll 与 Release 构建。artifact 保留 30 天，不自动创建或发布 GitHub Release。
+
+`package-release-candidate.ps1` 与打包脚本通过 PowerShell AST 解析；工作流通过 YAML 解析，`git diff --check` 通过。没有可用的正式 PFX/密码 secrets，因此本轮没有签名产物，也没有安装或发布。正式证书身份仍需替换清单占位 `CN=AppPublisher`；只有完成可信证书构建、可信时间戳和干净 Windows 安装/升级后，才可标记正式签名安装已验证。原始验证日志、源哈希与官方 Microsoft/GitHub 规则摘要见 [A69 来源底稿](../sources/windows-a69-release-signing-pipeline-2026-10-10/README.md)。
