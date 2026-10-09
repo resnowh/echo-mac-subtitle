@@ -5,7 +5,8 @@ import Foundation
 final class SonioxWebSocketClient {
     private let url: URL
     private let control = DispatchQueue(label: "local.echo.soniox-transport")
-    private let callbacks = DispatchQueue(label: "local.echo.soniox-callbacks")
+    private let callbacks: DispatchQueue
+    private var callbackGeneration: UInt64 = 0
     private var session: URLSession?
     private var task: URLSessionWebSocketTask?
     private var ready = false
@@ -22,14 +23,18 @@ final class SonioxWebSocketClient {
     var isActive: Bool { control.sync { task != nil } }
     var isReady: Bool { control.sync { ready } }
 
-    init(url: URL = URL(string: "wss://stt-rt.soniox.com/transcribe-websocket")!) {
+    init(url: URL = URL(string: "wss://stt-rt.soniox.com/transcribe-websocket")!,
+         callbackQueue: DispatchQueue = DispatchQueue(label: "local.echo.soniox-callbacks")) {
         self.url = url
+        self.callbacks = callbackQueue
     }
 
     func connect(apiKey: String, configuration: String, onReady: @escaping () -> Void,
                  onMessage: @escaping (String) -> Void, onFailure: @escaping (Error) -> Void) {
         control.sync {
             cancelLocked()
+            callbackGeneration &+= 1
+            let generation = callbackGeneration
             let config = URLSessionConfiguration.default
             config.timeoutIntervalForRequest = sendTimeout
             let session = URLSession(configuration: config)
@@ -50,10 +55,10 @@ final class SonioxWebSocketClient {
                     self.watchdog?.cancel()
                     if let error { self.failLocked(error); return }
                     self.ready = true
-                    self.callbacks.async(execute: onReady)
+                    self.deliver(onReady, generation: generation)
                 }
             }
-            receiveMessages(from: task, onMessage: onMessage)
+            receiveMessages(from: task, generation: generation, onMessage: onMessage)
         }
     }
 
@@ -89,7 +94,12 @@ final class SonioxWebSocketClient {
         }
     }
 
-    func cancel() { control.sync { cancelLocked() } }
+    func cancel() {
+        control.sync {
+            callbackGeneration &+= 1
+            cancelLocked()
+        }
+    }
 
     private func pumpLocked() {
         guard !sending, let task, let packet = pending.first else { return }
@@ -110,7 +120,7 @@ final class SonioxWebSocketClient {
         }
     }
 
-    private func receiveMessages(from task: URLSessionWebSocketTask,
+    private func receiveMessages(from task: URLSessionWebSocketTask, generation: UInt64,
                                  onMessage: @escaping (String) -> Void) {
         task.receive { [weak self, weak task] result in
             guard let self, let task else { return }
@@ -124,8 +134,8 @@ final class SonioxWebSocketClient {
                     case .data(let data): text = String(data: data, encoding: .utf8)
                     @unknown default: text = nil
                     }
-                    if let text { self.callbacks.async { onMessage(text) } }
-                    self.receiveMessages(from: task, onMessage: onMessage)
+                    if let text { self.deliver({ onMessage(text) }, generation: generation) }
+                    self.receiveMessages(from: task, generation: generation, onMessage: onMessage)
                 case .failure(let error): self.failLocked(error)
                 }
             }
@@ -144,8 +154,9 @@ final class SonioxWebSocketClient {
 
     private func failLocked(_ error: Error) {
         let handler = failureHandler
+        let generation = callbackGeneration
         cancelLocked(error: error)
-        if let handler { callbacks.async { handler(error) } }
+        if let handler { deliver({ handler(error) }, generation: generation) }
     }
 
     private func cancelLocked(error: Error = URLError(.cancelled)) {
@@ -167,6 +178,13 @@ final class SonioxWebSocketClient {
 
     private func deliver(_ completion: ((Error?) -> Void)?, error: Error?) {
         if let completion { callbacks.async { completion(error) } }
+    }
+
+    private func deliver(_ callback: @escaping () -> Void, generation: UInt64) {
+        callbacks.async { [weak self] in
+            guard let self, self.control.sync(execute: { self.callbackGeneration == generation }) else { return }
+            callback()
+        }
     }
 
     private static func error(_ message: String) -> NSError {

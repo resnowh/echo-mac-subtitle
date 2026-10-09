@@ -12,6 +12,8 @@ import threading
 
 
 class WebSocketFixture(socketserver.StreamRequestHandler):
+    probe_marker = None
+
     def handle(self):
         try:
             self.rfile.readline()
@@ -44,10 +46,16 @@ class WebSocketFixture(socketserver.StreamRequestHandler):
                     data = bytes(v ^ mask[i % 4] for i, v in enumerate(data))
                 if opcode == 8:
                     return
+                if opcode == 10 and data == b"probe":
+                    Path(self.probe_marker).write_text("received", encoding="utf-8")
                 if opcode == 1 and data:
                     configuration = json.loads(data)
                     assert "api_key" not in configuration
                     assert b"fixture-token" not in data
+                    if configuration.get("callback_probe"):
+                        reply = b"queued:stale"
+                        self.wfile.write(bytes([0x81, len(reply)]) + reply)
+                        self.wfile.write(bytes([0x89, 5]) + b"probe")
                 elif opcode == 2:
                     if data:
                         packets.append(data)
@@ -63,6 +71,8 @@ class WebSocketFixture(socketserver.StreamRequestHandler):
 root = Path(__file__).resolve().parents[1]
 with tempfile.TemporaryDirectory(prefix="echo-stream-checks-") as folder:
     fixture_directory = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(folder) / "archive-fixture"
+    fixture_directory.mkdir(parents=True, exist_ok=True)
+    WebSocketFixture.probe_marker = str(fixture_directory / "callback-probe-received")
     executable = str(Path(folder) / "checks")
     sdk = subprocess.check_output(["xcrun", "--sdk", "macosx", "--show-sdk-path"], text=True).strip()
     subprocess.run(["xcrun", "swiftc", "-sdk", sdk, "-O", "-framework", "Security", "-o", executable,
