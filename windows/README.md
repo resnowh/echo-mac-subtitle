@@ -6,7 +6,7 @@
 
 - Windows 分支：`feature/windows-mac-parity`；本轮核验起始快照为 `6f40d48a85d5029dfb0dd4e7ac16168e1b25194d`。PR [#5](https://github.com/resnowh/echo-mac-subtitle/pull/5) 尚未合并。
 - Mac 产品基线：`origin/main` `ae0359dc90da0ccb5e526a275da1747954a49a4f`。
-- 2026-10-10：A42 后本地 CoreChecks 共 111 项通过，Release x64 构建 0 警告、0 错误；PR #5 对应 Windows/Mac fixture/Archive 和 unsigned package CI 检查通过。源码检查和 CI 不代表真实音频设备或完整 GUI 验收。A41 对齐总结面板，A42 对齐 Soniox 畸形字段处理，见 [A41](../docs/sources/windows-a41-summary-panel-parity-2026-10-10.md) 与 [A42](../docs/sources/windows-a42-soniox-malformed-field-parity-2026-10-10.md)。
+- 2026-10-10：A43 后本地 CoreChecks 共 116 项通过，Release x64 构建 0 警告、0 错误。A43 将 Mac 生产处理器对拍扩至 18 条响应，新增经济学、微积分、翻译联动与保守负例；Mac CI 结果待推送后验证。源码检查和 CI 不代表真实音频设备或完整 GUI 验收。见 [A41](../docs/sources/windows-a41-summary-panel-parity-2026-10-10.md)、[A42](../docs/sources/windows-a42-soniox-malformed-field-parity-2026-10-10.md) 与 [A43](../docs/sources/windows-a43-correction-parity-2026-10-10.md)。
 - Soniox 实时模型为 `stt-rt-v5`。Windows 在 WebSocket 握手发送 Bearer API Key，配置 JSON 不重复包含密钥；Mac 当前代码仍把密钥放在起始配置中。按项目约束不改 Mac，Windows 保持官方推荐的握手鉴权。官方迁移时间与测试证据见 [A37 Soniox protocol baseline](../docs/sources/windows-a37-soniox-auth-protocol-2026-10-10.md)。
 - 正式发行尚未就绪：真实浮层/多屏/音频验收、受信任发布者签名、干净机器安装升级和隐私政策仍待完成。Soniox 官方建议客户端使用临时 Key；当前项目没有签发临时 Key 的后端，Windows 采用个人自行填写的 Key 与本机 DPAPI 存储。Android/iOS 不在当前交付范围。
 

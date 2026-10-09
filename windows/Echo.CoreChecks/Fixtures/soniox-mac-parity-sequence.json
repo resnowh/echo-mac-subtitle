@@ -113,6 +113,386 @@
         {"english":"Fourth speaker.","chinese":"第四位。","speaker":"Speaker 4","language":"ja","start":10.5,"end":11.0},
         {"english":"settled after malformed fields","chinese":"畸形字段后正常到达的译文","start":11.5,"end":12.0}
       ]
+    },
+    {
+      "message": {
+        "tokens": [
+          {
+            "text": "micro economic theory and macroeconomic model",
+            "is_final": true,
+            "start_ms": 13000,
+            "end_ms": 13600
+          },
+          {
+            "text": "<end>",
+            "is_final": true
+          }
+        ]
+      },
+      "expectedFinalizations": 6,
+      "expected": [
+        {
+          "english": "Meeting started.",
+          "chinese": "会议开始了。",
+          "speaker": "Speaker 5",
+          "language": "ja",
+          "start": 1.0,
+          "end": 2.2
+        },
+        {
+          "english": "First speaker.Second speaker.",
+          "chinese": "第一位。第二位。",
+          "speaker": "Speaker 2",
+          "language": "ja",
+          "start": 6.0,
+          "end": 8.0
+        },
+        {
+          "english": "Third speaker.",
+          "chinese": "第三位。",
+          "speaker": "Speaker 3",
+          "language": "en",
+          "start": 9.0,
+          "end": 10.0
+        },
+        {
+          "english": "Fourth speaker.",
+          "chinese": "第四位。",
+          "speaker": "Speaker 4",
+          "language": "ja",
+          "start": 10.5,
+          "end": 11.0
+        },
+        {
+          "english": "settled after malformed fields",
+          "chinese": "畸形字段后正常到达的译文",
+          "start": 11.5,
+          "end": 12.0
+        },
+        {
+          "english": "microeconomic theory and microeconomic model",
+          "chinese": "",
+          "start": 13.0,
+          "end": 13.6
+        }
+      ]
+    },
+    {
+      "message": {
+        "tokens": [
+          {
+            "text": "macroeconomic growth with a microeconomic class",
+            "is_final": true,
+            "start_ms": 14000,
+            "end_ms": 14700
+          },
+          {
+            "text": "<end>",
+            "is_final": true
+          }
+        ]
+      },
+      "expectedFinalizations": 7,
+      "expected": [
+        {
+          "english": "Meeting started.",
+          "chinese": "会议开始了。",
+          "speaker": "Speaker 5",
+          "language": "ja",
+          "start": 1.0,
+          "end": 2.2
+        },
+        {
+          "english": "First speaker.Second speaker.",
+          "chinese": "第一位。第二位。",
+          "speaker": "Speaker 2",
+          "language": "ja",
+          "start": 6.0,
+          "end": 8.0
+        },
+        {
+          "english": "Third speaker.",
+          "chinese": "第三位。",
+          "speaker": "Speaker 3",
+          "language": "en",
+          "start": 9.0,
+          "end": 10.0
+        },
+        {
+          "english": "Fourth speaker.",
+          "chinese": "第四位。",
+          "speaker": "Speaker 4",
+          "language": "ja",
+          "start": 10.5,
+          "end": 11.0
+        },
+        {
+          "english": "settled after malformed fields",
+          "chinese": "畸形字段后正常到达的译文",
+          "start": 11.5,
+          "end": 12.0
+        },
+        {
+          "english": "microeconomic theory and microeconomic model",
+          "chinese": "",
+          "start": 13.0,
+          "end": 13.6
+        },
+        {
+          "english": "macroeconomic growth with a macroeconomic class",
+          "chinese": "",
+          "start": 14.0,
+          "end": 14.7
+        }
+      ]
+    },
+    {
+      "message": {
+        "tokens": [
+          {
+            "text": "The first duty and duty function",
+            "is_final": true,
+            "start_ms": 15000,
+            "end_ms": 15700
+          },
+          {
+            "text": "税收关税",
+            "is_final": true,
+            "translation_status": "translation"
+          },
+          {
+            "text": "<end>",
+            "is_final": true
+          }
+        ]
+      },
+      "expectedFinalizations": 8,
+      "expected": [
+        {
+          "english": "Meeting started.",
+          "chinese": "会议开始了。",
+          "speaker": "Speaker 5",
+          "language": "ja",
+          "start": 1.0,
+          "end": 2.2
+        },
+        {
+          "english": "First speaker.Second speaker.",
+          "chinese": "第一位。第二位。",
+          "speaker": "Speaker 2",
+          "language": "ja",
+          "start": 6.0,
+          "end": 8.0
+        },
+        {
+          "english": "Third speaker.",
+          "chinese": "第三位。",
+          "speaker": "Speaker 3",
+          "language": "en",
+          "start": 9.0,
+          "end": 10.0
+        },
+        {
+          "english": "Fourth speaker.",
+          "chinese": "第四位。",
+          "speaker": "Speaker 4",
+          "language": "ja",
+          "start": 10.5,
+          "end": 11.0
+        },
+        {
+          "english": "settled after malformed fields",
+          "chinese": "畸形字段后正常到达的译文",
+          "start": 11.5,
+          "end": 12.0
+        },
+        {
+          "english": "microeconomic theory and microeconomic model",
+          "chinese": "",
+          "start": 13.0,
+          "end": 13.6
+        },
+        {
+          "english": "macroeconomic growth with a macroeconomic class",
+          "chinese": "",
+          "start": 14.0,
+          "end": 14.7
+        },
+        {
+          "english": "The first derivative and derivative function",
+          "chinese": "税收导数",
+          "start": 15.0,
+          "end": 15.7
+        }
+      ]
+    },
+    {
+      "message": {
+        "tokens": [
+          {
+            "text": "The duty is owed by Han",
+            "is_final": true,
+            "start_ms": 16000,
+            "end_ms": 16600
+          },
+          {
+            "text": "<end>",
+            "is_final": true
+          }
+        ]
+      },
+      "expectedFinalizations": 9,
+      "expected": [
+        {
+          "english": "Meeting started.",
+          "chinese": "会议开始了。",
+          "speaker": "Speaker 5",
+          "language": "ja",
+          "start": 1.0,
+          "end": 2.2
+        },
+        {
+          "english": "First speaker.Second speaker.",
+          "chinese": "第一位。第二位。",
+          "speaker": "Speaker 2",
+          "language": "ja",
+          "start": 6.0,
+          "end": 8.0
+        },
+        {
+          "english": "Third speaker.",
+          "chinese": "第三位。",
+          "speaker": "Speaker 3",
+          "language": "en",
+          "start": 9.0,
+          "end": 10.0
+        },
+        {
+          "english": "Fourth speaker.",
+          "chinese": "第四位。",
+          "speaker": "Speaker 4",
+          "language": "ja",
+          "start": 10.5,
+          "end": 11.0
+        },
+        {
+          "english": "settled after malformed fields",
+          "chinese": "畸形字段后正常到达的译文",
+          "start": 11.5,
+          "end": 12.0
+        },
+        {
+          "english": "microeconomic theory and microeconomic model",
+          "chinese": "",
+          "start": 13.0,
+          "end": 13.6
+        },
+        {
+          "english": "macroeconomic growth with a macroeconomic class",
+          "chinese": "",
+          "start": 14.0,
+          "end": 14.7
+        },
+        {
+          "english": "The first derivative and derivative function",
+          "chinese": "税收导数",
+          "start": 15.0,
+          "end": 15.7
+        },
+        {
+          "english": "The duty is owed by Han",
+          "chinese": "",
+          "start": 16.0,
+          "end": 16.6
+        }
+      ]
+    },
+    {
+      "message": {
+        "tokens": [
+          {
+            "text": "on the other han",
+            "is_final": true,
+            "start_ms": 17000,
+            "end_ms": 17500
+          },
+          {
+            "text": "<end>",
+            "is_final": true
+          }
+        ]
+      },
+      "expectedFinalizations": 10,
+      "expected": [
+        {
+          "english": "Meeting started.",
+          "chinese": "会议开始了。",
+          "speaker": "Speaker 5",
+          "language": "ja",
+          "start": 1.0,
+          "end": 2.2
+        },
+        {
+          "english": "First speaker.Second speaker.",
+          "chinese": "第一位。第二位。",
+          "speaker": "Speaker 2",
+          "language": "ja",
+          "start": 6.0,
+          "end": 8.0
+        },
+        {
+          "english": "Third speaker.",
+          "chinese": "第三位。",
+          "speaker": "Speaker 3",
+          "language": "en",
+          "start": 9.0,
+          "end": 10.0
+        },
+        {
+          "english": "Fourth speaker.",
+          "chinese": "第四位。",
+          "speaker": "Speaker 4",
+          "language": "ja",
+          "start": 10.5,
+          "end": 11.0
+        },
+        {
+          "english": "settled after malformed fields",
+          "chinese": "畸形字段后正常到达的译文",
+          "start": 11.5,
+          "end": 12.0
+        },
+        {
+          "english": "microeconomic theory and microeconomic model",
+          "chinese": "",
+          "start": 13.0,
+          "end": 13.6
+        },
+        {
+          "english": "macroeconomic growth with a macroeconomic class",
+          "chinese": "",
+          "start": 14.0,
+          "end": 14.7
+        },
+        {
+          "english": "The first derivative and derivative function",
+          "chinese": "税收导数",
+          "start": 15.0,
+          "end": 15.7
+        },
+        {
+          "english": "The duty is owed by Han",
+          "chinese": "",
+          "start": 16.0,
+          "end": 16.6
+        },
+        {
+          "english": "on the other hand",
+          "chinese": "",
+          "start": 17.0,
+          "end": 17.5
+        }
+      ]
     }
   ]
 }
