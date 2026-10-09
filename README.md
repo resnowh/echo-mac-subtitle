@@ -1,83 +1,107 @@
-# Echo：macOS 实时语音转写与翻译
+# Echo
 
-Echo 是一个原生 macOS 实时字幕应用。它从话筒或 Mac 正在播放的声音采集音频，通过 Soniox 实时识别，并在界面中保留英文原文、翻译和时间戳。默认行为是英语识别、简体中文翻译；音频默认不保存。
+**macOS 原生实时转写与双语字幕工具**  
+*Real-time transcription & bilingual subtitles for macOS.*
 
-## 当前功能
+[![macOS CI](https://github.com/resnowh/echo-mac-subtitle/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/resnowh/echo-mac-subtitle/actions/workflows/ci.yml)
+![macOS 15+](https://img.shields.io/badge/macOS-15%2B-555555?logo=apple)
+![SwiftUI](https://img.shields.io/badge/UI-SwiftUI-F05138?logo=swift&logoColor=white)
+![Stage](https://img.shields.io/badge/status-development%20preview-blue)
+![API](https://img.shields.io/badge/API-BYOK-6A737D)
 
-- **录音中纠正文字**：每行可编辑原文/译文、查看修改前版本并撤销。保存后的改动字段不会被后续识别覆盖，存档及后续导出/总结使用修正版。
-- **可选 AI 校对**：默认关闭，在设置开启或逐句请求。使用 DeepSeek Key，将文字和上下文发送到云端，可能计费，不上传音频。只生成需确认的建议，不自动改稿。原文修改保存后可请求“重新翻译”，已有总结和导出文件不自动重写。
-- **课程术语表**：用于 AI 校对和下次 Soniox 建连的识别提示，不作全局替换，也不保证每次识别正确。
+**简体中文** · [English](README.en.md) · [功能与文档](docs/README.md) · [问题反馈](https://github.com/resnowh/echo-mac-subtitle/issues)
 
-- 输入源可在录音中热切换：
-  - **电脑音频**：识别 Mac 正在播放的声音。
-  - **话筒**：识别麦克风输入。
-  - **电脑音频和话筒**：两路先在本地按时间轴混音，再发送给 Soniox。
-- 识别到的字幕逐条保留，支持现实本地时间、跨天日期行和滚动时的新内容提醒。
-- Soniox speaker diarization 可显示并保存匿名编号，如 `Speaker 1`、`Speaker 2`。
-- 设置中可选择：
-  - 自动识别源语言，或指定语言（指定语言会作为 Soniox 语言提示）；
-  - 指定语言的严格限制；
-  - 是否翻译，以及翻译目标语言；
-  - 是否启用 Speaker 编号。
-- 可选择新建存档或接续已有存档；一次课程可以由多个录音段组成，也可以把刚完成的录音段拆出。
-- 每段录音自动保存带时间戳的 `.srt` 文字稿；可从主界面导出当前存档的全部字幕。
-- 可选 DeepSeek AI 总结：
-  - 总结新增内容；
-  - 重新总结当前录音段；
-  - 总结整个存档。
-  AI 总结默认关闭，录音不会因为手动生成总结而停止。
-- 支持浅色、深色和跟随系统主题，以及窗口置顶开关。
+---
 
-## 系统要求
+Echo 让你在 Mac 上**实时阅读正在播放的声音或麦克风讲话内容**：转写原文、翻译成另一种语言，并保存带时间戳的字幕。适合课程、跨语言会议、视频与日常听力辅助。
 
-- macOS 15.0 或更高版本。
-- Apple Silicon 或 Intel Mac。
-- Soniox API Key 和网络连接。
-- 使用话筒需要允许 Echo 访问麦克风。
-- 使用电脑音频需要允许 Echo 访问“屏幕与系统音频录制”。
-- AI 总结还需要单独填写 DeepSeek API Key。
+> **当前状态：开发预览版，尚无公开的、经过 Apple 签名和公证的安装包。** macOS 源码位于 `main`；Windows 原生预览代码位于独立的 [`feature/windows-preview` 分支](https://github.com/resnowh/echo-mac-subtitle/tree/feature/windows-preview)，尚未正式发布。请勿将 CI 构建成功等同于完成真实设备验收。
 
-Echo 当前只支持 macOS。项目没有 Windows 版本，也没有现成 GitHub Release 安装包或 Apple notarization。
+## 核心功能
 
-## 使用方法
+| 能力 | 说明 |
+| --- | --- |
+| **实时双语字幕** | Soniox 流式识别与翻译；支持原文、译文、时间戳和匿名 Speaker 编号。 |
+| **多种音频输入** | 麦克风、Mac 电脑音频、两者混合；录音期间可切换输入模式。 |
+| **主界面快速切换语言** | 直接从双栏标题的下拉菜单切换源语言、翻译目标，也能关闭翻译。新 Soniox 会话使用新配置。 |
+| **可调字幕分段** | Soniox 端点灵敏度与延迟、本地静音及长段落兜底参数可配置。 |
+| **保存与导出** | 本地多段 Archive、接续录音、自动单段 SRT、全量字幕导出。默认**不保存原始音频**。 |
+| **纠正与 AI 辅助** | 手动编辑、撤销、保留原始识别稿；可选择用 DeepSeek 生成需人工确认的校对建议及总结。 |
+| **原生桌面体验** | SwiftUI、浅色／深色模式、窗口置顶、睡眠唤醒恢复逻辑。 |
 
-1. 用 Xcode 打开 `macOS/EchoMac.xcodeproj`，运行 `Echo` Scheme。
-2. 打开设置，在 `Soniox API Key` 中填写 Key。Key 只保存在本机 UserDefaults，不写入源码。
-3. 按需在“识别与翻译”中选择源语言和翻译目标；默认是 English → 简体中文。
-4. 在主界面选择输入源，点击“开始录音”。
-5. 第一次使用话筒或电脑音频时，根据 macOS 提示授予权限。
+**尚未交付**：独立桌面悬浮字幕窗口、正式签名和公证、自动更新、商店版本、移动客户端。部分功能已在计划或独立开发分支中，不代表 `main` 已实现。
 
-Soniox Key 可从 [Soniox Console](https://console.soniox.com/) 创建。Echo 使用 Soniox `stt-rt-v5` 实时 WebSocket；音频会发送到 Soniox 云端，应用默认不保存音频。
+## 快速开始
 
-## 文字稿与存档位置
+### 运行条件
 
-- 每次录音结束后，SRT 文字稿自动保存到用户的“下载”文件夹，文件名类似 `Echo-20260910-143000.srt`。
-- Archive JSON 保存在 `~/Library/Application Support/Echo/Archives/`，用于多段录音接续、恢复 Speaker/语言信息和全量 SRT 导出。
-- 设置页面会显示文字稿保存位置；当前版本没有修改自动保存目录的功能。
-- “导出全部字幕”会打开保存面板，可把当前存档另存到自选位置。
-- 默认不保存音频。
+- macOS **15.0 或更高版本**，Apple Silicon 或 Intel Mac。
+- 支持该系统版本的 Xcode（从源码构建）。
+- 网络连接和你自己的 [Soniox API Key](https://console.soniox.com/)。
+- 如使用 AI 校对或总结，另需 [DeepSeek API Key](https://platform.deepseek.com/)。
 
-## 从源码构建
+> Echo 使用 **BYOK（Bring Your Own Key）** 模式。第三方服务可能按用量收费；Echo 不包含免费的 Soniox/DeepSeek 调用额度。
 
-在项目根目录执行：
+### 从源码构建
 
-```sh
-xcodebuild -project macOS/EchoMac.xcodeproj -scheme Echo -configuration Debug -sdk macosx build
+目前没有面向普通用户的 DMG 下载。开发者可克隆仓库并打开 `macOS/EchoMac.xcodeproj`，在 Xcode 中选择 `Echo` Scheme 构建或运行：
+
+```bash
+git clone https://github.com/resnowh/echo-mac-subtitle.git
+cd echo-mac-subtitle
+open macOS/EchoMac.xcodeproj
 ```
 
-也可以执行：
+只想**编译验证而不启动应用**，可使用隔离构建路径：
 
-```sh
-chmod +x build_mac.command
-./build_mac.command
+```bash
+xcodebuild -project macOS/EchoMac.xcodeproj \
+  -scheme Echo -configuration Debug -sdk macosx \
+  -derivedDataPath "${TMPDIR:-/tmp}/echo-doc-build" \
+  CODE_SIGNING_ALLOWED=NO build
 ```
 
-脚本使用 Release 配置构建未签名的本地 app，并尝试打开构建结果。正式 Developer ID 签名、notarization、DMG 和 GitHub Release 流程见 [docs/release.md](docs/release.md)。
+> `build_mac.command` **会在 Release 构建后自动打开 Echo.app**。如果你正用 Echo 录音，请不要运行该脚本，也不要覆盖、退出或替换正在使用的应用。
 
-## 相关文档
+### 首次使用
 
-- [产品路线图：Mac 体验优先，Windows 随后](docs/roadmap/README.md)（设计计划，尚未实现 Windows/移动端）
-- [当前架构](docs/architecture.md)
-- [数据模型与持久化](docs/data-model.md)
-- [变更记录](CHANGELOG.md)
-- [发布准备](docs/release.md)
+1. 在 **设置 → 服务** 中填写 Soniox API Key；DeepSeek Key 可选。（当前主线设置为纵向分区；[标签页改版](https://github.com/resnowh/echo-mac-subtitle/pull/1) 仍在独立 PR 中。）
+2. 选择 **麦克风 / 电脑音频 / 两者混合**。根据系统提示授权麦克风或“屏幕与系统音频录制”。
+3. 在双栏字幕标题直接选择识别语言和翻译目标，然后点击 **开始录音**。
+4. 停止后在本地查看存档；按需编辑字幕、生成 AI 总结或导出 SRT。
+
+## 你的数据会去哪里？
+
+| 数据 | 处理方式 |
+| --- | --- |
+| 实时音频 | 传输到 Soniox 进行识别／翻译；Echo 默认不把原始音频保存到磁盘。 |
+| AI 校对、重新翻译、总结 | 仅在开启相应功能或主动调用时，将相关**文字**发送到 DeepSeek；不发送音频。 |
+| Archive JSON | 本机 `~/Library/Application Support/Echo/Archives/`。 |
+| 自动单段 SRT | 默认写入用户的 `Downloads` 文件夹。 |
+| Soniox / DeepSeek Key | **当前版本保存在本机 UserDefaults，尚未迁移到 Keychain**；正式分发前需要安全加固。 |
+
+请在使用会议、课堂录音功能时遵守适用的隐私及录音告知要求。
+
+## 项目状态与路线
+
+- **macOS（`main`）**：主要开发版本；[自动化构建与隔离检查](https://github.com/resnowh/echo-mac-subtitle/actions/workflows/ci.yml)。
+- **Windows（`feature/windows-preview`）**：原生 WinUI 3/C# 预览实现，仍待完整真机／云端验收；**没有正式下载版**。
+- **macOS 分发**：正在准备 Universal 构建、Developer ID 签名、公证和 DMG。**当前未具备正式签名、公证凭据，也没有发布公共 Release**。进度与门槛见 [发布文档](docs/release.md)。
+- **移动端**：远期构想，尚未开始实现。
+
+[变更记录](CHANGELOG.md) · [产品路线图](docs/roadmap/README.md) · [GitHub Releases](https://github.com/resnowh/echo-mac-subtitle/releases)
+
+## 文档与开发
+
+| 文档 | 用途 |
+| --- | --- |
+| [文档导航](docs/README.md) | 使用、技术、测试、发布文档总入口 |
+| [常见问题](docs/FAQ.md) | 权限、API Key、费用、数据及当前限制 |
+| [架构说明](docs/architecture.md) | 音频、Soniox、字幕、存档的数据流 |
+| [数据模型](docs/data-model.md) | Archive、时间戳、Speaker、兼容性 |
+| [测试说明](tests/README.md) | 隔离测试的范围与局限 |
+| [发布准备](docs/release.md) | Mac 签名、公证和真实设备验收要求 |
+
+欢迎通过 [Issues](https://github.com/resnowh/echo-mac-subtitle/issues) 报告问题或提出功能建议。反馈时请勿附上 API Key、真实录音、私人字幕或含个人信息的日志。
+
+**许可证说明：** 仓库目前公开可读，但尚未附带 `LICENSE` 文件；公开源码不代表已经授权他人复制、修改或再分发。许可证与商业模式仍待确定。
