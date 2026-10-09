@@ -13,7 +13,7 @@ Windows 来源：当前 PR 分支 `feature/windows-mac-parity`；其历史迁移
 | Windows 实现 | 当前 PR 分支 `windows/`；历史迁移来源见上文 | 文件清单、现有能力、待对齐行为 | 没有运行 UI 或真实音频硬件 |
 | Windows 检查底稿 | `docs/sources/windows-*` | 保留原有构建、核心检查和签名包记录 | 历史测试结论只适用于底稿注明的代码版本 |
 | AI 总结呈现 | Mac `EchoMacApp.swift`、`TranscriptViews.swift` | A29 记录 Markdown 分块、默认展开、收起/复制与 Windows 合成验证 | 尚无 GUI 视觉或剪贴板实测 |
-| Soniox 多响应与控制帧 | Mac 对字符串 `error_message` 立即报错并返回；仅布尔 `finished: true` 才结束；转写字段错误类型安全忽略 | A35 七响应、A42 十三响应、A43 十八响应生产 differential；A44 补无 error_code 错误和错误类型 finished 的 loopback 测试 | A35/A42/A43 production differential 通过；A44 本机控制帧检查通过，GitHub CI 待推送验证；真实云响应仍未覆盖 |
+| Soniox 多响应与控制帧 | Mac 对字符串 `error_message` 立即报错并返回；仅布尔 `finished: true` 才结束；转写字段错误类型安全忽略 | A35 七响应、A42 十三响应、A43 十八响应 production differential；A44 补无 error_code 错误和错误类型 finished 的 loopback 测试 | A35/A42/A43 production differential 和 A44 的 Mac/Windows/Archive CI 全通过；真实云响应仍未覆盖 |
 | Soniox 本地静默后备计时 | Mac 在错误/finished 早退后，对每条有效转写响应更新时间，包括空 token 响应和仅端点标记响应 | Windows 现按每条非错误、非 finished 的有效响应更新时间；不要求响应含普通语音 token | 之前仅普通文本 token 会刷新 Windows 计时，空响应期间可能比 Mac 提前本地切句；A39 已修正并以四类固定 JSON 检查 | 纯逻辑与 Release 构建已验证；真实服务空响应节奏和长时间静默仍未验 |
 | 录音电平与波形 | Mac 对转换样本算 RMS 并乘 7.5，20Hz 快攻慢放平滑，保留 48 个样本并逐点绘制 | Windows 按每路有效重采样样本算 RMS，采用相同放大、20Hz 平滑系数和 48 点波形；已移除与真实声音无关的正弦条形动画 | A40 以合成样本检查 RMS、攻击/回落、历史容量和重置 | 纯逻辑与 Release 构建通过；真实设备电平响应和视觉波形仍待 GUI/设备验收 |
 | 双路 PCM 混音欠载行为 | Mac `PCM16TimelineMixer` 与 Windows `AudioCapture.ReadFrame` / `AudioFrameMixer` | A36 对照发现并修正 Windows 欠载时固定双路除数导致的音量衰减；97 项 CoreChecks 与 Windows Release 构建通过 | 确定性样本检查不替代真实 WASAPI 设备、时钟漂移及长时间采集验收；Mac 源码基线和 Windows 代码版本见 A36 |

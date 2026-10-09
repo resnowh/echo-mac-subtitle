@@ -37,6 +37,6 @@ Windows 原接收器只在存在 `error_code` 时抛出服务错误，并对 `fi
 - 新增停止握手集成检查：字符串型 `finished` 被忽略，后续 `finished: true` 正常完成 stop，期间没有 Failure 事件。
 - `dotnet run --project windows/Echo.CoreChecks/Echo.CoreChecks.csproj -c Release --no-restore`：119 项通过。
 - `dotnet build windows/Echo.Windows/Echo.Windows.csproj -c Release -p:Platform=x64 -p:PublishReadyToRun=false --no-restore`：0 警告、0 错误。
-- GitHub Actions 尚需本轮推送后验证；完成后补录 run 与 PR 状态。
+- GitHub Actions runs [`37967804957`](https://github.com/resnowh/echo-mac-subtitle/actions/runs/37967804957) 与 [`37967811281`](https://github.com/resnowh/echo-mac-subtitle/actions/runs/37967811281) 全部通过，含 Mac fixture 生成、Windows CoreChecks/Release x64 与 Mac Archive 回读。Mac CI build `37967811103` 和 unsigned package preflight `37967811206` 也通过。PR #5 当前检查全部通过，状态 CLEAN；Windows 分支仍未合并。
 
 Mac 源码未改。合成网络测试不等于真实 Soniox 服务端兼容性或云端验收。
