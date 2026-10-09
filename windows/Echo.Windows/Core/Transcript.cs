@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -81,6 +82,77 @@ public static class TranscriptPresentation
         var currentDate = TimeZoneInfo.ConvertTime(Archive.AppleEpoch.AddSeconds(current), timeZone);
         if (previousDate.Date == currentDate.Date) return null;
         return currentDate.ToString("yyyy年M月d日", CultureInfo.GetCultureInfo("zh-CN"));
+    }
+}
+
+public static class TranscriptRecognitionCorrections
+{
+    private static readonly RegexOptions WordOptions = RegexOptions.IgnoreCase | RegexOptions.CultureInvariant;
+    private static readonly (string Source, string Target)[] NormalizedVariants =
+    [
+        ("micro economic", "microeconomic"),
+        ("macro economic", "macroeconomic"),
+        ("micro-economic", "microeconomic"),
+        ("macro-economic", "macroeconomic")
+    ];
+    private static readonly string[] MicroSignals =
+    [
+        "microeconomic theory", "microeconomic analysis", "microeconomic behavior",
+        "microeconomic model", "microeconomic models", "microeconomic foundations",
+        "microeconomic incentives", "microeconomic decision", "microeconomic decisions"
+    ];
+    private static readonly string[] MacroSignals =
+    [
+        "macroeconomic policy", "macroeconomic growth", "macroeconomic indicators",
+        "macroeconomic inflation", "macroeconomic unemployment", "macroeconomic gdp",
+        "macroeconomic outlook", "macroeconomic conditions", "macroeconomic performance"
+    ];
+    private static readonly string[] DerivativePhrases =
+    [
+        "first duty", "second duty", "partial duty", "duty of", "duty with respect to",
+        "take the duty", "duty function", "duties of", "first duties", "second duties", "partial duties"
+    ];
+    private static readonly string[] HandPhrases =
+    [
+        "on the other han", "on the one han", "one han", "other han", "right han",
+        "left han", "han side", "at han"
+    ];
+
+    public static string CorrectEnglish(string text)
+    {
+        string result = text;
+        foreach (var (source, target) in NormalizedVariants)
+            result = Regex.Replace(result, $@"\b{Regex.Escape(source)}\b", target, WordOptions);
+
+        string lower = result.ToLowerInvariant();
+        bool stronglyMicroeconomic = MicroSignals.Any(lower.Contains);
+        bool stronglyMacroeconomic = MacroSignals.Any(lower.Contains);
+        if (stronglyMicroeconomic && !stronglyMacroeconomic)
+            result = Regex.Replace(result, @"\bmacroeconomics?\b", "microeconomic", WordOptions);
+        else if (stronglyMacroeconomic && !stronglyMicroeconomic)
+            result = Regex.Replace(result, @"\bmicroeconomics?\b", "macroeconomic", WordOptions);
+
+        if (DerivativePhrases.Any(phrase => result.Contains(phrase, StringComparison.OrdinalIgnoreCase)))
+        {
+            result = Regex.Replace(result, @"\bfirst duties?\b", "first derivative", WordOptions);
+            result = Regex.Replace(result, @"\bsecond duties?\b", "second derivative", WordOptions);
+            result = Regex.Replace(result, @"\bpartial duties?\b", "partial derivative", WordOptions);
+            result = Regex.Replace(result, @"\bduties\b", "derivatives", WordOptions);
+            result = Regex.Replace(result, @"\bduty\b", "derivative", WordOptions);
+        }
+
+        if (HandPhrases.Any(phrase => result.Contains(phrase, StringComparison.OrdinalIgnoreCase)))
+            result = Regex.Replace(result, @"\bhan\b", "hand", WordOptions);
+        return result;
+    }
+
+    public static string CorrectChineseTranslation(string text, string correctedEnglish)
+    {
+        string lower = correctedEnglish.ToLowerInvariant();
+        if (!lower.Contains("derivative", StringComparison.Ordinal)
+            && !lower.Contains("differentiate", StringComparison.Ordinal)
+            && !lower.Contains("with respect to", StringComparison.Ordinal)) return text;
+        return text.Replace("关税", "导数", StringComparison.Ordinal);
     }
 }
 
@@ -410,6 +482,14 @@ public sealed class TokenAssembler(Segment segment, Action<Subtitle> added, Acti
         }
         return segment.Entries[index];
     }
+    private void ApplyRecognition(int index)
+    {
+        string source = TranscriptRecognitionCorrections.CorrectEnglish(
+            sourceFinal.GetValueOrDefault(index, "") + sourceProvisional.GetValueOrDefault(index, ""));
+        string translation = TranscriptRecognitionCorrections.CorrectChineseTranslation(
+            translationFinal.GetValueOrDefault(index, "") + translationProvisional.GetValueOrDefault(index, ""), source);
+        segment.Entries[index].ApplyRecognition(source, translation);
+    }
     public void Apply(JsonElement message)
     {
         if (!message.TryGetProperty("tokens", out var tokens)) return;
@@ -427,9 +507,7 @@ public sealed class TokenAssembler(Segment segment, Action<Subtitle> added, Acti
         var affectedRows = new HashSet<int>();
         if (hasSourceUpdate) { affectedRows.UnionWith(sourceProvisional.Keys); sourceProvisional.Clear(); }
         if (hasTranslationUpdate) { affectedRows.UnionWith(translationProvisional.Keys); translationProvisional.Clear(); }
-        foreach (int i in affectedRows)
-            segment.Entries[i].ApplyRecognition(sourceFinal.GetValueOrDefault(i, "") + sourceProvisional.GetValueOrDefault(i, ""),
-                translationFinal.GetValueOrDefault(i, "") + translationProvisional.GetValueOrDefault(i, ""));
+        foreach (int i in affectedRows) ApplyRecognition(i);
         int provisionalSource = sourceCursor, provisionalTranslation = translationCursor;
         foreach (var token in tokens.EnumerateArray())
         {
@@ -499,8 +577,7 @@ public sealed class TokenAssembler(Segment segment, Action<Subtitle> added, Acti
                 var dict = translation ? translationProvisional : sourceProvisional;
                 dict[index] = dict.GetValueOrDefault(index, "") + text;
             }
-            row.ApplyRecognition(sourceFinal.GetValueOrDefault(index, "") + sourceProvisional.GetValueOrDefault(index, ""),
-                translationFinal.GetValueOrDefault(index, "") + translationProvisional.GetValueOrDefault(index, ""));
+            ApplyRecognition(index);
         }
         segment.UpdatedAt = Archive.Now;
     }

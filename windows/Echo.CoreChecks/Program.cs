@@ -99,6 +99,20 @@ Check(segment.Entries[0].English == "Hello world", "provisional replacement with
 Apply("""{"tokens":[{"text":" there.","is_final":true,"start_ms":400,"end_ms":800},{"text":"<end>","is_final":true,"translation_status":"original"},{"text":"Next.","is_final":true,"start_ms":1500,"end_ms":2000}]}""");
 Apply("""{"tokens":[{"text":"你好。","is_final":true,"translation_status":"translation"},{"text":"<end>","is_final":true,"translation_status":"translation"}]}""");
 Check(segment.Entries[0].English == "Hello there." && segment.Entries[0].Chinese == "你好。" && segment.Entries[1].Chinese == "", "delayed translation remains with previous source endpoint");
+string microCorrected = TranscriptRecognitionCorrections.CorrectEnglish("micro economic theory and macroeconomic model");
+string macroCorrected = TranscriptRecognitionCorrections.CorrectEnglish("macroeconomic growth with a microeconomic class");
+Check(microCorrected == "microeconomic theory and microeconomic model"
+    && macroCorrected == "macroeconomic growth with a macroeconomic class",
+    "economics terminology normalization follows the Mac strong-context rules without changing ambiguous contexts");
+Check(TranscriptRecognitionCorrections.CorrectEnglish("The first duty and duty function") == "The first derivative and derivative function"
+    && TranscriptRecognitionCorrections.CorrectEnglish("The duty is owed by Han") == "The duty is owed by Han"
+    && TranscriptRecognitionCorrections.CorrectEnglish("on the other han") == "on the other hand",
+    "calculus and truncated-hand recognition corrections apply only in the Mac phrase contexts");
+var economicsSegment = new Segment(); var economicsAssembler = new TokenAssembler(economicsSegment, _ => { });
+using (var economicsTurn = JsonDocument.Parse("""{"tokens":[{"text":"first duty","is_final":true},{"text":"关税","is_final":true,"translation_status":"translation"}]}""")) economicsAssembler.Apply(economicsTurn.RootElement);
+Check(economicsSegment.Entries[0].English == "first derivative" && economicsSegment.Entries[0].Chinese == "导数"
+    && TranscriptRecognitionCorrections.CorrectChineseTranslation("税收关税", "The tax is due") == "税收关税",
+    "recognized transcript and its translation apply paired Mac calculus corrections while preserving ordinary tax text");
 var fieldEdit = new Subtitle { English = "Initial source", Chinese = "初始译文" };
 fieldEdit.ApplyRecognition("最新识别原文", "最新识别译文");
 fieldEdit.Edit("人工编辑原文", null);

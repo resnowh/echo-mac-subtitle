@@ -5,6 +5,7 @@
 ## P0：识别正确性和数据
 
 - 以 Mac 的 `TokenAssembler`、归档模型和 Soniox 处理为参考，为 Windows 建立相同输入事件序列：provisional 替换、final 追加、speaker 变化、翻译延迟、空端点、重连边界。
+- Mac 对经济学/微积分识别结果的强语境词汇纠正已移植到 Windows；同一 token fixture 需覆盖正确修正与普通语境不误修两类结果。
 - 同一合成 archive fixture 由 Mac 生产编码，再在 Windows 导入/保存，最后用 Mac 生产解码验证字段、日期、校对历史和总结元数据。
 - 保持存档原子写入、备份和恢复行为；发现损坏文件时明示，不静默覆盖。
 - Soniox/API 错误按 HTTP 状态、断线、超时分类；仅对可重试错误有限重试，并显示用户可理解的错误。
