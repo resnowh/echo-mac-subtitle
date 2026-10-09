@@ -923,6 +923,32 @@ try
         "two-hour synthetic archive is durably replaced and reloaded while the previous checkpoint remains in backup");
 }
 finally { if (Directory.Exists(diskStressRoot)) Directory.Delete(diskStressRoot, recursive: true); }
+int streamedRowsAdded = 0, streamedRowsFinalized = 0;
+var tokenStressSegment = new Segment { StartedAt = 800000000 };
+var tokenStressAssembler = new TokenAssembler(tokenStressSegment, _ => streamedRowsAdded++, _ => streamedRowsFinalized++);
+var tokenStressTimer = Stopwatch.StartNew();
+for (int i = 0; i < 7200; i++)
+{
+    int startMs = i * 1000, endMs = startMs + 1000;
+    using (var provisional = JsonDocument.Parse($"{{\"tokens\":[{{\"text\":\"Partial {i}\",\"is_final\":false,\"start_ms\":{startMs},\"end_ms\":{endMs}}}]}}"))
+        tokenStressAssembler.Apply(provisional.RootElement);
+    using (var final = JsonDocument.Parse($"{{\"tokens\":[{{\"text\":\"Lecture point {i}.\",\"is_final\":true,\"start_ms\":{startMs},\"end_ms\":{endMs},\"speaker\":\"1\",\"language\":\"en\"}},{{\"text\":\"课程点 {i}。\",\"is_final\":true,\"translation_status\":\"translation\"}},{{\"text\":\"<end>\",\"is_final\":true}}]}}"))
+        tokenStressAssembler.Apply(final.RootElement);
+}
+tokenStressTimer.Stop();
+var tokenStressArchive = new Archive { Segments = [tokenStressSegment] };
+string tokenStressJson = JsonSerializer.Serialize(TranscriptFiles.Snapshot(tokenStressArchive), TranscriptFiles.Json);
+var tokenStressLoaded = TranscriptFiles.Parse(tokenStressJson);
+string tokenStressSrt = TranscriptFiles.Srt(tokenStressLoaded);
+var tokenStressEntries = tokenStressLoaded.Segments.Single().Entries;
+Console.WriteLine($"A67 synthetic 2-hour Soniox stream: responses=14400, rows={tokenStressEntries.Count}, JSON={Encoding.UTF8.GetByteCount(tokenStressJson)} bytes, SRT={Encoding.UTF8.GetByteCount(tokenStressSrt)} bytes, stream+roundtrip+SRT={tokenStressTimer.ElapsedMilliseconds} ms");
+Check(streamedRowsAdded == 7200 && streamedRowsFinalized == 7200 && tokenStressEntries.Count == 7200
+    && tokenStressEntries.Select((entry, i) => entry.English == $"Lecture point {i}."
+        && entry.Chinese == $"课程点 {i}。" && entry.Start == i && entry.End == i + 1
+        && entry.RecordedAt == tokenStressSegment.StartedAt + i && entry.Speaker == "Speaker 1" && entry.Language == "en").All(matches => matches)
+    && tokenStressSrt.Contains("02:00:00,000", StringComparison.Ordinal)
+    && tokenStressSrt.Contains("Lecture point 7199.", StringComparison.Ordinal),
+    "two-hour synthetic Soniox provisional/final stream preserves 7200 bilingual rows, timestamps, metadata, and SRT output");
 Check(Archive.AppleEpoch.AddSeconds(0).Year == 2001, "Apple date reference is not Unix time");
 Check(SpeechRetryPolicy.MaxRetries == 2 && SpeechRetryPolicy.Delay(1) == TimeSpan.FromSeconds(1) && SpeechRetryPolicy.Delay(2) == TimeSpan.FromSeconds(3)
     && SpeechRetryPolicy.IsTransient(new System.Net.WebSockets.WebSocketException())

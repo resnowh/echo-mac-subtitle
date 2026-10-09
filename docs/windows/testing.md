@@ -91,3 +91,7 @@ Mac 主菜单可独立切换锁定/解锁位置，改变锁状态时相应进入
 ## A66 原生浮层生命周期回归检查（2026-10-10）
 
 Mac 使用不随应用失活隐藏的 floating panel；Windows 原生浮层创建时不设置 owner，并以 no-activate 方式置顶显示，因此主窗最小化不会通过 owner 关系自动隐藏浮层。主窗关闭路径会销毁 HWND、停止两个 dispatcher 定时器并取消 feed 订阅。CoreChecks 新增两项源码契约检查，154 项全部通过；Release x64 构建 0 警告、0 错误。没有启动应用或操作当前桌面，故“主窗最小化后仍可见”仍是源码和 Win32 所有权规则推断，不是 GUI 实测；多屏、全屏及真实资源释放仍待隔离 GUI 验收。源码哈希与测试日志见 [A66 底稿](../sources/windows-a66-overlay-lifecycle-2026-10-10/README.md)。
+
+## A67 两小时合成 Soniox 字幕流压力（2026-10-10）
+
+用生产 `TokenAssembler` 顺序处理 7,200 秒字幕时间轴：每秒一条 provisional 响应，随后一条双语 final 和 endpoint，共 14,400 条合成 WebSocket 响应。最终检查 7,200 条字幕各自仅落定一次，英文、中文、开始/结束时间、现实时间、speaker 和 language 均正确；再经 Archive JSON 序列化/解析与完整 SRT 导出，末尾时间达到 02:00:00。CoreChecks 155 项通过；该流处理、JSON/SRT 回读耗时 178ms（本机单次观测），Release x64 构建 0 警告、0 错误。此测试快速生成两小时跨度，不经过两小时墙钟时间、不采集音频、不连接 Soniox，也不覆盖 UI/内存曲线或真实网络故障。完整日志和源码哈希见 [A67 底稿](../sources/windows-a67-two-hour-token-stream-2026-10-10/README.md)。
