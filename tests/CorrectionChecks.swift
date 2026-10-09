@@ -57,8 +57,30 @@ enum CorrectionChecks {
         let request = DeepSeekService().correctionRequest(apiKey: "", source: "maturity day", translation: "",
             context: "bond", terms: "maturity date", targetLanguage: "ja", translationOnly: true)!
         let body = try JSONSerialization.jsonObject(with: request.httpBody!) as! [String: Any]
+        precondition(body["model"] as? String == DeepSeekModelConfiguration.defaultID)
         precondition((body["response_format"] as? [String: String])?["type"] == "json_object")
         precondition(body["stream"] as? Bool == false)
+        let alternateRequest = DeepSeekService().correctionRequest(apiKey: "", source: "source", translation: "",
+            context: "", terms: "", targetLanguage: "zh", translationOnly: false,
+            modelID: " deepseek-v4-pro ")!
+        let alternateBody = try JSONSerialization.jsonObject(with: alternateRequest.httpBody!) as! [String: Any]
+        precondition(alternateBody["model"] as? String == "deepseek-v4-pro")
+        precondition(DeepSeekService().request(apiKey: "", prompt: "test", modelID: "bad/model") == nil)
+        let summaryRequest = DeepSeekService().request(apiKey: "", prompt: "test", modelID: "deepseek-v4-pro")!
+        let summaryBody = try JSONSerialization.jsonObject(with: summaryRequest.httpBody!) as! [String: Any]
+        precondition(summaryBody["model"] as? String == "deepseek-v4-pro")
+
+        let modelSuite = "EchoDeepSeekModelChecks.\(UUID().uuidString)"
+        let modelDefaults = UserDefaults(suiteName: modelSuite)!
+        defer { modelDefaults.removePersistentDomain(forName: modelSuite) }
+        precondition(DeepSeekModelConfiguration.load(from: modelDefaults) == DeepSeekModelConfiguration.defaultID)
+        precondition(DeepSeekModelConfiguration.save(" deepseek-v4-pro ", to: modelDefaults))
+        precondition(DeepSeekModelConfiguration.load(from: modelDefaults) == "deepseek-v4-pro")
+        precondition(!DeepSeekModelConfiguration.save("bad/model", to: modelDefaults))
+        precondition(DeepSeekModelConfiguration.load(from: modelDefaults) == "deepseek-v4-pro")
+        modelDefaults.set("bad/model", forKey: DeepSeekModelConfiguration.userDefaultsKey)
+        precondition(DeepSeekModelConfiguration.load(from: modelDefaults) == DeepSeekModelConfiguration.defaultID)
+        print("PASS: configurable DeepSeek model ID, safe validation, and isolated persistence")
         let payload: [String: Any] = ["source": "maturity day", "translation": "到期日", "reason": "fixture", "uncertain": true]
         let content = String(data: try JSONSerialization.data(withJSONObject: payload), encoding: .utf8)!
         func envelope(_ reason: String, _ text: String) throws -> Data {

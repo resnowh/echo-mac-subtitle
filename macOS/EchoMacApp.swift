@@ -517,6 +517,11 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                     SecureField("DeepSeek API Key（可选）", text: $model.deepSeekAPIKey)
                         .textFieldStyle(.roundedBorder)
+                    TextField("DeepSeek 模型 ID", text: $model.deepSeekModelID)
+                        .textFieldStyle(.roundedBorder)
+                    Text("默认 deepseek-flash；当前 DeepSeek API 还列出 deepseek-v4-pro。更换模型后点“完成”保存。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     if !model.credentialStorageStatus.isEmpty {
                         Text(model.credentialStorageStatus)
                             .font(.caption)

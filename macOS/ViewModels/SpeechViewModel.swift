@@ -40,6 +40,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     @Published var isSwitchingInput = false
     @Published var isSummaryEnabled: Bool
     @Published var deepSeekAPIKey: String
+    @Published var deepSeekModelID = DeepSeekModelConfiguration.load()
     @Published private(set) var credentialStorageStatus = ""
     @Published var recognitionConfig: RecognitionConfig {
         didSet { recognitionConfig.save() }
@@ -1703,7 +1704,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
             apiKey: deepSeekAPIKey.trimmingCharacters(in: .whitespacesAndNewlines),
             source: snapshot.english, translation: snapshot.chinese, context: context,
             terms: correctionTerms, targetLanguage: config.translationEnabled ? config.targetTranslationLanguage : "none",
-            translationOnly: job.translate) else { return }
+            translationOnly: job.translate, modelID: deepSeekModelID) else { return }
         correctionBusy = true
         correctionStatuses[job.id] = job.translate ? "正在重新翻译…" : "正在 AI 校对…"
         correctionTask = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
@@ -1886,6 +1887,13 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     func saveCredentialSettings() -> Bool {
+        guard let modelID = DeepSeekModelConfiguration.validated(deepSeekModelID) else {
+            credentialStorageStatus = "DeepSeek 模型 ID 不能为空，且仅支持字母、数字、点、下划线和连字符。"
+            return false
+        }
+        deepSeekModelID = modelID
+        DeepSeekModelConfiguration.save(modelID)
+
         var warnings: [String] = []
         do {
             try APIKeyVault.standard.save(sonioxAPIKey, for: .soniox, defaults: .standard)
@@ -2084,7 +2092,8 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
             \(transcript)
             """
         }
-        guard let request = DeepSeekService().request(apiKey: key, prompt: prompt) else {
+        guard let request = DeepSeekService().request(apiKey: key, prompt: prompt,
+                                                      modelID: deepSeekModelID) else {
             summaryStatus = "AI 总结失败：请求格式错误。"
             return
         }
