@@ -18,7 +18,8 @@ Windows 已处理 `WM_DISPLAYCHANGE` 和 `WM_DPICHANGED`，但未处理工作区
 
 - CoreChecks 新增 1 项消息接线检查，确认 `SPI_SETWORKAREA` 与 `WM_DISPLAYCHANGE` 各自进入同一重排处理。
 - 本机 139 项 CoreChecks 通过；Windows Release x64 构建成功，0 警告、0 错误；`git diff --check` 通过。
-- PR/Actions 结果待提交后记录。
+- GitHub Actions Windows CI run `37988196258` 全部成功：Mac Soniox fixture、Mac Archive fixture、Windows CoreChecks/Release x64、Windows Archive 往返及 Mac production decoder/SRT 回读。
+- GUI 测试没有运行：真实任务栏位置变化、显示器拔插、异 DPI 和全屏窗口行为仍待隔离验收；源码检查不等于系统 GUI 实测。
 - 真实任务栏位置变化、显示器拔插、异 DPI 和全屏窗口 GUI 行为仍待隔离验收；源码检查不等于系统 GUI 实测。
 
 ## 文件
