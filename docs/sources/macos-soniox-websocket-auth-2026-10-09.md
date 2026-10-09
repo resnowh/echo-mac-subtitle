@@ -20,4 +20,11 @@
 - `tests/run_stream_checks.py` 的本机 WebSocket fixture 检查真实 transport 握手头为合成 Bearer Key、启动 JSON 不含 Key 字段和值。独立检查覆盖 401、402、403、429、408 和诊断文字清理。
 - 测试只连接回环模拟服务，使用合成 Key，不连 Soniox 云端、不采集音频、不启动 Echo。
 
-GitHub macOS CI 验证结果待本次提交后补录。真实服务账户和真实 Key 端到端仍需单独验收。
+## CI 验证结果
+
+- GitHub Actions [37916093546](https://github.com/resnowh/echo-mac-subtitle/actions/runs/37916093546)（提交 `2da0002a4add6e41dc8229f65f5ca9cbed01b0f2`）的 Mac、Windows 与 Mac 归档回读三个 job 全部通过。
+- Mac job 的 Swift 源码检查通过，包括结构化错误提示和本机 WebSocket 回环测试；回环握手确认 Bearer 认证头存在，启动 JSON 不包含 `api_key`。Mac Debug 与 Release 构建通过。
+- Windows CoreChecks 与 Release x64 构建通过（0 警告、0 错误）。Windows 生成的合成归档由 Mac 生产 decoder 回读通过，日期、可选字段、说话人/语言及校对历史均保留。
+- 验证没有启动 Echo，也没有使用真实服务账户、Key 或音频。
+
+真实 Soniox 账户与真实 Key 的端到端仍需单独验收。
