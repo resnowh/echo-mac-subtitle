@@ -95,7 +95,7 @@ jobs:
           bash scripts/macos-package.sh signed \
             "$RUNNER_TEMP/echo-distribution-release/Build/Products/Release/Echo.app" \
             "$RUNNER_TEMP/echo-signed-release"
-          shasum -a 256 -c "$RUNNER_TEMP/echo-signed-release/"*.sha256
+          (cd "$RUNNER_TEMP/echo-signed-release" && shasum -a 256 -c ./*.sha256)
 
       - name: Upload notarized candidate for private acceptance testing
         uses: actions/upload-artifact@v4
