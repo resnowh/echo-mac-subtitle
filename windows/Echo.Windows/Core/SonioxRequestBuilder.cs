@@ -41,7 +41,7 @@ public static class SonioxRequestBuilder
         var terms = EconomicsTerms.Concat(NormalizeCorrectionTerms(config.CorrectionTerms)).ToArray();
         var request = new Dictionary<string, object>
         {
-            ["model"] = config.SonioxModel,
+            ["model"] = EchoServiceModels.SonioxRealtime,
             ["audio_format"] = "pcm_s16le",
             ["sample_rate"] = 16000,
             ["num_channels"] = 1,

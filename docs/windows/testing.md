@@ -14,7 +14,7 @@ Windows 仓库已有 `windows/Echo.CoreChecks/Program.cs`，覆盖转写 token �
 
 ## 本轮已运行
 
-1. `dotnet run --project windows/Echo.CoreChecks -c Release --no-restore`：82 项通过，包括 Mac provisional 双语响应快照、经济学/微积分识别纠正规则正反例、DeepSeek 校对/重译请求语义与必需响应字段、原文后到达译文和完整双语端点游标、字幕纠正/撤销、Soniox 请求上下文和 Unicode 术语边界、archive updatedAt 降序、多 segment JSON/SRT 时间线、音频转换与恢复策略。检查不调用云端，不保存真实音频。Soniox 协议依据见 `docs/sources/windows-a25-soniox-endpoint-contract-2026-10-09.md`；上下文与术语基线见 `docs/sources/windows-a26-soniox-context-2026-10-09.md`；Archive 依据与边界见 `docs/sources/windows-a27-archive-order-multisegment-2026-10-09.md`；AI 请求依据见 `docs/sources/windows-a28-ai-correction-2026-10-09.md`；分段参数底稿见 `docs/sources/windows-a24-soniox-segmentation-2026-10-09.md`。
+1. `dotnet run --project windows/Echo.CoreChecks -c Release --no-restore`：83 项通过，包括 Mac fixed model 请求、DeepSeek 校对/重译请求语义、手动优先队列和必需响应字段、双语 token 事件、字幕纠正/撤销、Soniox 上下文与 Unicode 术语、Archive 顺序/时间线、音频转换与恢复策略。检查不调用云端，不保存真实音频。Soniox 协议依据见 `docs/sources/windows-a25-soniox-endpoint-contract-2026-10-09.md`；上下文与术语基线见 `docs/sources/windows-a26-soniox-context-2026-10-09.md`；Archive 依据与边界见 `docs/sources/windows-a27-archive-order-multisegment-2026-10-09.md`；AI 请求依据见 `docs/sources/windows-a28-ai-correction-2026-10-09.md`；分段参数底稿见 `docs/sources/windows-a24-soniox-segmentation-2026-10-09.md`。
 2. Windows Release x64 编译：执行 `dotnet build windows/Echo.Windows/Echo.Windows.csproj -c Release -p:Platform=x64 -p:PublishReadyToRun=false --no-restore`，最新源码成功，0 警告、0 错误；编译没有启动应用。
 3. 执行 `git diff --check`，检查提交路径确保无 `macOS/`、`tests/` 文件。
 4. UI smoke 未运行：本轮不启动应用，因此 UI、Narrator、DPI、多屏、录音硬件均未验。

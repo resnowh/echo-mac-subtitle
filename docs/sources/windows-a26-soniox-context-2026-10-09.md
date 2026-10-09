@@ -20,7 +20,7 @@ Mac source baseline: `origin/main` `ae0359dc90da0ccb5e526a275da1747954a49a4f`
 - User terms are appended to the base recognition terms, not translation terms, matching Mac behavior.
 - Empty lines are ignored. Each retained user term is trimmed, limited to 80 Unicode text elements (matching Swift `Character` behavior for tested combining marks and ZWJ emoji), and no more than 100 user terms are added.
 - Translation-disabled sessions retain the context, as Mac does, while omitting only the `translation` request block.
-- Windows keeps its configurable Soniox model field. Mac currently hardcodes `stt-rt-v5`; this difference remains a platform configuration difference and is not changed in this round.
+- Windows now sends Mac's fixed `stt-rt-v5` model. The old persisted `SonioxModel` value is retained for settings-file compatibility but is no longer user-editable or used by requests.
 
 ## Validation record
 

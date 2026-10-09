@@ -47,7 +47,6 @@ public sealed partial class MainPage : Page
         TargetLanguageChoice.ItemsSource = TargetLanguages;
         SettingsSourceLanguage.ItemsSource = SourceLanguages;
         SettingsTargetLanguage.ItemsSource = TargetLanguages;
-        SonioxModel.Text = c.SonioxModel; DeepSeekModel.Text = c.DeepSeekModel;
         CorrectionTerms.Text = c.CorrectionTerms;
         AutoSummary.IsOn = c.AutoSummaryEnabled;
         AutoCorrection.IsOn = c.AutoCorrectionEnabled;
@@ -609,11 +608,10 @@ public sealed partial class MainPage : Page
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(SonioxModel.Text) || (Translate.IsOn && string.IsNullOrWhiteSpace(ViewModel.Config.TargetLanguage))) throw new InvalidOperationException("请填写模型和翻译目标语言。");
+            if (Translate.IsOn && string.IsNullOrWhiteSpace(ViewModel.Config.TargetLanguage)) throw new InvalidOperationException("请填写翻译目标语言。");
             var c = ViewModel.Config;
             c.SonioxSecret = Preferences.Protect(SonioxKey.Password.Trim()); c.DeepSeekSecret = Preferences.Protect(DeepSeekKey.Password.Trim());
             c.CorrectionTerms = CorrectionTerms.Text.Trim();
-            c.SonioxModel = SonioxModel.Text.Trim(); c.DeepSeekModel = DeepSeekModel.Text.Trim();
             c.Translate = Translate.IsOn; c.Strict = Strict.IsOn; c.Speakers = Speakers.IsOn;
             if (SettingsSourceLanguage.SelectedItem is LanguageChoice source) c.SourceLanguage = source.Code ?? string.Empty;
             if (SettingsTargetLanguage.SelectedItem is LanguageChoice target && target.Code is not null) c.TargetLanguage = target.Code;

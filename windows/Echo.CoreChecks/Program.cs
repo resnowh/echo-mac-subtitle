@@ -75,12 +75,13 @@ segmentation.SonioxMaxEndpointDelayMilliseconds = 4000; segmentation.SonioxEndpo
 segmentation.LocalSilenceThresholdSeconds = -1; segmentation.Validate();
 Check(segmentation.SonioxMaxEndpointDelayMilliseconds == 3000 && segmentation.SonioxEndpointSensitivity == -.3
     && segmentation.LocalSilenceThresholdSeconds == 4.5, "invalid segmentation preferences recover to safe defaults");
-var requestPreferences = new Preferences { SourceLanguage = "", Translate = false };
+var requestPreferences = new Preferences { SourceLanguage = "", Translate = false, SonioxModel = "user-selected-model" };
 var requestSegmentation = new TranscriptSegmentationSettings { SonioxMaxEndpointDelayMilliseconds = 1750, SonioxEndpointSensitivity = .2, SonioxEndpointLatencyAdjustmentLevel = 2 };
 var sonioxRequest = SonioxRequestBuilder.Build(requestPreferences, requestSegmentation);
 Check((int)sonioxRequest["max_endpoint_delay_ms"] == 1750 && (double)sonioxRequest["endpoint_sensitivity"] == .2
     && (int)sonioxRequest["endpoint_latency_adjustment_level"] == 2 && !sonioxRequest.ContainsKey("language_hints")
-    && !sonioxRequest.ContainsKey("translation"), "Soniox request carries configured endpoint settings and omits disabled language and translation options");
+    && !sonioxRequest.ContainsKey("translation") && (string)sonioxRequest["model"] == EchoServiceModels.SonioxRealtime,
+    "Soniox request uses the Mac fixed model, carries configured endpoint settings, and omits disabled language and translation options");
 var sonioxContext = (Dictionary<string, object>)sonioxRequest["context"];
 var sonioxGeneral = (Dictionary<string, string>[])sonioxContext["general"];
 var sonioxTerms = (string[])sonioxContext["terms"];
@@ -125,18 +126,29 @@ Apply("""{"tokens":[{"text":" there.","is_final":true,"start_ms":400,"end_ms":80
 Apply("""{"tokens":[{"text":"你好。","is_final":true,"translation_status":"translation"}]}""");
 Apply("""{"tokens":[{"text":"<end>","is_final":true},{"text":"Next.","is_final":true,"start_ms":1500,"end_ms":2000}]}""");
 Check(segment.Entries[0].English == "Hello there." && segment.Entries[0].Chinese == "你好。" && segment.Entries[1].Chinese == "", "translation arriving after source but before the authoritative endpoint stays paired with its utterance");
-using var translationOnlyRequest = SubtitleCorrectionService.CreateRequest("test-key", "deepseek-v4-flash", "Exact source", "旧译文", "nearby context", "term", "zh", translationOnly: true);
+using var translationOnlyRequest = SubtitleCorrectionService.CreateRequest("test-key", "Exact source", "旧译文", "nearby context", "term", "zh", translationOnly: true);
 using var translationOnlyBody = JsonDocument.Parse(await translationOnlyRequest.Content!.ReadAsStringAsync());
 var translationOnlyMessages = translationOnlyBody.RootElement.GetProperty("messages");
 using var translationOnlyPayload = JsonDocument.Parse(translationOnlyMessages[1].GetProperty("content").GetString()!);
-using var correctionRequest = SubtitleCorrectionService.CreateRequest("test-key", "deepseek-v4-flash", "Source to review", "译文", "previous\ncurrent\nnext", "term", "zh", translationOnly: false);
+using var correctionRequest = SubtitleCorrectionService.CreateRequest("test-key", "Source to review", "译文", "previous\ncurrent\nnext", "term", "zh", translationOnly: false);
 using var correctionBody = JsonDocument.Parse(await correctionRequest.Content!.ReadAsStringAsync());
 Check(translationOnlyRequest.Headers.Authorization?.Scheme == "Bearer"
+    && translationOnlyBody.RootElement.GetProperty("model").GetString() == EchoServiceModels.DeepSeek
     && translationOnlyBody.RootElement.GetProperty("thinking").GetProperty("type").GetString() == "disabled"
     && translationOnlyMessages[0].GetProperty("content").GetString()!.Contains("source 必须逐字保持输入原文", StringComparison.Ordinal)
     && translationOnlyPayload.RootElement.GetProperty("source").GetString() == "Exact source"
     && correctionBody.RootElement.GetProperty("messages")[0].GetProperty("content").GetString()!.Contains("前后文仅用于判断，不并入当前句", StringComparison.Ordinal),
     "DeepSeek correction requests match Mac thinking and distinguish translation-only from contextual proofreading instructions");
+var priorityCorrectionQueue = new PriorityWorkQueue<string>(3);
+bool priorityQueueContract = priorityCorrectionQueue.Enqueue("auto-1", false, item => item == "auto-1") == PriorityWorkQueueInsertResult.Added
+    && priorityCorrectionQueue.Enqueue("auto-2", false, item => item == "auto-2") == PriorityWorkQueueInsertResult.Added
+    && priorityCorrectionQueue.Promote(item => item == "auto-2")
+    && priorityCorrectionQueue.Enqueue("manual", true, item => item == "manual") == PriorityWorkQueueInsertResult.Added
+    && priorityCorrectionQueue.Enqueue("auto-1", false, item => item == "auto-1") == PriorityWorkQueueInsertResult.Duplicate
+    && priorityCorrectionQueue.Enqueue("auto-3", false, item => item == "auto-3") == PriorityWorkQueueInsertResult.Full
+    && priorityCorrectionQueue.Dequeue() == "manual" && priorityCorrectionQueue.Dequeue() == "auto-2"
+    && priorityCorrectionQueue.Dequeue() == "auto-1" && priorityCorrectionQueue.Count == 0;
+Check(priorityQueueContract, "manual correction jobs jump ahead of pending automatic jobs, including promotion of a matching queued job");
 bool missingUncertainRejected = false;
 try { JsonSerializer.Deserialize<CorrectionSuggestion>("""{"source":"s","translation":"t","reason":"r"}""", TranscriptFiles.Json); }
 catch (JsonException) { missingUncertainRejected = true; }

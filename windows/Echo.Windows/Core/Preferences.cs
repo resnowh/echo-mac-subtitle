@@ -4,10 +4,17 @@ using System.Text.Json;
 
 namespace Echo_Windows.Core;
 
+public static class EchoServiceModels
+{
+    public const string SonioxRealtime = "stt-rt-v5";
+    public const string DeepSeek = "deepseek-v4-flash";
+}
+
 public sealed class Preferences
 {
-    public string SonioxModel { get; set; } = "stt-rt-v5";
-    public string DeepSeekModel { get; set; } = "deepseek-v4-flash";
+    // Retained for existing settings-file compatibility; requests use the Mac-defined fixed models.
+    public string SonioxModel { get; set; } = EchoServiceModels.SonioxRealtime;
+    public string DeepSeekModel { get; set; } = EchoServiceModels.DeepSeek;
     public string SourceLanguage { get; set; } = "en";
     public string TargetLanguage { get; set; } = "zh";
     public bool Translate { get; set; } = true;

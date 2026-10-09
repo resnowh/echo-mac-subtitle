@@ -9,11 +9,11 @@ public sealed class SubtitleCorrectionService
 {
     private static readonly HttpClient Client = new() { Timeout = TimeSpan.FromSeconds(45) };
 
-    public async Task<CorrectionSuggestion> SuggestAsync(string apiKey, string model, string source,
+    public async Task<CorrectionSuggestion> SuggestAsync(string apiKey, string source,
         string translation, string context, string terms, string targetLanguage, bool translationOnly,
         CancellationToken cancellationToken)
     {
-        using var request = CreateRequest(apiKey, model, source, translation, context, terms, targetLanguage, translationOnly);
+        using var request = CreateRequest(apiKey, source, translation, context, terms, targetLanguage, translationOnly);
         using var response = await Client.SendAsync(request, cancellationToken);
         if (!response.IsSuccessStatusCode) throw new IOException($"DeepSeek 返回 {(int)response.StatusCode}，请检查 API Key、额度与模型设置。");
         using var envelope = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
@@ -26,7 +26,7 @@ public sealed class SubtitleCorrectionService
         return suggestion;
     }
 
-    public static HttpRequestMessage CreateRequest(string apiKey, string model, string source,
+    public static HttpRequestMessage CreateRequest(string apiKey, string source,
         string translation, string context, string terms, string targetLanguage, bool translationOnly)
     {
         string scopeInstruction = translationOnly
@@ -36,7 +36,7 @@ public sealed class SubtitleCorrectionService
         var payload = JsonSerializer.Serialize(new { source, translation, context = context[..Math.Min(3000, context.Length)], terms = terms[..Math.Min(4000, terms.Length)] });
         var body = JsonSerializer.Serialize(new
         {
-            model,
+            model = EchoServiceModels.DeepSeek,
             thinking = new { type = "disabled" },
             messages = new[] { new { role = "system", content = instruction }, new { role = "user", content = payload } },
             response_format = new { type = "json_object" }, stream = false, max_tokens = 2400
