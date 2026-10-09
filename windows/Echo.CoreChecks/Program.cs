@@ -82,13 +82,19 @@ var mainPageXaml = XDocument.Load(Path.Combine(AppContext.BaseDirectory, "Fixtur
 var settingsOverlay = mainPageXaml.Descendants(presentationNamespace + "Grid")
     .Single(element => element.Attribute(xamlNamespace + "Name")?.Value == "SettingsOverlay");
 var settingsPanelBorder = settingsOverlay.Element(presentationNamespace + "Border");
-var settingsScrollViewer = settingsPanelBorder?.Descendants(presentationNamespace + "ScrollViewer").SingleOrDefault();
+var settingsScrollViewer = settingsPanelBorder?.Descendants(presentationNamespace + "ScrollViewer")
+    .SingleOrDefault(element => element.Attribute("AutomationProperties.AutomationId")?.Value == "SettingsScrollViewer");
+var settingsScrollGrid = settingsScrollViewer?.Parent;
+var settingsScrollGridRows = settingsScrollGrid?.Element(presentationNamespace + "Grid.RowDefinitions")?
+    .Elements(presentationNamespace + "RowDefinition").Select(element => element.Attribute("Height")?.Value).ToArray();
 Check(settingsPanelBorder?.Attribute("Width") is null && settingsPanelBorder?.Attribute("Height") is null
     && settingsPanelBorder?.Attribute("MaxWidth")?.Value == "520" && settingsPanelBorder?.Attribute("MaxHeight")?.Value == "560"
     && settingsPanelBorder.Attribute("HorizontalAlignment")?.Value == "Stretch"
     && settingsPanelBorder.Attribute("VerticalAlignment")?.Value == "Stretch"
-    && settingsScrollViewer is not null,
-    "settings panel keeps the Mac 520x560 DIP target while fitting the window and scrolling on short or narrow work areas");
+    && settingsScrollViewer is not null && settingsScrollGrid?.Name == presentationNamespace + "Grid"
+    && settingsScrollViewer.Attribute("Grid.Row")?.Value == "1"
+    && settingsScrollGridRows is ["Auto", "*"],
+    "settings panel keeps the Mac 520x560 DIP target, fits short work areas, and constrains its accessible scroll viewer to a star-sized row");
 var overlayFeed = new DesktopSubtitleOverlayFeed();
 var overlayEntry = new Subtitle { English = "Live caption", Chinese = "实时字幕" };
 var overlayAt = DateTimeOffset.Parse("2026-10-09T00:00:00Z");

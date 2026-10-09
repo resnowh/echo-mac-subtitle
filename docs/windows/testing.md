@@ -4,7 +4,7 @@
 
 - Mac 来源：`origin/main` `ae0359dc90da0ccb5e526a275da1747954a49a4f`。
 - Windows 本轮验证来源：当前 PR 分支 `feature/windows-mac-parity`。历史迁移基线为旧 `feature/windows-preview` 分支（本地快照 `d500bbb`，远端 `64f2b89`）；该旧分支混有后来 Mac 变更，当前工作只选择 Windows 子树及 Windows 证据文件。
-- 当前任务不启动 Echo，不切换或操作用户已运行的应用。
+- A47 仅启动了带独立包身份、临时数据目录的 UI 验收副本；没有切换或操作用户已运行的 Echo 包。
 
 ## 现有自动验证
 
@@ -29,7 +29,8 @@ Windows 仓库已有 `windows/Echo.CoreChecks/Program.cs`，覆盖转写 token �
 13. A43 扩展 Soniox 固定 fixture 至 18 条，把经济学、微积分和截断词规则纳入 Mac production handler 对拍；本机及 Actions 116 项 CoreChecks 通过，Windows Release x64 构建 0 警告、0 错误。Actions run `37966271007` 四个 job 全部成功。Mac 原始输出已保存并登记 SHA，见 [A43](../sources/windows-a43-correction-parity-2026-10-10.md)；未调用云端服务、未录制音频、未启动 GUI。
 14. A44 补充 WebSocket 控制帧边界：无 `error_code` 字符串错误需触发非重试服务异常；字符串 `finished` 不应中断接收，后续布尔 true 正常完成 stop。119 项 CoreChecks 和 Release x64 构建通过；Actions runs `37967804957`、`37967811281` 的 Mac/Windows/Archive job、Mac CI `37967811103` 与 unsigned package preflight `37967811206` 均通过。Mac 生产源码 SHA 与本地模拟帧见 [A44](../sources/windows-a44-soniox-control-frames-2026-10-10.md)。
 15. A45 对齐 Mac 新 Archive 的默认标题与本地日期格式。固定时间用例通过，CoreChecks 总计 120 项；本机 Release x64 0 警告/错误。初次 Actions runs `37969232352`、`37969238022` 的 Mac/Windows/Archive job、Mac CI `37969237990` 与 unsigned package preflight `37969238091` 全部通过；当前 HEAD `b4cdc61` 再运行的 Actions runs `37969777944`、`37969788314`、Mac CI `37969788362` 和 unsigned package preflight `37969788440` 也全部通过。Mac 源码 hash 和差异记录见 [A45](../sources/windows-a45-archive-title-parity-2026-10-10.md)。
-16. A46 对齐设置 sheet 的受限窗口布局：Mac 常规目标尺寸为 520×560 DIP；Windows 继续以此为最大尺寸，在短/窄可用区域内收缩，并由内部 ScrollViewer 保留表单访问路径。CoreChecks 新增 XAML 契约，总计 121 项通过；Release x64 构建 0 警告、0 错误。Actions runs `37970740322`、`37970748525` 的 Windows build/check、Mac fixture/Archive 回读、Mac build `37970748522` 与 unsigned package preflight `37970748705` 全部成功。没有启动 Echo，因此实际窗口布局、DPI、键盘和 Narrator 仍待 GUI 验收；来源哈希见 [A46](../sources/windows-a46-responsive-settings-2026-10-10.md)。
+16. A46 对齐设置 sheet 的受限窗口布局：Mac 常规目标尺寸为 520×560 DIP；Windows 继续以此为最大尺寸，在短/窄可用区域内收缩。CoreChecks 新增 XAML 契约，总计 121 项通过；Release x64 构建 0 警告、0 错误。Actions runs `37970740322`、`37970748525` 的 Windows build/check、Mac fixture/Archive 回读、Mac build `37970748522` 与 unsigned package preflight `37970748705` 全部成功。来源哈希见 [A46](../sources/windows-a46-responsive-settings-2026-10-10.md)。
+17. A47 以隔离的唯一 Package Identity 和临时 DataRoot 首次实测设置页：144 DPI（150%）环境下窗口为 430×360 DIP，UIA 确认“完成”、分类栏可见；滚动至分段设置底部后，“恢复默认值”和“完成”同时可见。测试揭示原 `ScrollViewer` 位于纵向 `StackPanel`，无法取得有限视口；改为 `Auto,*` Grid 行后通过。4 项 UIA、121 项 CoreChecks、Release x64 构建（0 警告、0 错误）通过；截图与 JSON 结果、哈希及测试隔离信息见 [A47](../sources/windows-a47-responsive-settings-scroll-2026-10-10.md)。测试实例正常关闭并注销，现有 Echo MSIX 包未运行且仍注册。其他 DPI、键盘、Narrator 和真实设备未覆盖。
 
 ## 跨平台 Archive runtime 对拍
 
