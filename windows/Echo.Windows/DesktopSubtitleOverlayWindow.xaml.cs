@@ -178,10 +178,18 @@ public sealed partial class DesktopSubtitleOverlayWindow : Window
     {
         if (settings.DisplayId is ulong savedDisplayId)
         {
-            foreach (DisplayArea area in DisplayArea.FindAll())
-                if (area.DisplayId.Value == savedDisplayId) return area;
+            try
+            {
+                DisplayArea? savedArea = DisplayArea.GetFromDisplayId(new Microsoft.UI.DisplayId { Value = savedDisplayId });
+                if (savedArea is not null) return savedArea;
+            }
+            catch (Exception exception) when (exception is COMException or InvalidCastException or ArgumentException)
+            {
+                // A saved monitor can disappear while the app is closed. Fall back
+                // to the monitor nearest this window instead of failing the UI thread.
+            }
         }
-        return DisplayArea.Primary;
+        return CurrentDisplayArea();
     }
 
     private OverlayPlacement CalculatePlacement(DisplayArea area, bool useSavedPosition)

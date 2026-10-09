@@ -10,7 +10,7 @@ Windows 来源：当前 PR 分支 `feature/windows-mac-parity`；其历史迁移
 | 数据 | 来源及范围 | 本次记录 | 限制 |
 |---|---|---|---|
 | 当前 Mac 行为 | GitHub `origin/main`，以上 SHA；PR #1–#4 均已合并 | 本表逐项记录 UI、配置、字幕和浮层的源码位置 | 只代表该提交，不代表之后尚未拉取的远端更新 |
-| Windows 实现 | 当前 PR 分支 `windows/`；历史迁移来源见上文 | 文件清单、现有能力、待对齐行为 | A33/A47/A48 已做选定窗口与控件 UIA 实测；并非完整 GUI 对照，真实音频硬件未测 |
+| Windows 实现 | 当前 PR 分支 `windows/`；历史迁移来源见上文 | 文件清单、现有能力、待对齐行为 | A33/A47/A48/A49 已做选定窗口与控件 UIA 实测；并非完整 GUI 对照，真实音频硬件未测 |
 | Windows 检查底稿 | `docs/sources/windows-*` | 保留原有构建、核心检查和签名包记录 | 历史测试结论只适用于底稿注明的代码版本 |
 | AI 总结呈现 | Mac `EchoMacApp.swift`、`TranscriptViews.swift` | A29 记录 Markdown 分块、默认展开、收起/复制与 Windows 合成验证 | 尚无 GUI 视觉或剪贴板实测 |
 | Soniox 多响应与控制帧 | Mac 对字符串 `error_message` 立即报错并返回；仅布尔 `finished: true` 才结束；转写字段错误类型安全忽略 | A35 七响应、A42 十三响应、A43 十八响应 production differential；A44 补无 error_code 错误和错误类型 finished 的 loopback 测试 | A35/A42/A43 production differential 和 A44 的 Mac/Windows/Archive CI 全通过；真实云响应仍未覆盖 |
@@ -41,7 +41,7 @@ Windows 来源：当前 PR 分支 `feature/windows-mac-parity`；其历史迁移
 | 归档选择、新建、续录、导出、清空、拆分已完成段 | Mac 载入列表按 `updatedAt` 降序；新存档名为“课程 MM-dd HH:mm”；多段 archive 按段开始日期导出 | Windows 按 `updatedAt` 降序载入并在保存后移动更新项；A45 将默认新存档名对齐为“课程 MM-dd HH:mm”；A32 Mac→Windows→Mac 生产归档往返已成功 | 部分实现 | Mac `Storage/TranscriptArchiveStore.swift`、`SpeechViewModel.swift`、archive models；Windows `Core/Transcript.cs`、`MainPageViewModel.cs`、`Echo.CoreChecks/Program.cs`；A32 runtime、A45 固定标题与 CI 通过。当前 HEAD `b4cdc61` 的 Mac/Windows/Archive CI 复验通过；仍缺用户历史归档广泛互操作验证；见 A17/A27/A32/A45 |
 | 停止后生成 SRT；不默认保存原始音频 | Windows 停止后写 SRT，不保存原始音频 | 完全一致 | Windows `MainPageViewModel.cs`、`Core/Transcript.cs`、`Services/AudioCapture.cs`；格式细节见 A17 底稿 |
 | 总结新增内容、当前段或完整归档；Markdown 呈现、展开/收起与复制；可选停止后自动总结；AI 校对和重译建议需人工采纳 | Windows 支持三种范围与停止后自动总结开关；总结 Markdown 按 Mac 标题、小标题、项目符号和段落规则展示，默认展开，可收起/展开和复制；面板按自动总结开关、已有总结或状态文字显示，状态在面板内反馈，录音中无总结时显示提示；校对请求固定 Mac 模型并要求人工确认，手动优先于待自动任务 | 主要逻辑已对齐，呈现待验 | Mac `Services/DeepSeekService.swift`、`SpeechViewModel.swift`、`EchoMacApp.swift`、`Views/TranscriptViews.swift`；Windows `Services/SubtitleCorrectionService.cs`、`MainPage.xaml(.cs)`、`MainPageViewModel.cs`、`Core/TranscriptSummaryMarkdown.cs`。A41 用纯逻辑检查复核可见条件并完成 Release 构建；真实 GUI 排版、自动总结生命周期及云端结果仍待验收；见 A28/A29/A41 |
-| 全局透明悬浮双语字幕；位置/大小；锁定；点击穿透；多桌面与全屏空间 | 已实现独立 WinUI 窗口、Topmost、layered/DWM 透明窗口样式、无激活/无边框、点击穿透切换、调整时拖动和缩放；位置/宽度按规范化坐标、当前显示器 ID 持久化；显示器或 DPI 配置变化时重新布局。A38 对齐翻译关闭时强制显示原文及 Mac 两行尾部截断规则 | 尚未验证 | Mac `macOS/Views/DesktopSubtitleOverlay.swift`、`macOS/Models/DesktopSubtitleOverlayModels.swift`；Windows `windows/Echo.Windows/DesktopSubtitleOverlayWindow.xaml(.cs)`、`Core/DesktopSubtitleOverlayPlacement.cs`、`Core/DesktopSubtitleOverlay.cs`、`MainPage.xaml(.cs)`、`Core/Preferences.cs`。99 项 CoreChecks 含可见行和 XAML 行数契约；实际透明、点击穿透、异 DPI、多屏和全屏 GUI 行为仍须验收，见 A38 |
+| 全局透明悬浮双语字幕；位置/大小；锁定；点击穿透；多桌面与全屏空间 | 已实现独立浮层、置顶/无激活/调整/点击穿透状态、字幕绑定、显示器记忆与 DPI 重排；A38 对齐原文可见规则和两行尾截断。A49 在隔离 GUI 实测可见性、主窗上方 Z 序、点击穿透标志和双语文本，但发现实际窗口未带 `WS_EX_LAYERED` 且 XAML 浮层显示不透明黑底 | 部分实现 | Mac `macOS/Views/DesktopSubtitleOverlay.swift`；Windows `windows/Echo.Windows/DesktopSubtitleOverlayWindow.xaml(.cs)`、`Core/DesktopSubtitleOverlayPlacement.cs`、`Core/DesktopSubtitleOverlay.cs`、`MainPage.xaml(.cs)`、`Core/Preferences.cs`。A49 同时修复 `DisplayArea.FindAll()` WinRT 枚举崩溃；透明背景与全屏覆盖仍未达到 Mac。用户选择下一轮用原生 Win32/Direct2D 实现透明浮层，见 [A49 实测底稿](../sources/windows-a49-overlay-ui-2026-10-10.md) |
 | 浮层显示临时识别；最终文本按保留时长消失；更新或更正重置倒计时 | Windows feed 直接投影当前 `Subtitle`，50ms 节流；final 后按配置隐藏；迟到译文/文字更正重置计时，相同文字不延长；不创建第二条采集或 Soniox 会话 | 部分实现 | Mac `macOS/Services/DesktopSubtitleOverlayFeed.swift`、`macOS/Models/DesktopSubtitleOverlayModels.swift`；Windows `Core/DesktopSubtitleOverlay.cs`、`ViewModels/MainPageViewModel.cs`、`DesktopSubtitleOverlayWindow.xaml.cs`；核心语义有 6 项自动检查，GUI 对拍尚未运行 |
 | API Key 本机保护；录音音频不落盘 | Windows 以当前用户 DPAPI 保护密钥；音频缓冲仅用于流式发送 | 部分实现 | Windows `Core/Preferences.cs`、`Services/AudioCapture.cs`；还需对照 Mac Keychain 的错误恢复和设置更新时机 |
 | macOS 桌面音频采集受系统屏幕与系统音频权限约束 | Windows 使用 WASAPI loopback 和麦克风权限 | 平台客观限制 | 权限弹窗、设备默认值和系统环回授权由平台决定；需在 Windows 上清楚显示授权和设备状态 |
@@ -51,7 +51,7 @@ Windows 来源：当前 PR 分支 `feature/windows-mac-parity`；其历史迁移
 
 1. P0：A35 七条、A42 十三条、A43 十八条 Mac production handler 对拍均通过。A39 对齐空响应静默计时，A42 对齐畸形字段的安全回退，A43 对齐纠正规则，A44 对齐 error/finished 控制帧。下一步核实真实用户历史 Archive 的脱敏互操作和断线收尾；真实云响应仍未覆盖。
 2. P1：主界面语言菜单、滚动跟随行为、四类设置和分段配置已接入；A33 完成 12 项启动/控件 UIA smoke，但窄窗口、视觉布局、字幕滚动手感、键盘和 Narrator 仍未实测。
-3. P1：A34 补上上次使用的显示器记忆、DPI/显示器配置变化重排以及跨 DPI 拖动基线；优先完成真实透明合成、点击穿透、多屏和全屏应用验收。悬浮字幕复用同一识别会话和当前字幕状态。
+3. P1：以原生 Win32/Direct2D 浮层替换当前不透明 WinUI XAML 浮层，保持主界面为 WinUI；完成透明文字合成后再验收点击穿透、多屏/DPI 与全屏应用。浮层继续复用同一识别会话和当前字幕状态。
 4. P2：总结面板已补齐 Mac 风格 Markdown 分块、折叠/展开、复制、状态反馈和显示条件；继续核验主题与窄窗口布局。
 5. 发布：签名证书、CI 构建产物留存和干净 Windows 机器安装升级验证。
 

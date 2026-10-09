@@ -32,6 +32,7 @@ Windows 仓库已有 `windows/Echo.CoreChecks/Program.cs`，覆盖转写 token �
 16. A46 对齐设置 sheet 的受限窗口布局：Mac 常规目标尺寸为 520×560 DIP；Windows 继续以此为最大尺寸，在短/窄可用区域内收缩。CoreChecks 新增 XAML 契约，总计 121 项通过；Release x64 构建 0 警告、0 错误。Actions runs `37970740322`、`37970748525` 的 Windows build/check、Mac fixture/Archive 回读、Mac build `37970748522` 与 unsigned package preflight `37970748705` 全部成功。来源哈希见 [A46](../sources/windows-a46-responsive-settings-2026-10-10.md)。
 17. A47 以隔离的唯一 Package Identity 和临时 DataRoot 首次实测设置页：144 DPI（150%）环境下窗口为 430×360 DIP，UIA 确认“完成”、分类栏可见；滚动至分段设置底部后，“恢复默认值”和“完成”同时可见。测试揭示原 `ScrollViewer` 位于纵向 `StackPanel`，无法取得有限视口；改为 `Auto,*` Grid 行后通过。4 项 UIA、121 项 CoreChecks、Release x64 构建（0 警告、0 错误）通过；截图与 JSON 结果、哈希及测试隔离信息见 [A47](../sources/windows-a47-responsive-settings-scroll-2026-10-10.md)。后续 PR checks 全部通过：Windows CI run `37972920269`、Mac CI `37972920240`、unsigned package `37972920232`，push run `37972914290` 的 Archive/Windows jobs 亦通过。测试实例正常关闭并注销，现有 Echo MSIX 包未运行且仍注册。其他 DPI、键盘、Narrator 和真实设备未覆盖。
 18. A48 对齐 Mac 主窗口大小并复查字幕工具栏：144 DPI（150%）隔离副本默认 820×650 DIP，发起 600×450 请求后由 `OverlappedPresenter` 按 Mac 最小限制到 680×520 DIP；UIA 确认无新字幕时没有常驻“回到最新”动作。截图检查最小布局无裁切。4 项 UIA、123 项 CoreChecks 和 Release x64（0 警告、0 错误）通过；详细数据与原始截图见 [A48](../sources/windows-a48-main-window-size-2026-10-10.md)。实例已关闭并注销，正式包未触碰；Mac 并排截图、多显示器与其他 DPI 未覆盖。
+19. A49 首次复现浮层启动崩溃：WinApp 调试器显示 `DisplayArea.FindAll()` 的 WinRT 枚举在 `IReadOnlyList.GetEnumerator()` 抛出 `InvalidCastException 0x80004002`。改为直接按 ID 获取显示器，并在显示器已移除/句柄失效时回退当前显示器。144 DPI 隔离副本的双语浮层启动后，UIA/Win32 共 7 项中 6 项通过：文字可见、窗口在主窗上方、可见、无激活/工具窗样式及点击穿透标志；`WS_EX_LAYERED` 检查失败，浮层截图为黑色不透明背景。完整日志、截图、JSON 和隔离说明见 [A49](../sources/windows-a49-overlay-ui-2026-10-10.md)。测试包已关闭注销，正式包保持安装且未运行。用户选择下一轮保留 WinUI 主界面并改用原生 Win32/Direct2D 透明浮层。
 
 ## 跨平台 Archive runtime 对拍
 
@@ -40,7 +41,8 @@ Windows 仓库已有 `windows/Echo.CoreChecks/Program.cs`，覆盖转写 token �
 
 ## 尚未验证
 
-- 透明渲染、悬浮窗口点击穿透/失焦、窗口位置和缩放的 GUI smoke。
+- Mac 所需的透明渲染尚未实现；当前 WinUI 浮层实测黑底。点击穿透只检查了 HWND 扩展样式，鼠标命中/失焦仍待 GUI 验收。
+- 原生 Win32/Direct2D 替换后的多显示器/DPI、虚拟桌面、全屏应用及实际字幕生命周期 GUI smoke。
 - 新版矩阵覆盖每个 Mac 行为的自动化契约。
 - 真实 Soniox/DeepSeek 云响应；本地模拟服务不等于云端验收。
 - Windows GUI 的字体、窗口缩放、键盘、Narrator、高对比度与多 DPI，包括 125%、150%、200%。
