@@ -3,7 +3,7 @@
 ## 基线
 
 - Mac 来源：`origin/main` `ae0359dc90da0ccb5e526a275da1747954a49a4f`。
-- Windows 本轮验证来源：当前 PR 分支 `feature/windows-mac-parity`。历史迁移基线为旧 `feature/windows-preview` 分支（本地快照 `d500bbb`，远端 `64f2b89`）；该旧分支混有后来 Mac 变更，当前工作只选择 Windows 子树及 Windows 证据文件。
+- Windows 验证来源：PR #5 分支 `feature/windows-mac-parity`。历史迁移基线为旧 `feature/windows-preview`，当前远端为 `d500bbb21bc9bfa4d811c614576f38c0476efc50`；该旧分支混有 Mac 变更，不能整体合并或 cherry-pick。
 - A47 仅启动了带独立包身份、临时数据目录的 UI 验收副本；没有切换或操作用户已运行的 Echo 包。
 
 ## 现有自动验证
@@ -12,9 +12,9 @@ Windows 仓库已有 `windows/Echo.CoreChecks/Program.cs`，覆盖转写 token �
 
 `windows/README.md` 中记录曾在 Windows SDK/WinApp CLI 环境执行 Release x64 构建，亦有自签名 MSIX 底稿。自签名证书不等于公众信任的正式签名；历史包不代表此分支的当前构建产物。
 
-## 本轮已运行
+## 按底稿追踪的历史验证
 
-1. 2026-10-10 当前本机工作区 `dotnet run --project windows/Echo.CoreChecks/Echo.CoreChecks.csproj -c Release --no-restore`：130 项通过，含 A35/A42/A43 Soniox 18 响应 fixture、A51 音源模式路由、A52/A53 纠正历史/滚动视口源码契约、A54 语言请求契约、A55 术语限长/去重/数量边界，以及既有字幕纠正、归档、AI 请求、分段、浮层和音频处理检查；不调用云端、不保存真实音频。Windows Release x64 构建成功，0 警告、0 错误。官方页面 HTML 与 SHA-256 见 A54 底稿。当前远端 PR #5 是 A54；A55 尚未推送。纠正面板的输入、反馈、即时保存视觉和真实音频会话仍未 GUI/设备验收。此前 95/97/99/100/104/105/111/116/119/120/123/126/127/128 项结果只适用于各自记录的版本。
+1. A55 时点本机工作区 `dotnet run --project windows/Echo.CoreChecks/Echo.CoreChecks.csproj -c Release --no-restore`：130 项通过，含 A35/A42/A43 Soniox 18 响应 fixture、A51 音源模式路由、A52/A53 纠正历史/滚动视口源码契约、A54 语言请求契约、A55 术语限长/去重/数量边界，以及既有字幕纠正、归档、AI 请求、分段、浮层和音频处理检查；不调用云端、不保存真实音频。Windows Release x64 构建成功，0 警告、0 错误。官方页面 HTML 与 SHA-256 见 A54 底稿。此记录早于 A60，历史数量只适用于各自注明的版本；A60 当前本机验证见下文。
 2. 2026-10-10 Windows Release x64 编译：执行 `dotnet build windows/Echo.Windows/Echo.Windows.csproj -c Release -p:Platform=x64 -p:PublishReadyToRun=false --no-restore`，成功，0 警告、0 错误；编译没有启动应用。
 3. 执行 `git diff --check`。本轮改动仅限 `windows/` 和 `docs/`，未改 `macOS/` 或 `tests/`。
 4. Windows 调试实例已启动并完成 `windows/ui-smoke.ps1` 的 12 项 UIA 检查：录音页、停止按钮隐藏、电脑音频默认项、源/目标语言可读标签、设置入口、AI 服务分类和 Soniox Key 控件存在、模型输入不开放、返回主界面、导出菜单及字幕列表。没有点击录音、保存设置或调用云端；应用加载了 MSIX 包隔离目录中的既有存档，因此原始截图和 UIA 全树未留存，避免把本机字幕纳入仓库。仅留检查名称/结果。A33 还记录首次启动的 NullReferenceException 及修复。UIA 通过不等于视觉、浮层透明、键盘、Narrator、DPI 或多屏验收。
@@ -63,3 +63,7 @@ Windows 仓库已有 `windows/Echo.CoreChecks/Program.cs`，覆盖转写 token �
 ## A59 音源切换失败回滚（2026-10-10）
 
 CoreChecks 使用合成采集器与本地 WebSocket：开始话筒模式后模拟切换至电脑音频失败，检查旧输入恢复、`SpeechSession` 未发失败事件、恢复后继续发送 PCM，且全程只建立一个连接。本机 140 项 CoreChecks、Release x64 和 Actions run `37989494186` 的 Mac fixture、Windows 构建/检查与 Mac Archive 往返均通过。没有访问真实音频设备或 Soniox；真实切换连续性、权限拒绝与拔插仍待验收。源码基线见 [A59 底稿](../sources/windows-a59-audio-switch-rollback-2026-10-10.md)。
+
+## A60 默认音频端点变化（2026-10-10）
+
+延续 A59 的合成采集器和本机 loopback WebSocket：先模拟用户切换失败并恢复话筒，再注入 Windows 默认话筒变化事件。检查默认端点重启成功、活动设备 ID 更新、状态显示已跟随、后续 PCM 继续通过原 WebSocket，连接数仍为 1。完整原始输出见 [A60 测试日志](../sources/windows-a60-default-device-change-2026-10-10/test-results.txt)。本机 CoreChecks 141 项通过；Release x64 构建 0 警告、0 错误。此测试不创建麦克风/扬声器采集器、不调用云端、不保存音频；真实 WASAPI 移除、权限拒绝、硬件断连及声学间隙仍未验收。Mac 参考源码和各文件 SHA-256、日志 SHA-256 见 [A60 底稿](../sources/windows-a60-default-device-change-2026-10-10.md)。
