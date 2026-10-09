@@ -2,6 +2,7 @@ using NAudio.CoreAudioApi;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 using System.Buffers;
+using Echo_Windows.Core;
 
 namespace Echo_Windows.Services;
 
@@ -163,7 +164,9 @@ public sealed class AudioCapture : IDisposable
                 sources.Count > 0 ? sources[0].OutputFrame : ReadOnlySpan<float>.Empty, firstValid,
                 sources.Count > 1 ? sources[1].OutputFrame : ReadOnlySpan<float>.Empty, secondValid,
                 mixed);
-            level = mixed.Max(x => Math.Abs(x));
+            level = 0;
+            if (sources.Count > 0) level = AudioLevelHistory.MeasureRms(sources[0].OutputFrame, firstValid);
+            if (sources.Count > 1) level = Math.Max(level, AudioLevelHistory.MeasureRms(sources[1].OutputFrame, secondValid));
             var bytes = new byte[640];
             for (int i = 0; i < mixed.Length; i++)
             {

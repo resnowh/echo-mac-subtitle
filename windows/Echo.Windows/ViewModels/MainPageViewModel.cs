@@ -30,6 +30,7 @@ public partial class MainPageViewModel : ObservableObject
     private TokenAssembler? assembler;
     private readonly DispatcherQueueTimer checkpoint;
     private readonly DispatcherQueueTimer segmentationTimer;
+    private readonly AudioLevelHistory audioLevelHistory = new();
     private TranscriptSegmentationSettings activeSegmentation = new();
     private DateTimeOffset? lastResponseReceivedAt;
     private long sessionStartedTimestamp;
@@ -68,6 +69,7 @@ public partial class MainPageViewModel : ObservableObject
     [ObservableProperty] public partial bool IsSummarizing { get; set; }
     [ObservableProperty] public partial bool HasGeneratedSummary { get; set; }
     [ObservableProperty] public partial double Level { get; set; }
+    public IReadOnlyList<double> AudioWaveformSamples => audioLevelHistory.Samples;
     public bool CanEdit => !IsBusy && !IsRecording;
     public bool CanSwitchAudioDevices => IsRecording && !IsBusy;
     public bool CanStopRecording => IsRecording && (!IsBusy || recoveryCancellation is not null);
@@ -448,6 +450,9 @@ public partial class MainPageViewModel : ObservableObject
             activeTranslationEnabled = Config.Translate;
             activeSegmentation = Config.Segmentation.Copy().Validate();
             lastResponseReceivedAt = null;
+            audioLevelHistory.Reset();
+            Level = 0;
+            OnPropertyChanged(nameof(AudioWaveformSamples));
             sessionStartedTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
             SubtitleOverlayFeed.Clear();
             if (SelectedArchive is null) { var a = new Archive(); Archives.Insert(0, a); SelectedArchive = a; }
@@ -481,7 +486,13 @@ public partial class MainPageViewModel : ObservableObject
             if (SonioxResponseActivity.ShouldResetQuietTimer(json)) lastResponseReceivedAt = DateTimeOffset.UtcNow;
             assembler?.Apply(json);
         });
-        current.Level += value => ui.TryEnqueue(() => { if (ReferenceEquals(session, current)) Level = Math.Min(100, value * 100); });
+        current.Level += value => ui.TryEnqueue(() =>
+        {
+            if (!ReferenceEquals(session, current)) return;
+            if (!audioLevelHistory.TryRecord(value, System.Diagnostics.Stopwatch.GetTimestamp(), System.Diagnostics.Stopwatch.Frequency)) return;
+            Level = audioLevelHistory.Current * 100;
+            OnPropertyChanged(nameof(AudioWaveformSamples));
+        });
         current.Status += status => ui.TryEnqueue(() => { if (ReferenceEquals(session, current)) Status = status; });
         current.Failure += error => ui.TryEnqueue(() => HandleSessionFailure(current, error));
         return current;
@@ -679,7 +690,8 @@ public partial class MainPageViewModel : ObservableObject
             if (current is not null) await current.DisposeAsync();
             await DrainUiQueueAsync();
             if (ReferenceEquals(session, current)) session = null;
-            session = null; IsRecording = false; Level = 0;
+            session = null; IsRecording = false; audioLevelHistory.Reset(); Level = 0;
+            OnPropertyChanged(nameof(AudioWaveformSamples));
             // Flush queued transcript events before serialization on the same dispatcher.
             if (SelectedArchive is not null && segment is not null)
             {

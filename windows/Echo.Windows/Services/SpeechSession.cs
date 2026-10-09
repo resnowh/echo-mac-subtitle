@@ -197,7 +197,7 @@ public sealed class SpeechSession : IAsyncDisposable
         try
         {
             var bytes = capture.ReadFrame(out var level);
-            if (frameNumber % 5 == 0) Level?.Invoke(level);
+            if (frameNumber % 2 == 0) Level?.Invoke(level);
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(audioStop.Token, lifetime.Token);
             timeout.CancelAfter(TimeSpan.FromSeconds(5));
             await socket.SendAsync(bytes.AsMemory(), WebSocketMessageType.Binary, true, timeout.Token);

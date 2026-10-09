@@ -151,6 +151,26 @@ Check(unicodeSonioxTerms.Length == 2 && StringInfo.ParseCombiningCharacters(unic
     && unicodeSonioxTerms[1] == string.Concat(Enumerable.Repeat("👩‍🏫", 80)),
     "Soniox custom terms truncate by Unicode text elements like Swift Character without splitting combining marks or ZWJ emoji");
 var policySettings = new TranscriptSegmentationSettings();
+Check(Math.Abs(AudioLevelHistory.MeasureRms([.1f, -.1f, 1f], 2) - .75) < .0001
+    && AudioLevelHistory.MeasureRms([1f, 1f], 0) == 0,
+    "audio meter computes Mac-scaled RMS over only valid captured samples");
+var audioHistory = new AudioLevelHistory();
+Check(audioHistory.TryRecord(.4, 1000, 1000) && Math.Abs(audioHistory.Current - .3) < .0001
+    && !audioHistory.TryRecord(.8, 1049, 1000)
+    && audioHistory.TryRecord(.8, 1050, 1000) && Math.Abs(audioHistory.Current - .675) < .0001
+    && audioHistory.TryRecord(.4, 1100, 1000) && Math.Abs(audioHistory.Current - .6255) < .0001,
+    "audio meter samples at 20 Hz, attacks quickly and decays slowly like Mac");
+var expectedAudioHistory = new List<double>();
+for (int i = 0; i < 60; i++)
+{
+    if (audioHistory.TryRecord(i % 2, 1200 + (i * 50), 1000)) expectedAudioHistory.Add(audioHistory.Current);
+}
+Check(audioHistory.Samples.Count == AudioLevelHistory.Capacity
+    && audioHistory.Samples.SequenceEqual(expectedAudioHistory.TakeLast(AudioLevelHistory.Capacity)),
+    "audio waveform retains the newest 48 samples in order");
+audioHistory.Reset();
+Check(audioHistory.Current == 0 && audioHistory.Samples.Count == 48 && audioHistory.Samples.All(sample => sample == 0),
+    "audio waveform history resets cleanly between recording sessions");
 using var emptySonioxResponse = JsonDocument.Parse("""{"tokens":[]}""");
 using var endpointOnlySonioxResponse = JsonDocument.Parse("""{"tokens":[{"text":"<end>","is_final":true}]}""");
 using var finishedSonioxResponse = JsonDocument.Parse("""{"finished":true,"tokens":[]}""");

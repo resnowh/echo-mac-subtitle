@@ -37,7 +37,6 @@ public sealed partial class MainPage : Page
     ];
     private bool isAtTranscriptEnd = true;
     private readonly HashSet<Guid> observedSubtitleIds = [];
-    private int waveformFrame;
     private bool initialized;
     private bool isSummaryExpanded = true;
     private bool loadingSettings = true;
@@ -96,7 +95,7 @@ public sealed partial class MainPage : Page
                 };
             if (ViewModel.Entries.Count > 0) TranscriptList.ScrollIntoView(ViewModel.Entries[^1]);
         };
-        for (int i = 0; i < 64; i++)
+        for (int i = 0; i < 48; i++)
         {
             var bar = new Border { Width = 3, Height = 2, CornerRadius = new CornerRadius(2) };
             waveform.Add(bar);
@@ -104,7 +103,7 @@ public sealed partial class MainPage : Page
         }
         ViewModel.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName is nameof(ViewModel.Level) or nameof(ViewModel.IsRecording) or nameof(ViewModel.Status)) UpdateAudioDisplay();
+            if (e.PropertyName is nameof(ViewModel.Level) or nameof(ViewModel.IsRecording) or nameof(ViewModel.Status) or nameof(ViewModel.AudioWaveformSamples)) UpdateAudioDisplay();
             if (e.PropertyName == nameof(ViewModel.IsRecording)) UpdateRecordingLanguageHint();
             if (e.PropertyName == nameof(ViewModel.Summary)) RenderSummary();
             if (e.PropertyName == nameof(ViewModel.HasGeneratedSummary)) UpdateSummaryVisibility();
@@ -237,13 +236,14 @@ public sealed partial class MainPage : Page
         double level = Math.Clamp(ViewModel.Level / 100, 0, 1);
         var accent = (Brush)Application.Current.Resources["EchoAccentBrush"];
         var muted = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+        var samples = ViewModel.AudioWaveformSamples;
         foreach (var (bar, index) in waveform.Select((bar, index) => (bar, index)))
         {
-            double rhythm = .28 + .72 * Math.Abs(Math.Sin(index * .47 + waveformFrame * .8));
-            bar.Height = active ? Math.Max(2, 3 + level * rhythm * 42) : 2;
+            double sample = index < samples.Count ? samples[index] : 0;
+            bar.Height = active ? Math.Max(2, Math.Min(46, 3 + sample * 44)) : 2;
             bar.Background = active ? accent : muted;
+            bar.Opacity = active ? .85 : .35;
         }
-        waveformFrame++;
         AudioStatus.Text = active ? level > .035 ? "检测到声音" : "等待声音" : "未在录音";
         AudioDot.Fill = active && level > .035 ? accent : muted;
         ConnectionDot.Fill = active ? accent : muted;
