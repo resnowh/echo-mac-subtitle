@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Text;
+
 namespace Echo_Windows.Core;
 
 public static class SonioxRequestBuilder
@@ -74,7 +77,20 @@ public static class SonioxRequestBuilder
         .Split('\n')
         .Select(term => term.Trim())
         .Where(term => term.Length > 0)
-        .Select(term => term.Length > 80 ? term[..80] : term)
+        .Select(term => PrefixTextElements(term, 80))
         .Take(100)
         .ToArray();
+
+    private static string PrefixTextElements(string value, int maximum)
+    {
+        var result = new StringBuilder(Math.Min(value.Length, maximum));
+        var elements = StringInfo.GetTextElementEnumerator(value);
+        int count = 0;
+        while (count < maximum && elements.MoveNext())
+        {
+            result.Append((string)elements.Current!);
+            count++;
+        }
+        return result.ToString();
+    }
 }

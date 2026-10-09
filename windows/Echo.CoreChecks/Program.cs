@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Globalization;
 using System.Diagnostics;
 using System.Reflection;
 using Echo_Windows.Core;
@@ -96,6 +97,14 @@ Check(customSonioxTerms.Length == 139 && customSonioxTerms[39] == "Acme"
     && customSonioxTerms[40] == new string('x', 80) && customSonioxTerms[^1] == "Term97"
     && JsonDocument.Parse(JsonSerializer.Serialize(customSonioxRequest)).RootElement.GetProperty("context").GetProperty("translation_terms").GetArrayLength() == 26,
     "Soniox request appends normalized user terms with Mac line, length, and count limits and serializes valid context JSON");
+string combiningTerm = string.Concat(Enumerable.Repeat("e\u0301", 81));
+string emojiTerm = string.Concat(Enumerable.Repeat("👩‍🏫", 81));
+var unicodeSonioxTerms = SonioxRequestBuilder.NormalizeCorrectionTerms(combiningTerm + "\n" + emojiTerm);
+Check(unicodeSonioxTerms.Length == 2 && StringInfo.ParseCombiningCharacters(unicodeSonioxTerms[0]).Length == 80
+    && StringInfo.ParseCombiningCharacters(unicodeSonioxTerms[1]).Length == 80
+    && unicodeSonioxTerms[0] == string.Concat(Enumerable.Repeat("e\u0301", 80))
+    && unicodeSonioxTerms[1] == string.Concat(Enumerable.Repeat("👩‍🏫", 80)),
+    "Soniox custom terms truncate by Unicode text elements like Swift Character without splitting combining marks or ZWJ emoji");
 var policySettings = new TranscriptSegmentationSettings();
 Check(TranscriptSegmentationPolicy.Trigger("one two three four five", 1, 4.5, policySettings) == TranscriptSegmentationTrigger.Silence
     && TranscriptSegmentationPolicy.Trigger("one two three four", 1, 10, policySettings) is null

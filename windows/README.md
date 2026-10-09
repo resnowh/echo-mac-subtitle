@@ -20,6 +20,7 @@ UI 方案见 [ui-parity.md](../docs/windows/ui-parity.md)，功能计划见 [fun
 
 - WASAPI 播放设备回环采集、麦克风采集、本地双路混合；转换为 16 kHz 单声道 PCM16。
 - Soniox WebSocket 转写和单向翻译；临时文本替换、最终文本追加、端点分段、Speaker 编号。
+- Soniox 请求带有与 Mac 一致的经济学领域上下文、识别术语与中英译词；自定义术语按行清理并按 Unicode 文本元素截断，避免拆开组合字符或 emoji。
 - 本地多段存档、接续、JSON 导入/导出、整份存档 SRT、停止后自动单段 SRT。
 - DeepSeek 总结新增内容、当前段、全存档；结果可选中复制。
 - 设置中的停止后自动总结默认关闭；AI 服务说明会提示文字发送和费用影响。
