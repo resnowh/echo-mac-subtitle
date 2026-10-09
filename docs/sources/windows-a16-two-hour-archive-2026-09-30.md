@@ -30,3 +30,12 @@
 ## 数据留存
 
 合成文字与测试代码随仓库保留；没有真实用户文字、录音、API Key 或云端响应。
+
+## 2026-10-09 落盘补充
+
+- 环境：Windows 11 build `10.0.26200`；.NET SDK `10.0.401`。
+- 在随机 `%TEMP%` 子目录运行生产 `TranscriptFiles.AtomicWrite`：先写一份含单条字幕的旧检查点，再用 7,200 条合成字幕的完整 JSON 原子替换；随后从磁盘回读并解析当前档案与 `.bak`。
+- 结果：JSON `2,501,560` bytes；保存、刷新到磁盘、替换并回读共 `100 ms`。当前文件保留全部 7,200 条及尾条字幕；`.bak` 保留先前检查点；未遗留 `.tmp` 文件。临时目录在测试结束时删除。
+- `dotnet run --project windows/Echo.CoreChecks/Echo.CoreChecks.csproj -c Release --no-restore`：51 项通过。Windows Release x64 构建：0 错误、10 条 NAudio 弃用警告。未启动应用、未枚举或使用音频设备、未调用云服务。
+
+这补齐一次完整大档案的原子落盘与恢复点检查，但不证明真实两小时录音的周期性检查点队列有界，也不覆盖 UI 响应、持续资源曲线或强退时序。

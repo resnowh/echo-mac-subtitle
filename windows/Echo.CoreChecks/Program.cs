@@ -346,6 +346,29 @@ Check(twoHourLoaded.Segments[0].Entries.Count == 7200
     && twoHourLoaded.Segments[0].Entries[^1].English == "Synthetic line 7199"
     && twoHourSrt.Contains("02:00:00,000") && twoHourSrt.Contains("Synthetic line 7199"),
     "two-hour synthetic archive snapshot, JSON round trip and SRT export preserve all 7200 entries and the final timestamp");
+string diskStressRoot = Path.Combine(Path.GetTempPath(), "Echo-CoreChecks-A16-" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(diskStressRoot);
+string diskStressPath = Path.Combine(diskStressRoot, "two-hour.json");
+try
+{
+    var priorCheckpoint = new Archive { Id = twoHourLoaded.Id, Segments = [new Segment { StartedAt = 800000000,
+        Entries = [new Subtitle { Start = 0, End = 1, English = "Prior checkpoint" }] }] };
+    TranscriptFiles.AtomicWrite(diskStressPath, JsonSerializer.Serialize(TranscriptFiles.Snapshot(priorCheckpoint), TranscriptFiles.Json));
+    var diskWriteTimer = Stopwatch.StartNew();
+    TranscriptFiles.AtomicWrite(diskStressPath, twoHourJson);
+    var diskReloaded = TranscriptFiles.Parse(File.ReadAllText(diskStressPath));
+    var diskBackup = TranscriptFiles.Parse(File.ReadAllText(diskStressPath + ".bak"));
+    diskWriteTimer.Stop();
+    long diskBytes = new FileInfo(diskStressPath).Length;
+    Console.WriteLine($"A16 atomic disk save: JSON={diskBytes} bytes, write+flush+replace+reload={diskWriteTimer.ElapsedMilliseconds} ms, backupEntries={diskBackup.Segments[0].Entries.Count}");
+    Check(diskBytes == Encoding.UTF8.GetByteCount(twoHourJson)
+        && diskReloaded.Segments[0].Entries.Count == 7200
+        && diskReloaded.Segments[0].Entries[^1].English == "Synthetic line 7199"
+        && diskBackup.Segments[0].Entries.Single().English == "Prior checkpoint"
+        && !Directory.EnumerateFiles(diskStressRoot, "*.tmp", SearchOption.TopDirectoryOnly).Any(),
+        "two-hour synthetic archive is durably replaced and reloaded while the previous checkpoint remains in backup");
+}
+finally { if (Directory.Exists(diskStressRoot)) Directory.Delete(diskStressRoot, recursive: true); }
 Check(Archive.AppleEpoch.AddSeconds(0).Year == 2001, "Apple date reference is not Unix time");
 Check(SpeechRetryPolicy.MaxRetries == 2 && SpeechRetryPolicy.Delay(1) == TimeSpan.FromSeconds(1) && SpeechRetryPolicy.Delay(2) == TimeSpan.FromSeconds(3)
     && SpeechRetryPolicy.IsTransient(new System.Net.WebSockets.WebSocketException())
