@@ -107,24 +107,32 @@ struct DesktopSubtitleOverlayState: Equatable {
 struct DesktopSubtitleOverlayReducer {
     private(set) var current: DesktopSubtitleOverlayState?
 
-    mutating func update(_ entry: SubtitleEntry, translationEnabled: Bool) {
+    mutating func update(_ entry: SubtitleEntry, translationEnabled: Bool, at date: Date = Date()) {
         let original = entry.english.trimmingCharacters(in: .whitespacesAndNewlines)
         let translation = entry.chinese.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !original.isEmpty || (translationEnabled && !translation.isEmpty) else { return }
         let sameEntry = current?.entryID == entry.id
+        // New meaningful text on an already-finalized entry (e.g. late translation
+        // or a manual correction) must remain readable for a full retention window.
+        // Identical updates must not indefinitely extend that window.
+        let textChanged = sameEntry &&
+            (current?.original != original || current?.translation != translation ||
+             current?.translationEnabled != translationEnabled)
+        let wasFinal = sameEntry && (current?.isFinal ?? false)
+        let previousFinalizedAt = sameEntry ? current?.finalizedAt : nil
         current = DesktopSubtitleOverlayState(
             entryID: entry.id,
             original: original,
             translation: translation,
             translationEnabled: translationEnabled,
-            isFinal: sameEntry ? (current?.isFinal ?? false) : false,
+            isFinal: wasFinal,
             revision: UUID(),
-            finalizedAt: sameEntry ? current?.finalizedAt : nil
+            finalizedAt: wasFinal && textChanged ? date : previousFinalizedAt
         )
     }
 
     mutating func finalize(_ entry: SubtitleEntry, translationEnabled: Bool, at date: Date = Date()) {
-        update(entry, translationEnabled: translationEnabled)
+        update(entry, translationEnabled: translationEnabled, at: date)
         guard current?.entryID == entry.id else { return }
         current?.isFinal = true
         current?.finalizedAt = date
