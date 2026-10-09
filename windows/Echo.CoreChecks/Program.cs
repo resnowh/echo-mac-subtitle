@@ -346,20 +346,85 @@ async Task<bool> CheckRejectedHandshakeAsync(int statusCode)
     var reject = Task.Run(async () =>
     {
         var context = await rejectedListener.GetContextAsync().WaitAsync(timeout.Token);
+        bool hasBearerKey = context.Request.Headers["Authorization"] == "Bearer synthetic";
         context.Response.StatusCode = statusCode; context.Response.Close();
+        return hasBearerKey;
     }, timeout.Token);
     await using var rejectedSession = new SpeechSession(new Uri($"ws://127.0.0.1:{statusPort}/"), captureEnabled: false);
     try { await rejectedSession.StartAsync(new Preferences(), "synthetic", 0, null, null); }
     catch (SpeechServiceException error)
     {
-        await reject;
-        return error.Retryable == (statusCode >= 500);
+        bool hasBearerKey = await reject;
+        return hasBearerKey && error.StatusCode == statusCode && error.Retryable == (statusCode >= 500)
+            && (statusCode != 401 || error.Message.Contains("更新 Key"));
     }
     catch { await reject; return false; }
     return false;
 }
 Check(await CheckRejectedHandshakeAsync(401), "HTTP 401 handshake failure is not retried");
 Check(await CheckRejectedHandshakeAsync(503), "HTTP 503 handshake failure uses the bounded retry policy");
+async Task<(bool BearerHeader, bool ConfigOmitsKey, SpeechServiceException? Error)> CheckServiceErrorFrameAsync(
+    int statusCode, string errorType, string serviceMessage, string expectedGuidance, bool retryable)
+{
+    var portProbe = new TcpListener(IPAddress.Loopback, 0); portProbe.Start();
+    int port = ((IPEndPoint)portProbe.LocalEndpoint).Port; portProbe.Stop();
+    using var listener = new HttpListener(); listener.Prefixes.Add($"http://127.0.0.1:{port}/"); listener.Start();
+    using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+    var server = Task.Run(async () =>
+    {
+        var context = await listener.GetContextAsync().WaitAsync(timeout.Token);
+        bool bearerHeader = context.Request.Headers["Authorization"] == "Bearer synthetic";
+        using var socket = (await context.AcceptWebSocketAsync(null)).WebSocket;
+        var packet = new byte[65536];
+        var configResult = await socket.ReceiveAsync(new ArraySegment<byte>(packet), timeout.Token);
+        using var config = JsonDocument.Parse(packet.AsMemory(0, configResult.Count));
+        bool configOmitsKey = !config.RootElement.TryGetProperty("api_key", out _)
+            && config.RootElement.GetProperty("sample_rate").GetInt32() == 16000;
+        byte[] error = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            tokens = Array.Empty<object>(), error_code = statusCode, error_type = errorType,
+            error_message = serviceMessage, request_id = "synthetic-request-id"
+        });
+        await socket.SendAsync(error.AsMemory(), WebSocketMessageType.Text, true, timeout.Token);
+        return (bearerHeader, configOmitsKey);
+    }, timeout.Token);
+    var failure = new TaskCompletionSource<Exception>(TaskCreationOptions.RunContinuationsAsynchronously);
+    await using (var session = new SpeechSession(new Uri($"ws://127.0.0.1:{port}/"), captureEnabled: false))
+    {
+        session.Failure += error => failure.TrySetResult(error);
+        await session.StartAsync(new Preferences(), "synthetic", 0, null, null);
+        var error = await failure.Task.WaitAsync(timeout.Token);
+        var serverResult = await server;
+        listener.Stop();
+        var serviceError = error as SpeechServiceException;
+        bool actionable = serviceError is not null
+            && serviceError.StatusCode == statusCode && serviceError.ErrorType == errorType
+            && serviceError.RequestId == "synthetic-request-id" && serviceError.Retryable == retryable
+            && serviceError.Message.Contains(expectedGuidance) && serviceError.Message.Contains("synthetic-request-id");
+        return (serverResult.bearerHeader, serverResult.configOmitsKey, actionable ? serviceError : null);
+    }
+}
+var serviceErrorCases = new[]
+{
+    (401, "unauthenticated", "Incorrect API key", "更新 Key", false),
+    (402, "organization_balance_exhausted", "Organization balance exhausted", "余额或月度预算", false),
+    (403, "permission_denied", "Realtime STT permission missing", "产品权限", false),
+    (429, "limit_exceeded", "Concurrent requests limit reached", "限额", false),
+    (503, "service_unavailable", "Backend temporarily unavailable", "有限次数重试", true),
+    (413, "max_duration_reached", "Maximum session duration reached", "达到时长上限", true)
+};
+bool serviceErrorsClassified = true;
+foreach (var (statusCode, errorType, serviceMessage, expectedGuidance, retryable) in serviceErrorCases)
+{
+    var result = await CheckServiceErrorFrameAsync(statusCode, errorType, serviceMessage, expectedGuidance, retryable);
+    serviceErrorsClassified &= result.BearerHeader && result.ConfigOmitsKey && result.Error is not null;
+}
+Check(serviceErrorsClassified,
+    "Soniox WebSocket uses Authorization Bearer without placing the API key in config and gives actionable, non-retryable auth/quota errors");
+var sanitizedServiceError = SpeechServiceException.FromApiError(401, "unauthenticated", "Invalid\r\nkey", "request\r\nid");
+Check(!sanitizedServiceError.Message.Contains('\r') && !sanitizedServiceError.Message.Contains('\n')
+    && sanitizedServiceError.Message.Contains("requestid"),
+    "service diagnostics remove line breaks from remote messages and request IDs before showing them in the status line");
 async Task<bool> CheckConnectCancellationAsync()
 {
     var probe = new TcpListener(IPAddress.Loopback, 0); probe.Start();
@@ -529,7 +594,10 @@ if (args.Contains("--audio"))
         var packet = new byte[65536];
         var configResult = await socket.ReceiveAsync(new ArraySegment<byte>(packet), timeout.Token);
         using var config = JsonDocument.Parse(packet.AsMemory(0, configResult.Count));
-        validConfig = configResult.MessageType == WebSocketMessageType.Text && config.RootElement.GetProperty("sample_rate").GetInt32() == 16000 && config.RootElement.GetProperty("api_key").GetString() == "synthetic";
+        validConfig = context.Request.Headers["Authorization"] == "Bearer synthetic"
+            && configResult.MessageType == WebSocketMessageType.Text
+            && config.RootElement.GetProperty("sample_rate").GetInt32() == 16000
+            && !config.RootElement.TryGetProperty("api_key", out _);
         byte[] provisional = Encoding.UTF8.GetBytes("""{"tokens":[{"text":"Before","is_final":false,"start_ms":0,"end_ms":250}]}""");
         await socket.SendAsync(provisional.AsMemory(), WebSocketMessageType.Text, true, timeout.Token);
         while (true)

@@ -37,6 +37,7 @@ public sealed class SpeechSession : IAsyncDisposable
         using var connectTimeout = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, cancellationToken);
         connectTimeout.CancelAfter(TimeSpan.FromSeconds(20));
         this.mode = mode; this.outputId = outputId; this.inputId = inputId;
+        socket.Options.SetRequestHeader("Authorization", $"Bearer {key}");
         capture.DefaultDeviceChanged += QueueDefaultDeviceChange;
         capture.Failed += error =>
         {
@@ -61,7 +62,7 @@ public sealed class SpeechSession : IAsyncDisposable
             {
                 int? status = ReadHandshakeStatus(e);
                 if (status is null) throw;
-                throw new SpeechServiceException($"转写服务拒绝连接（HTTP {status}）。", e, status is 408 or >= 500 and <= 599);
+                throw SpeechServiceException.FromApiError(status, null, null, null, e);
             }
             catch (OperationCanceledException e) when (!lifetime.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
             {
@@ -69,7 +70,7 @@ public sealed class SpeechSession : IAsyncDisposable
                 throw new TimeoutException("连接转写服务超时。", e);
             }
             var request = new Dictionary<string, object> {
-                ["api_key"] = key, ["model"] = config.SonioxModel, ["audio_format"] = "pcm_s16le", ["sample_rate"] = 16000, ["num_channels"] = 1,
+                ["model"] = config.SonioxModel, ["audio_format"] = "pcm_s16le", ["sample_rate"] = 16000, ["num_channels"] = 1,
                 ["enable_endpoint_detection"] = true, ["max_endpoint_delay_ms"] = 900, ["enable_language_identification"] = true, ["enable_speaker_diarization"] = config.Speakers
             };
             if (!string.IsNullOrWhiteSpace(config.SourceLanguage)) { request["language_hints"] = new[] { config.SourceLanguage }; request["language_hints_strict"] = config.Strict; }
@@ -224,7 +225,14 @@ public sealed class SpeechSession : IAsyncDisposable
                 } while (!part.EndOfMessage);
                 using var json = JsonDocument.Parse(message.ToArray());
                 var root = json.RootElement;
-                if (root.TryGetProperty("error_code", out var error)) throw new SpeechServiceException($"服务错误 {error}：{(root.TryGetProperty("error_message", out var reason) ? reason.ToString() : "请求失败")}");
+                if (root.TryGetProperty("error_code", out var error))
+                {
+                    int? errorCode = error.ValueKind == JsonValueKind.Number && error.TryGetInt32(out var parsedCode) ? parsedCode : null;
+                    string? errorType = root.TryGetProperty("error_type", out var type) && type.ValueKind == JsonValueKind.String ? type.GetString() : null;
+                    string? reason = root.TryGetProperty("error_message", out var detail) && detail.ValueKind == JsonValueKind.String ? detail.GetString() : null;
+                    string? requestId = root.TryGetProperty("request_id", out var id) && id.ValueKind == JsonValueKind.String ? id.GetString() : null;
+                    throw SpeechServiceException.FromApiError(errorCode, errorType, reason, requestId);
+                }
                 Message?.Invoke(root.Clone());
                 if (root.TryGetProperty("finished", out var done) && done.GetBoolean()) { finished.TrySetResult(); return; }
             }
@@ -272,8 +280,60 @@ public sealed class AudioDeviceSwitchException(string message, bool captureResto
 
 public sealed class SpeechServiceException : IOException
 {
-    public SpeechServiceException(string message, Exception? innerException = null, bool retryable = false) : base(message, innerException) => Retryable = retryable;
+    public SpeechServiceException(string message, Exception? innerException = null, bool retryable = false,
+        int? statusCode = null, string? errorType = null, string? requestId = null) : base(message, innerException)
+    {
+        Retryable = retryable; StatusCode = statusCode; ErrorType = errorType; RequestId = requestId;
+    }
     public bool Retryable { get; }
+    public int? StatusCode { get; }
+    public string? ErrorType { get; }
+    public string? RequestId { get; }
+
+    public static SpeechServiceException FromApiError(int? statusCode, string? errorType, string? errorMessage,
+        string? requestId, Exception? innerException = null)
+    {
+        string guidance = errorType switch
+        {
+            "unauthenticated" => "Soniox API Key 无效或缺失。请在服务设置中更新 Key 后重试。",
+            "organization_balance_exhausted" or "organization_monthly_budget_exhausted" or "project_monthly_budget_exhausted"
+                => "Soniox 账户余额或月度预算已用尽。请检查账户用量和预算后重试。",
+            "permission_denied" => "此 Soniox API Key 没有实时语音转写权限。请检查 Key 的产品权限。",
+            "limit_exceeded" or "max_concurrent_connections_reached"
+                => "Soniox 使用或并发限额已达到。请等待限额恢复，或关闭其他转写会话后重试。",
+            "max_duration_reached" => "本次转写连接已达到时长上限，正在新建连接继续录音。",
+            "model_not_available" => "当前 Soniox 项目无法使用所选模型。请检查模型名称和项目权限。",
+            "invalid_request" => "Soniox 拒绝了转写设置。请检查模型、音频和语言选项。",
+            _ => statusCode switch
+            {
+                400 => "Soniox 拒绝了转写请求，请检查服务设置。",
+                401 => "Soniox API Key 无效或缺失。请在服务设置中更新 Key 后重试。",
+                402 => "Soniox 账户余额或月度预算已用尽。请检查账户用量和预算后重试。",
+                403 => "Soniox API Key 没有所需权限。请检查 Key 的产品权限。",
+                408 => "Soniox 请求超时，正在按有限次数重试。",
+                413 => "Soniox 转写连接已达到时长上限。",
+                429 => "Soniox 使用或并发限额已达到。请稍后重试，或关闭其他转写会话。",
+                >= 500 and <= 599 => "Soniox 服务暂时不可用，正在按有限次数重试。",
+                _ => statusCode is { } code ? $"Soniox 转写请求失败（HTTP {code}）。" : "Soniox 转写请求失败。"
+            }
+        };
+        string message = guidance;
+        if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            string detail = new(errorMessage.Where(character => !char.IsControl(character)).ToArray());
+            detail = detail.Trim();
+            if (detail.Length > 360) detail = detail[..360] + "…";
+            message += $" 服务说明：{detail}";
+        }
+        if (!string.IsNullOrWhiteSpace(requestId))
+        {
+            string safeRequestId = new(requestId.Where(character => char.IsLetterOrDigit(character) || character is '-' or '_' or '.')
+                .Take(128).ToArray());
+            if (safeRequestId.Length > 0) message += $" 请求编号：{safeRequestId}。";
+        }
+        bool retryable = statusCode is 408 or >= 500 and <= 599 || errorType == "max_duration_reached";
+        return new SpeechServiceException(message, innerException, retryable, statusCode, errorType, requestId);
+    }
 }
 public sealed class AudioCaptureFailureException(string message, Exception innerException) : IOException(message, innerException) { }
 
