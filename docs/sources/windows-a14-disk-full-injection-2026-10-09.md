@@ -12,6 +12,7 @@
 - `MainPageViewModel` 的异步保存、等待保存和 Flush 失败状态统一使用此错误映射；普通 I/O 错误仍保留原错误详情。
 - `dotnet run --project windows/Echo.CoreChecks/Echo.CoreChecks.csproj -c Release --no-restore`：50 项通过。
 - `dotnet build windows/Echo.Windows/Echo.Windows.csproj -c Release --no-restore /p:Platform=x64 /p:RuntimeIdentifier=win-x64`：成功，0 错误、10 条既有 NAudio 弃用警告。
+- 提交 `fd6dbe302c18883c2d733e028bef73aac5ec0e77` 的 [GitHub Actions 运行 37902256407](https://github.com/resnowh/echo-mac-subtitle/actions/runs/37902256407) 中 Windows 与 Mac jobs 均通过；Windows 锁定还原、50 项 CoreChecks 与 Release x64 构建通过，Mac transport 与 Debug/Release 检查通过。
 
 ## 未覆盖
 
