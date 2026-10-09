@@ -34,4 +34,6 @@ GitHub Actions run [`37952567838`](https://github.com/resnowh/echo-mac-subtitle/
 
 后续扩展：固定输入现增至七条响应，增加已有 row 在下一条响应切换 speaker 的分支。Windows 静态 fixture/CoreChecks 已扩至 95 项通过；新的 Mac production 输出和 Actions runtime differential 尚待运行，不沿用五响应 run 的成功结论。
 
+七响应结果：GitHub Actions run [`37954634204`](https://github.com/resnowh/echo-mac-subtitle/actions/runs/37954634204) 的 `generate-mac-soniox-runtime-fixture`、`build-and-check` 和 `verify-mac-archive-roundtrip` 全部成功。Mac 输出来自提交 `8505c52d99ea1c7892d03fb4ed7d708fb9397089`，6649 bytes，SHA-256 `CA5F9D36FEE3E0E3C4DC4F60D5049910DB25E352F967031B8AF32E5ECCA2B4CB`，保存在 [`expanded/mac-soniox-runtime.json`](windows-a35-soniox-runtime-fixture-2026-10-09/expanded/mac-soniox-runtime.json)。第六/第七响应累计定稿次数为 2/4，Mac production 输出与 Windows 逐响应状态一致。
+
 该结果只证明固定合成输入下的生产处理器对拍，不代表真实云响应、音频、GUI 或所有 token 序列都已验收。
