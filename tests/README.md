@@ -12,6 +12,12 @@ isolated service name: create, update, read, delete, and verified migration
 from a temporary `UserDefaults` suite. Test credentials are synthetic and are
 removed from the test keychain when the process exits; no provider is contacted.
 
+`SonioxErrorChecks.swift` verifies actionable guidance for authentication,
+balance, permission, quota, and timeout errors, while stripping control
+characters from service text and request IDs. The loopback WebSocket fixture
+also checks the real transport sends a Bearer header and no API key in its
+configuration frame.
+
 `LifecycleRecoveryChecks.swift` runs the production sleep/wake state machine
 through ten recovery cycles and checks that inactive wake events, duplicate
 notifications, user stops, and stale recovery results cannot restart recording.

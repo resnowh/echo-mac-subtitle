@@ -966,7 +966,6 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         sonioxConnectionState = lifecycleState.isRecovering ? .recovering : .connecting
 
         var config: [String: Any] = [
-            "api_key": apiKey,
             "model": "stt-rt-v5",
             "audio_format": "pcm_s16le",
             "sample_rate": 16_000,
@@ -1080,6 +1079,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
             let data = try JSONSerialization.data(withJSONObject: config)
             let json = String(decoding: data, as: UTF8.self)
             sonioxClient.connect(
+                apiKey: apiKey,
                 configuration: json,
                 onReady: { [weak self] in
                     self?.audioQueue.async {
@@ -1263,9 +1263,8 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     private func handleSonioxMessage(_ text: String) {
         guard let data = text.data(using: .utf8),
               let response = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
-        if let errorMessage = response["error_message"] as? String {
-            let requestID = response["request_id"] as? String
-            errorMessageReceived("\(errorMessage)\(requestID.map { "（request_id: \($0)）" } ?? "")")
+        if let serviceError = SonioxServiceError(response: response) {
+            errorMessageReceived(serviceError.userMessage)
             return
         }
         if response["finished"] as? Bool == true {
@@ -1589,8 +1588,8 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     private func errorMessageReceived(_ message: String) {
-        errorMessage = "Soniox 翻译失败：\(message)"
-        status = "翻译失败"
+        errorMessage = "Soniox 服务错误：\(message)"
+        status = "Soniox 服务错误"
     }
 
     func dismissError() {

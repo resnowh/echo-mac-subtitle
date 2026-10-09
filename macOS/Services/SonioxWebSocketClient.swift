@@ -26,14 +26,16 @@ final class SonioxWebSocketClient {
         self.url = url
     }
 
-    func connect(configuration: String, onReady: @escaping () -> Void,
+    func connect(apiKey: String, configuration: String, onReady: @escaping () -> Void,
                  onMessage: @escaping (String) -> Void, onFailure: @escaping (Error) -> Void) {
         control.sync {
             cancelLocked()
             let config = URLSessionConfiguration.default
             config.timeoutIntervalForRequest = sendTimeout
             let session = URLSession(configuration: config)
-            let task = session.webSocketTask(with: url)
+            var request = URLRequest(url: url)
+            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+            let task = session.webSocketTask(with: request)
             self.session = session
             self.task = task
             failureHandler = onFailure

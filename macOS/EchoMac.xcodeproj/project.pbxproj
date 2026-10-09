@@ -22,6 +22,7 @@
 		42 /* LifecycleRecoveryState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43 /* LifecycleRecoveryState.swift */; };
 		44 /* MacLifecycleObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45 /* MacLifecycleObserver.swift */; };
 		47 /* APIKeyVault.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48 /* APIKeyVault.swift */; };
+		49 /* SonioxServiceError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50 /* SonioxServiceError.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -42,6 +43,7 @@
 		43 /* LifecycleRecoveryState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/LifecycleRecoveryState.swift; sourceTree = "<group>"; };
 		45 /* MacLifecycleObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/MacLifecycleObserver.swift; sourceTree = "<group>"; };
 		48 /* APIKeyVault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/APIKeyVault.swift; sourceTree = "<group>"; };
+		50 /* SonioxServiceError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/SonioxServiceError.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -90,6 +92,7 @@
 				43 /* LifecycleRecoveryState.swift */,
 				45 /* MacLifecycleObserver.swift */,
 				48 /* APIKeyVault.swift */,
+				50 /* SonioxServiceError.swift */,
 			);
 			name = Echo;
 			path = .;
@@ -177,6 +180,7 @@
 				42 /* LifecycleRecoveryState.swift in Sources */,
 				44 /* MacLifecycleObserver.swift in Sources */,
 				47 /* APIKeyVault.swift in Sources */,
+				49 /* SonioxServiceError.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

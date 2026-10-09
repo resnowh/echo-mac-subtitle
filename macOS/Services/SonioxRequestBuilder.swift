@@ -33,7 +33,6 @@ enum SonioxRequestBuilder {
     }
 
     static func makeRequest(
-        apiKey: String,
         model: String = "stt-rt-v5",
         audioFormat: String = "pcm_s16le",
         sampleRate: Int = 16_000,
@@ -43,7 +42,6 @@ enum SonioxRequestBuilder {
         context: [String: Any] = [:]
     ) -> [String: Any] {
         var request: [String: Any] = [
-            "api_key": apiKey,
             "model": model,
             "audio_format": audioFormat,
             "sample_rate": sampleRate,

@@ -2,9 +2,13 @@ import Foundation
 
 @main
 struct StreamChecks {
+    private static let fixtureAPIKey = "fixture-token"
+    private static let fixtureConfiguration = #"{"model":"stt-rt-v5","audio_format":"pcm_s16le"}"#
+
     static func main() throws {
         try APIKeyVaultChecks.run()
         LifecycleRecoveryChecks.run()
+        SonioxErrorChecks.run()
         let fixtureDirectory = CommandLine.arguments.count > 2
             ? URL(fileURLWithPath: CommandLine.arguments[2], isDirectory: true)
             : nil
@@ -43,7 +47,7 @@ struct StreamChecks {
         let client = SonioxWebSocketClient(url: URL(string: "ws://127.0.0.1:\(port)")!)
         for _ in 0..<20 {
             let done = DispatchSemaphore(value: 0)
-            client.connect(configuration: "fixture", onReady: {
+            client.connect(apiKey: fixtureAPIKey, configuration: fixtureConfiguration, onReady: {
                 for index in 0..<32 { client.sendAudio(Data([UInt8(index)])) }
                 client.finish()
             }, onMessage: { message in
@@ -55,7 +59,7 @@ struct StreamChecks {
             precondition(!client.isReady && !client.isActive)
         }
         let failed = DispatchSemaphore(value: 0)
-        client.connect(configuration: "fixture", onReady: {
+        client.connect(apiKey: fixtureAPIKey, configuration: fixtureConfiguration, onReady: {
             client.sendAudio(Data(repeating: 0, count: 160_001))
         }, onMessage: { _ in fatalError("Unexpected data") }, onFailure: { _ in failed.signal() })
         precondition(failed.wait(timeout: .now() + 10) == .success)
@@ -69,11 +73,11 @@ struct StreamChecks {
         // Cancel immediately during handshake; late completion of these tasks
         // must not fail or mark the replacement socket ready.
         for _ in 0..<20 {
-            client.connect(configuration: "fixture", onReady: {}, onMessage: { _ in }, onFailure: { _ in })
+            client.connect(apiKey: fixtureAPIKey, configuration: fixtureConfiguration, onReady: {}, onMessage: { _ in }, onFailure: { _ in })
             client.cancel()
         }
         let replacement = DispatchSemaphore(value: 0)
-        client.connect(configuration: "fixture", onReady: {
+        client.connect(apiKey: fixtureAPIKey, configuration: fixtureConfiguration, onReady: {
             for index in 0..<32 { client.sendAudio(Data([UInt8(index)])) }
             client.finish()
         }, onMessage: { message in

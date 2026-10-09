@@ -141,7 +141,8 @@ enum CorrectionChecks {
         var englishToChinese = config
         englishToChinese.selectSourceLanguage("en")
         englishToChinese.selectTranslationLanguage("zh")
-        var request = SonioxRequestBuilder.makeRequest(apiKey: "fixture", recognition: englishToChinese)
+        var request = SonioxRequestBuilder.makeRequest(recognition: englishToChinese)
+        precondition(request["api_key"] == nil, "Soniox credentials must not be included in the start JSON")
         precondition((request["language_hints"] as? [String]) == ["en"])
         precondition((request["translation"] as? [String: String])?["target_language"] == "zh")
 
@@ -149,7 +150,7 @@ enum CorrectionChecks {
         var japaneseToChinese = config
         japaneseToChinese.selectSourceLanguage("ja")
         japaneseToChinese.selectTranslationLanguage("zh")
-        request = SonioxRequestBuilder.makeRequest(apiKey: "fixture", recognition: japaneseToChinese)
+        request = SonioxRequestBuilder.makeRequest(recognition: japaneseToChinese)
         precondition((request["language_hints"] as? [String]) == ["ja"])
         precondition((request["translation"] as? [String: String])?["target_language"] == "zh")
 
@@ -157,14 +158,14 @@ enum CorrectionChecks {
         var englishToJapanese = config
         englishToJapanese.selectSourceLanguage("en")
         englishToJapanese.selectTranslationLanguage("ja")
-        request = SonioxRequestBuilder.makeRequest(apiKey: "fixture", recognition: englishToJapanese)
+        request = SonioxRequestBuilder.makeRequest(recognition: englishToJapanese)
         precondition((request["language_hints"] as? [String]) == ["en"])
         precondition((request["translation"] as? [String: String])?["target_language"] == "ja")
 
         // Automatic recognition does not inherit or mutate a detected language.
         var automatic = englishToChinese
         automatic.selectSourceLanguage(nil)
-        request = SonioxRequestBuilder.makeRequest(apiKey: "fixture", recognition: automatic)
+        request = SonioxRequestBuilder.makeRequest(recognition: automatic)
         precondition(automatic.sourceLanguageMode == .automatic && automatic.languageHints.isEmpty)
         precondition(request["language_hints"] == nil && request["language_hints_strict"] == nil)
         automatic.save(to: defaults)
@@ -177,7 +178,7 @@ enum CorrectionChecks {
         var noTranslation = englishToChinese
         noTranslation.selectTranslationLanguage(nil)
         precondition(!noTranslation.translationEnabled && noTranslation.targetTranslationLanguage == "zh")
-        request = SonioxRequestBuilder.makeRequest(apiKey: "fixture", recognition: noTranslation)
+        request = SonioxRequestBuilder.makeRequest(recognition: noTranslation)
         precondition(request["translation"] == nil)
 
         // A value snapshot stays fixed for the active session while the next
@@ -186,8 +187,8 @@ enum CorrectionChecks {
         var pending = englishToChinese
         pending.selectSourceLanguage("ja")
         pending.selectTranslationLanguage("en")
-        let activeRequest = SonioxRequestBuilder.makeRequest(apiKey: "fixture", recognition: activeSnapshot)
-        let nextRequest = SonioxRequestBuilder.makeRequest(apiKey: "fixture", recognition: pending)
+        let activeRequest = SonioxRequestBuilder.makeRequest(recognition: activeSnapshot)
+        let nextRequest = SonioxRequestBuilder.makeRequest(recognition: pending)
         precondition((activeRequest["language_hints"] as? [String]) == ["en"])
         precondition((activeRequest["translation"] as? [String: String])?["target_language"] == "zh")
         precondition((nextRequest["language_hints"] as? [String]) == ["ja"])
@@ -316,7 +317,6 @@ enum CorrectionChecks {
         precondition(TranscriptSegmentationConfig.load(from: userDefaults) == defaults)
 
         let request = SonioxRequestBuilder.makeRequest(
-            apiKey: "fixture-only",
             recognition: RecognitionConfig(),
             segmentation: saved
         )

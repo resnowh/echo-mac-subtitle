@@ -1,6 +1,7 @@
 """Isolated logic and loopback transport checks. No credentials/audio hardware."""
 import base64
 import hashlib
+import json
 from pathlib import Path
 import socketserver
 import struct
@@ -20,12 +21,14 @@ class WebSocketFixture(socketserver.StreamRequestHandler):
                 headers[name.lower()] = value.strip()
             if "sec-websocket-key" not in headers:
                 return  # Expected when the client cancels before its handshake.
+            assert headers.get("authorization") == "Bearer fixture-token"
             digest = hashlib.sha1((headers["sec-websocket-key"] +
                                    "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode()).digest()
             accept = base64.b64encode(digest).decode()
             self.wfile.write(("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n"
                               "Connection: Upgrade\r\nSec-WebSocket-Accept: " + accept + "\r\n\r\n").encode())
             packets = []
+            configuration = None
             while True:
                 header = self.rfile.read(2)
                 if len(header) != 2:
@@ -41,11 +44,16 @@ class WebSocketFixture(socketserver.StreamRequestHandler):
                     data = bytes(v ^ mask[i % 4] for i, v in enumerate(data))
                 if opcode == 8:
                     return
-                if opcode == 2:
+                if opcode == 1 and data:
+                    configuration = json.loads(data)
+                    assert "api_key" not in configuration
+                    assert b"fixture-token" not in data
+                elif opcode == 2:
                     if data:
                         packets.append(data)
                     else:
                         assert packets == [bytes([i]) for i in range(32)]
+                        assert configuration is not None
                         reply = b"ordered:32"
                         self.wfile.write(bytes([0x81, len(reply)]) + reply)
         except (ConnectionError, BrokenPipeError):
@@ -64,10 +72,12 @@ with tempfile.TemporaryDirectory(prefix="echo-stream-checks-") as folder:
                     str(root / "macOS/Models/LifecycleRecoveryState.swift"),
                     str(root / "macOS/Storage/TranscriptArchiveStore.swift"),
                     str(root / "macOS/Services/SonioxRequestBuilder.swift"),
+                    str(root / "macOS/Services/SonioxServiceError.swift"),
                     str(root / "macOS/Services/DeepSeekService.swift"),
                     str(root / "macOS/Services/APIKeyVault.swift"),
                     str(root / "macOS/Services/SRTExporter.swift"),
                     str(root / "tests/CorrectionChecks.swift"),
+                    str(root / "tests/SonioxErrorChecks.swift"),
                     str(root / "tests/APIKeyVaultChecks.swift"),
                     str(root / "tests/LifecycleRecoveryChecks.swift"),
                     str(root / "tests/StreamChecks.swift")], check=True)

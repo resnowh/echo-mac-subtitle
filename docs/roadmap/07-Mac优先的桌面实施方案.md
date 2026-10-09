@@ -52,6 +52,7 @@
 3. 使用原 Swift 编码器生成样本，实测 Mac → Windows → Mac 导入，核对段数、文本、时间和 SRT；未通过前不声称双向兼容。
 4. 对 legacy 无法表达的额外信息暂不写入共享存档；必要时保存独立平台设置，避免旧 Mac 重写后丢失新字段。未来 schema 升级单独评审、备份、迁移和回退。
 5. Mac 凭据采用用户登录钥匙串；旧 `UserDefaults` Key 仅在写入并确认钥匙串后清理，失败时保留旧值并提示。Windows 使用系统保护存储。Key 不进入导出和跨端样本。自动化检查覆盖合成密钥读写与迁移；正式签名身份下的钥匙串授权提示及旧安装升级仍需 Mac 验收。
+6. Mac 与 Windows 的 Soniox WebSocket 配置均不把 API Key 放入启动 JSON；Mac 由握手 `Authorization: Bearer` 头传递，并按官方 `error_type` 给出错误指引。回环协议检查不替代真实云端验收。
 
 ## 5. 执行阶段
 
