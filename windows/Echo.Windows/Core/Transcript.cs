@@ -534,9 +534,10 @@ public sealed class TokenAssembler(Segment segment, Action<Subtitle> added, Acti
                 continue;
             }
             if (text.Length == 0 || text.StartsWith('<')) continue;
-            if (!translation && final && token.TryGetProperty("speaker", out var finalSpeaker))
+            if (!translation && final && token.TryGetProperty("speaker", out var finalSpeaker)
+                && finalSpeaker.ValueKind == JsonValueKind.String)
             {
-                string label = "Speaker " + finalSpeaker.ToString();
+                string label = "Speaker " + finalSpeaker.GetString();
                 if (sourceCursor < segment.Entries.Count && segment.Entries[sourceCursor] is { } current
                     && !string.IsNullOrWhiteSpace(current.English) && current.Speaker is not null && current.Speaker != label)
                 {
@@ -555,8 +556,11 @@ public sealed class TokenAssembler(Segment segment, Action<Subtitle> added, Acti
                 if (token.TryGetProperty("start_ms", out var start) && row.English.Length == 0) { row.Start = start.GetDouble() / 1000; row.RecordedAt = segment.StartedAt + row.Start; }
                 if (token.TryGetProperty("end_ms", out var end)) row.End = Math.Max(row.Start, end.GetDouble() / 1000);
                 if (token.TryGetProperty("speaker", out var speaker)
-                    && (final || row.Speaker is null)) row.Speaker = "Speaker " + speaker.ToString();
-                if (token.TryGetProperty("language", out var lang)) row.Language = lang.GetString();
+                    && speaker.ValueKind == JsonValueKind.String && (final || row.Speaker is null))
+                    row.Speaker = "Speaker " + speaker.GetString();
+                if (token.TryGetProperty("language", out var lang)
+                    && lang.ValueKind == JsonValueKind.String && (final || row.Language is null))
+                    row.Language = lang.GetString();
             }
             if (final)
             {

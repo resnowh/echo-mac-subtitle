@@ -11,7 +11,7 @@
 | [Endpoint detection](https://soniox.com/docs/stt/rt/endpoint-detection) | 端点使该 segment 的前置 token 定稿；`<end>` 在段尾出现一次且始终为 final。 |
 | [Manual finalization](https://soniox.com/docs/stt/rt/manual-finalization) | 客户端发送 `{"type":"finalize"}` 后，服务端定稿此前音频并返回 final 的 `<fin>` 标记。 |
 | [Real-time speech-to-text translation](https://soniox.com/docs/translation/stt-translation/rt-translation) | 原文与译文共用同一 WebSocket token 流；转写 token 先到，译文 token 随后分块输出，二者不保证一对一。 |
-| [WebSocket API](https://soniox.com/docs/api-reference/stt/websocket-api) | token 的 `translation_status` 是可选字段；译文 token 不带音频时间戳。 |
+| [WebSocket API](https://soniox.com/docs/api-reference/stt/websocket-api) | token 的 `translation_status` 是可选字段；`speaker` 是可选字符串；译文 token 不带音频时间戳。 |
 
 ## 对 Windows 实现的影响
 
@@ -19,6 +19,7 @@
 - Windows `TokenAssembler` 也统一将端点标记视为整条双语流的边界；`translation_status` 不改变端点游标。
 - 译文可以在原文 token 之后到达，但按官方实时翻译流顺序，端点标记属于整个定稿 segment 的尾部。若翻译在端点之后才到达，不属于该协议说明的标准顺序；Mac 当前实现也不会把这种 token 回填到前一条已结束字幕。
 - 连续的空 `<end>`/`<fin>` 不应跳过字幕索引或生成空行；Windows 回归对此单独检查。
+- Mac `SpeechViewModel.handleTranscriptResponse` 在 provisional token 上只填入尚为空的 speaker/language 标签；final token 才能更新已存在的标签。Windows 逐字幕行实现相同语言规则，并以 `en` provisional → `ja` provisional → `ja` final 的固定序列验证。
 
 关于“翻译结果在端点标记前完成”是根据官方所述的统一流、原文先于译文、`<end>` 位于 segment 末尾综合得出的实现推论；官方页面没有逐例展示带翻译的 `<end>` 响应全文。因此保留端到端 token fixture 对拍待验状态。
 
