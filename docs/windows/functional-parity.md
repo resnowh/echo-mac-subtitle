@@ -31,7 +31,7 @@
 ## P2：AI 与易用性
 
 - 总结新增/当前段/完整存档、增量去重、Mac 同款 Markdown 分块、默认展开、收起/展开和复制已接入。A41 补齐 Mac 同款面板显隐条件、面板内状态反馈和录音提示，并用 CoreChecks 覆盖显隐条件；真实 GUI 排版、自动总结生命周期及云端响应仍待验收。呈现底稿见 [A29 summary panel baseline](../sources/windows-a29-summary-panel-2026-10-09.md) 与 [A41 summary panel parity](../sources/windows-a41-summary-panel-parity-2026-10-10.md)。
-- 字幕纠正按改动字段提交：未编辑字段读取当前最新识别值，保持继续接收识别更新；编辑器显示新识别提示，可载入最新文本，关闭未保存修改时先确认。原始识别稿和每条修订（时间、原文、译文）可展开查看；长内容在受限滚动视口中呈现。AI 校对继续采用建议后人工确认；不把模型输出自动写回字幕。校对/重新翻译提示、Mac 固定模型、thinking 开关、必需响应字段及手动任务优先级有合成契约检查；云端结果和该编辑器交互仍待 GUI 核对。来源清单见 [A28 AI correction request baseline](../sources/windows-a28-ai-correction-2026-10-09.md) 与 [A53 编辑器布局底稿](../sources/windows-a53-correction-editor-scroll-2026-10-10.md)。
+- 字幕纠正按改动字段提交：未编辑字段读取当前最新识别值，保持继续接收识别更新；编辑器显示新识别提示，可载入最新文本，关闭未保存修改时先确认。原始识别稿和每条修订（时间、原文、译文）可展开查看；长内容在受限滚动视口中呈现。可在编辑器内加术语，立即保存并从下一次 Soniox 建连应用；长度、重复和数量限制对齐 Mac。AI 校对继续采用建议后人工确认；不把模型输出自动写回字幕。云端结果和该编辑器交互仍待 GUI 核对。来源清单见 [A28](../sources/windows-a28-ai-correction-2026-10-09.md)、[A53](../sources/windows-a53-correction-editor-scroll-2026-10-10.md) 与 [A55](../sources/windows-a55-inline-correction-term-2026-10-10.md)。
 - Soniox 与 DeepSeek 请求均使用 Mac 固定模型；Windows 不再暴露不同模型输入。继续核对 Key 保护、网络失败、费用提示及云端行为。
 
 ## 完成定义

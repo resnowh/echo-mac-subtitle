@@ -79,8 +79,12 @@ Check(correctionEditorSource.Contains("var historyExpander = new Expander { Head
     && correctionEditorSource.Contains("version.Translation", StringComparison.Ordinal)
     && correctionEditorSource.Contains("var bodyHost = new ScrollViewer", StringComparison.Ordinal)
     && correctionEditorSource.Contains("VerticalScrollBarVisibility = ScrollBarVisibility.Auto", StringComparison.Ordinal)
-    && correctionEditorSource.Contains("MaxHeight = 480", StringComparison.Ordinal),
-    "subtitle correction editor exposes dated revision history in an accessible disclosure and a bounded scroll viewport like Mac");
+    && correctionEditorSource.Contains("MaxHeight = 480", StringComparison.Ordinal)
+    && correctionEditorSource.Contains("SetAutomationId(termInput, \"CorrectionTerm\")", StringComparison.Ordinal)
+    && correctionEditorSource.Contains("SetAutomationId(addTerm, \"AddCorrectionTerm\")", StringComparison.Ordinal)
+    && correctionEditorSource.Contains("ViewModel.AddCorrectionTerm(termInput.Text)", StringComparison.Ordinal)
+    && correctionEditorSource.Contains("CorrectionTerms.Text = ViewModel.Config.CorrectionTerms", StringComparison.Ordinal),
+    "subtitle correction editor exposes dated history, bounded scrolling, and inline term addition like Mac");
 Check(ThemePreference.IndexFor("Light") == 0 && ThemePreference.IndexFor("Dark") == 1 && ThemePreference.IndexFor("Default") == 2
     && ThemePreference.Next("Dark") == "Default" && ThemePreference.Next("Default") == "Light" && ThemePreference.Next("Light") == "Dark",
     "theme choices and main-window cycling follow the Mac light, dark, system order");
@@ -228,6 +232,18 @@ Check(unicodeSonioxTerms.Length == 2 && StringInfo.ParseCombiningCharacters(unic
     && unicodeSonioxTerms[0] == string.Concat(Enumerable.Repeat("e\u0301", 80))
     && unicodeSonioxTerms[1] == string.Concat(Enumerable.Repeat("👩‍🏫", 80)),
     "Soniox custom terms truncate by Unicode text elements like Swift Character without splitting combining marks or ZWJ emoji");
+var addedCorrectionTerms = "Acme\r\nExisting\n\n";
+bool termAdded = CorrectionTermList.TryAdd(addedCorrectionTerms, "  New term  ", out string normalizedCorrectionTerms);
+Check(termAdded && normalizedCorrectionTerms == "Acme\nExisting\nNew term"
+    && !CorrectionTermList.TryAdd(normalizedCorrectionTerms, "new TERM", out _)
+    && !CorrectionTermList.TryAdd(normalizedCorrectionTerms, "   ", out _)
+    && !CorrectionTermList.TryAdd(string.Join('\n', Enumerable.Range(0, 100).Select(i => $"Term{i}")), "Extra", out _),
+    "inline correction terms trim input, normalize blank lines, reject case-insensitive duplicates and enforce the 100-term Mac limit");
+string eightyOneEmoji = string.Concat(Enumerable.Repeat("👩‍🏫", 81));
+Check(CorrectionTermList.HasValidCandidateLength(string.Concat(Enumerable.Repeat("👩‍🏫", 80)))
+    && !CorrectionTermList.HasValidCandidateLength(eightyOneEmoji)
+    && !CorrectionTermList.TryAdd("", eightyOneEmoji, out _),
+    "inline correction term field uses the Mac 80-character limit measured in Unicode text elements");
 var policySettings = new TranscriptSegmentationSettings();
 Check(Math.Abs(AudioLevelHistory.MeasureRms([.1f, -.1f, 1f], 2) - .75) < .0001
     && AudioLevelHistory.MeasureRms([1f, 1f], 0) == 0,

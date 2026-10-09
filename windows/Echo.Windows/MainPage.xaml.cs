@@ -610,6 +610,30 @@ public sealed partial class MainPage : Page
         body.Children.Add(actions); body.Children.Add(suggestionText);
         suggestionText.Text = ViewModel.GetCorrectionStatus(entry) ?? "";
         body.Children.Add(new TextBlock { Text = "AI 只读取文字。点击请求会把本句和相邻上下文发送给 DeepSeek，可能产生费用；建议需手动应用。", TextWrapping = TextWrapping.Wrap, Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"] });
+        var termInput = new TextBox { PlaceholderText = "需要记住的专业词（可选）", MinWidth = 180 };
+        var addTerm = new Button { Content = "加入术语表", IsEnabled = false };
+        var termNotice = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"] };
+        AutomationProperties.SetAutomationId(termInput, "CorrectionTerm");
+        AutomationProperties.SetAutomationId(addTerm, "AddCorrectionTerm");
+        AutomationProperties.SetAutomationId(termNotice, "CorrectionTermNotice");
+        var termRow = new Grid { ColumnSpacing = 8 };
+        termRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        termRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        termRow.Children.Add(termInput);
+        Grid.SetColumn(addTerm, 1); termRow.Children.Add(addTerm);
+        termInput.TextChanged += (_, _) => addTerm.IsEnabled = CorrectionTermList.HasValidCandidateLength(termInput.Text);
+        addTerm.Click += (_, _) =>
+        {
+            if (ViewModel.AddCorrectionTerm(termInput.Text))
+            {
+                termInput.Text = string.Empty;
+                CorrectionTerms.Text = ViewModel.Config.CorrectionTerms;
+                termNotice.Text = "已加入；识别提示在下次建连生效。";
+            }
+            else termNotice.Text = ViewModel.Status;
+        };
+        body.Children.Add(termRow);
+        body.Children.Add(termNotice);
         var root = new Grid();
         var bodyHost = new ScrollViewer
         {

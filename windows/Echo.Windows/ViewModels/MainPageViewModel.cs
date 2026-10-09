@@ -307,6 +307,23 @@ public partial class MainPageViewModel : ObservableObject
         if (!Save()) return;
         Status = "已撤销上次纠正；当前文字保留为人工选择。";
     }
+    public bool AddCorrectionTerm(string candidate)
+    {
+        if (!CorrectionTermList.TryAdd(Config.CorrectionTerms, candidate, out string updated))
+        {
+            Status = "术语已存在，或已达到 100 个上限。";
+            return false;
+        }
+        string previous = Config.CorrectionTerms;
+        Config.CorrectionTerms = updated;
+        try { Config.Save(); Status = "已加入；识别提示在下次建连生效。"; return true; }
+        catch (Exception e)
+        {
+            Config.CorrectionTerms = previous;
+            Status = "术语表保存失败：" + e.Message;
+            return false;
+        }
+    }
     private readonly Dictionary<Guid, (string Source, string Translation, Guid Revision, CorrectionSuggestion Suggestion)> correctionSuggestions = [];
     public CorrectionSuggestion? GetSuggestion(Subtitle entry)
     {
