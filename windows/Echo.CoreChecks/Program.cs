@@ -809,6 +809,16 @@ Check(neutralFrames == 320 && highBufferFrames > 320 && lowBufferFrames < 320
     && longDrift.LastRatio <= 1.005 && longDrift.LastRatio >= 0.995
     && Math.Abs(adjustedFrameTotal - 320 * 10000 * longDrift.LastRatio) < 4,
     "dual-input drift correction responds to buffer direction, stays bounded and preserves fractional frame adjustments");
+float[] mixerFirst = [0.8f, 0.6f, 0.4f, 1.2f];
+float[] mixerSecond = [-0.2f, -0.4f, 0.9f, 0f];
+float[] mixedFrame = new float[4];
+AudioFrameMixer.Mix(mixerFirst, 4, mixerSecond, 2, mixedFrame);
+Check(Math.Abs(mixedFrame[0] - 0.3f) < 0.001f && Math.Abs(mixedFrame[1] - 0.1f) < 0.001f
+    && Math.Abs(mixedFrame[2] - 0.4f) < 0.001f && mixedFrame[3] == 1f,
+    "dual-input mixing averages overlapping samples, keeps a surviving source at full level during underrun, and clamps PCM range");
+AudioFrameMixer.Mix(mixerFirst, 0, mixerSecond, 0, mixedFrame);
+Check(mixedFrame.All(sample => sample == 0),
+    "dual-input mixing emits silence only when neither capture source supplied the output sample");
 List<float> ReadNormalized(ISampleProvider input)
 {
     ISampleProvider normalized = AudioCapture.ToMono16k(input);
@@ -829,11 +839,12 @@ Check(firstDelayedTone is >= 1600 and <= 3200,
 var boundedPrebuffer = new BoundedAudioPrebuffer(new WaveFormat(16000, 16, 1));
 var spanPrebuffer = new BoundedAudioPrebuffer(new WaveFormat(16000, 16, 1));
 byte[] spanPcm = [0x00, 0x40, 0x00, 0xC0];
-spanPrebuffer.AddSamples(spanPcm.AsSpan());
 float[] spanSamples = new float[2];
+int emptySpanRead = spanPrebuffer.Samples.Read(spanSamples.AsSpan());
+spanPrebuffer.AddSamples(spanPcm.AsSpan());
 int spanRead = spanPrebuffer.Samples.Read(spanSamples.AsSpan());
-Check(spanRead == 2 && Math.Abs(spanSamples[0] - 0.5f) < 0.001f && Math.Abs(spanSamples[1] + 0.5f) < 0.001f,
-    "span-based WASAPI capture buffers copy PCM into the prebuffer before the callback returns");
+Check(emptySpanRead == 0 && spanRead == 2 && Math.Abs(spanSamples[0] - 0.5f) < 0.001f && Math.Abs(spanSamples[1] + 0.5f) < 0.001f,
+    "capture prebuffer reports starvation as unavailable frames and copies span-based PCM before the callback returns");
 int fullPrebufferBytes = (int)(boundedPrebuffer.CapacitySeconds * boundedPrebuffer.WaveFormat.AverageBytesPerSecond);
 boundedPrebuffer.AddSamples(new byte[fullPrebufferBytes], 0, fullPrebufferBytes);
 bool overflowReported = false;

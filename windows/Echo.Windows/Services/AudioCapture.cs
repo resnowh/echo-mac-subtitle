@@ -156,11 +156,13 @@ public sealed class AudioCapture : IDisposable
         lock (gate)
         {
             var mixed = new float[320];
-            foreach (var s in sources)
-            {
-                s.ReadOutputFrame();
-                for (int i = 0; i < mixed.Length; i++) mixed[i] += s.OutputFrame[i] / sources.Count;
-            }
+            int firstValid = 0, secondValid = 0;
+            if (sources.Count > 0) firstValid = sources[0].ReadOutputFrame();
+            if (sources.Count > 1) secondValid = sources[1].ReadOutputFrame();
+            AudioFrameMixer.Mix(
+                sources.Count > 0 ? sources[0].OutputFrame : ReadOnlySpan<float>.Empty, firstValid,
+                sources.Count > 1 ? sources[1].OutputFrame : ReadOnlySpan<float>.Empty, secondValid,
+                mixed);
             level = mixed.Max(x => Math.Abs(x));
             var bytes = new byte[640];
             for (int i = 0; i < mixed.Length; i++)
@@ -219,21 +221,27 @@ public sealed class AudioCapture : IDisposable
         public volatile bool Stopping;
         public CaptureDataAvailableHandler DataHandler = null!;
         public EventHandler<StoppedEventArgs> StoppedHandler = null!;
-        public void ReadOutputFrame()
+        public int ReadOutputFrame()
         {
+            Array.Clear(OutputFrame);
             int inputFrames = Drift.InputFramesFor(OutputFrame.Length, Buffer.BufferedSeconds);
             var input = InputFrame.AsSpan(0, inputFrames);
             int read = Resampled.Read(input);
             if (read < inputFrames) input[read..].Clear();
+            if (read <= 0) return 0;
             double sourceStride = (double)(inputFrames - 1) / (OutputFrame.Length - 1);
+            int validOutputFrames = 0;
             for (int i = 0; i < OutputFrame.Length; i++)
             {
                 double position = i * sourceStride;
+                if (position >= read) break;
                 int left = (int)position;
-                int right = Math.Min(left + 1, inputFrames - 1);
+                int right = Math.Min(left + 1, read - 1);
                 float fraction = (float)(position - left);
                 OutputFrame[i] = input[left] + (input[right] - input[left]) * fraction;
+                validOutputFrames++;
             }
+            return validOutputFrames;
         }
     }
     private sealed class AverageChannels(ISampleProvider input) : ISampleProvider
@@ -254,6 +262,25 @@ public sealed class AudioCapture : IDisposable
     }
 }
 
+/// <summary>Mixes only samples that were actually read from each capture source.</summary>
+public static class AudioFrameMixer
+{
+    public static void Mix(ReadOnlySpan<float> first, int firstValidFrames,
+        ReadOnlySpan<float> second, int secondValidFrames, Span<float> output)
+    {
+        firstValidFrames = Math.Clamp(firstValidFrames, 0, first.Length);
+        secondValidFrames = Math.Clamp(secondValidFrames, 0, second.Length);
+        for (int i = 0; i < output.Length; i++)
+        {
+            bool hasFirst = i < firstValidFrames;
+            bool hasSecond = i < secondValidFrames;
+            if (!hasFirst && !hasSecond) { output[i] = 0; continue; }
+            float sum = (hasFirst ? first[i] : 0) + (hasSecond ? second[i] : 0);
+            output[i] = Math.Clamp(sum / ((hasFirst ? 1 : 0) + (hasSecond ? 1 : 0)), -1f, 1f);
+        }
+    }
+}
+
 public sealed class BoundedAudioPrebuffer
 {
     private readonly BufferedWaveProvider buffer;
@@ -264,7 +291,7 @@ public sealed class BoundedAudioPrebuffer
     public BoundedAudioPrebuffer(WaveFormat format, double capacitySeconds = AudioCapture.PrebufferSeconds)
     {
         CapacitySeconds = Math.Max(0.02, capacitySeconds);
-        buffer = new BufferedWaveProvider(format, TimeSpan.FromSeconds(CapacitySeconds)) { ReadFully = true, DiscardOnBufferOverflow = false };
+        buffer = new BufferedWaveProvider(format, TimeSpan.FromSeconds(CapacitySeconds)) { ReadFully = false, DiscardOnBufferOverflow = false };
     }
     public void AddSamples(byte[] data, int offset, int count)
     {
