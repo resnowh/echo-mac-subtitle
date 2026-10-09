@@ -286,30 +286,41 @@ try
 finally { if (Directory.Exists(aclReplaceRoot)) Directory.Delete(aclReplaceRoot, recursive: true); }
 var firstSaveStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 var releaseFirstSave = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-var saveAttempts = new List<int>(); var durableSaves = new List<int>();
-async Task PersistCheckpoint(int value)
+var saveAttempts = new List<(int Revision, int TranscriptEntries)>();
+var durableSaves = new List<(int Revision, int TranscriptEntries)>();
+async Task PersistCheckpoint((int Revision, int TranscriptEntries) snapshot)
 {
-    saveAttempts.Add(value);
-    if (value == 1)
+    saveAttempts.Add(snapshot);
+    if (snapshot.Revision == 1)
     {
         firstSaveStarted.TrySetResult();
         await releaseFirstSave.Task;
         throw new IOException("simulated disk write failure");
     }
-    durableSaves.Add(value);
+    durableSaves.Add(snapshot);
 }
-var saveQueue = new OrderedPersistenceQueue<int>(PersistCheckpoint);
-Task failedCheckpoint = saveQueue.Enqueue(1);
+var saveQueue = new OrderedPersistenceQueue<(int Revision, int TranscriptEntries)>(PersistCheckpoint);
+Task failedCheckpoint = saveQueue.Enqueue((1, 1));
 await firstSaveStarted.Task;
-Task recoveredCheckpoint = saveQueue.Enqueue(2);
-bool laterCheckpointWaited = saveAttempts.SequenceEqual([1]);
+Task? recoveredCheckpoint = null;
+bool coalescedBurst = true;
+for (int checkpoint = 2; checkpoint <= 10000; checkpoint++)
+{
+    var queued = saveQueue.Enqueue((checkpoint, checkpoint));
+    if (recoveredCheckpoint is null) recoveredCheckpoint = queued;
+    else coalescedBurst &= ReferenceEquals(recoveredCheckpoint, queued);
+}
+Task latestCheckpoint = saveQueue.FlushAsync();
+bool laterCheckpointWaited = saveAttempts.Count == 1 && saveAttempts[0] == (1, 1);
 releaseFirstSave.TrySetResult();
 bool firstCheckpointFailed = false;
 try { await failedCheckpoint; } catch (IOException) { firstCheckpointFailed = true; }
-await recoveredCheckpoint;
+await recoveredCheckpoint!;
 await saveQueue.FlushAsync();
-Check(laterCheckpointWaited && firstCheckpointFailed && saveAttempts.SequenceEqual([1, 2]) && durableSaves.SequenceEqual([2]),
-    "serialized archive checkpoints recover after a failed write and flush waits for the latest durable snapshot");
+Check(laterCheckpointWaited && firstCheckpointFailed && coalescedBurst && ReferenceEquals(latestCheckpoint, recoveredCheckpoint)
+    && saveAttempts.Count == 2 && saveAttempts[0] == (1, 1) && saveAttempts[1] == (10000, 10000)
+    && durableSaves.Count == 1 && durableSaves[0] == (10000, 10000),
+    "a slow archive writer keeps one newest pending full snapshot, coalesces 9,999 checkpoints and flushes all 10,000 entries after failure");
 var splitSource = new Archive { Title = "课程", Segments = [new Segment(), new Segment { StartedAt = 800000123, Entries = [new Subtitle { English = "拆分字幕" }] }] };
 splitSource.SummarizedEntries[splitSource.Segments[1].Entries[0].Id] = TranscriptFiles.SummarySignature("拆分字幕");
 var splitResult = ArchiveOperations.SplitSegment(splitSource, splitSource.Segments[1].Id)!;

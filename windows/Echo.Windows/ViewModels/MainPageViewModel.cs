@@ -19,6 +19,7 @@ public partial class MainPageViewModel : ObservableObject
     private readonly DispatcherQueueTimer checkpoint;
     private readonly HttpClient http = new() { Timeout = TimeSpan.FromSeconds(90) };
     private readonly OrderedPersistenceQueue<Archive> saves = new(snapshot => Task.Run(() => TranscriptFiles.Save(snapshot)));
+    private Task? reportedSaveTask;
     private readonly SubtitleCorrectionService corrections = new();
     private readonly SemaphoreSlim correctionQueue = new(1, 1);
     private readonly HashSet<Guid> correctionScheduled = [];
@@ -153,7 +154,10 @@ public partial class MainPageViewModel : ObservableObject
     {
         if (SelectedArchive is null) return false;
         var task = EnqueueSave(SelectedArchive);
-        _ = ReportSaveFailureAsync(task);
+        if (!ReferenceEquals(Interlocked.Exchange(ref reportedSaveTask, task), task))
+        {
+            _ = ReportSaveFailureAsync(task);
+        }
         return true;
     }
     private Task EnqueueSave(Archive archive)
@@ -166,6 +170,7 @@ public partial class MainPageViewModel : ObservableObject
     {
         try { await pending; }
         catch (Exception e) { ui.TryEnqueue(() => Status = TranscriptFiles.SaveFailureMessage(e)); }
+        finally { _ = Interlocked.CompareExchange(ref reportedSaveTask, null, pending); }
     }
     private async Task<bool> SaveArchiveAndWaitAsync(Archive archive)
     {

@@ -39,4 +39,14 @@
 - `dotnet run --project windows/Echo.CoreChecks/Echo.CoreChecks.csproj -c Release --no-restore`：51 项通过。Windows Release x64 构建：0 错误、10 条 NAudio 弃用警告。未启动应用、未枚举或使用音频设备、未调用云服务。
 - GitHub Actions [37903408339](https://github.com/resnowh/echo-mac-subtitle/actions/runs/37903408339)：Windows 与 macOS jobs 全部通过；Mac PCM/loopback 检查及 Debug/Release 构建通过。
 
-这补齐一次完整大档案的原子落盘与恢复点检查，但不证明真实两小时录音的周期性检查点队列有界，也不覆盖 UI 响应、持续资源曲线或强退时序。
+这补齐一次完整大档案的原子落盘与恢复点检查，但不覆盖 UI 响应、持续资源曲线或强退时序。
+
+## 2026-10-09 周期检查点积压补充
+
+- 检查发现：录音期间每 3 秒创建一份完整 Archive 快照；旧串行队列会为每份快照保留一个 Task 和快照引用。若慢磁盘持续落后，等待中的完整快照会不断占用内存。
+- 实现调整：同一存档的持久化仍保持串行；允许一个写入执行中，等待区仅保留最新完整快照。较早的待写快照被新完整快照覆盖时，其等待者共享最新快照的完成结果。UI 后台错误观察器也按共享 Task 去重，避免每次定时检查点附加一个等待任务。
+- 故障注入：让第一个写入停在门闩处并最终抛出 `IOException`，然后快速排队 9,999 个后续完整快照。受控写入器只看到失败的第一个快照和成功的最后一个快照；最终完整快照带有 10,000 个累计条目的版本，`FlushAsync` 等待它成功，9,999 个排队调用共享同一完成 Task。
+- 本轮复跑：`Echo.CoreChecks` 51 项通过；完整档案 `2,501,561` bytes，原子写入/刷盘/替换/回读 `87 ms`。Windows Release x64 构建 0 错误、10 条既存 NAudio 弃用警告。未启动应用或访问音频设备。
+- GitHub Actions [37903408339](https://github.com/resnowh/echo-mac-subtitle/actions/runs/37903408339) 的 Windows 与 macOS jobs 全通过，覆盖此前的落盘检查；当前队列合并改动的 CI 会在推送后单独记录。
+
+该测试证明队列在受控慢写下将等待快照数量限制为一个，并验证失败后仍保存最新完整状态；不测真实磁盘长时延迟、UI 定时器与绘制、两小时持续资源曲线或真实录音。
