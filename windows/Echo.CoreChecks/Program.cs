@@ -1377,6 +1377,7 @@ using (var switchTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(12))
         await socket.SendAsync(finished.AsMemory(), WebSocketMessageType.Text, true, switchTimeout.Token);
     }, switchTimeout.Token);
     var syntheticCapture = new SyntheticSpeechSessionCapture { FailNextPrepare = true, FollowCaptureDefault = true };
+    syntheticCapture.QueueMicrophoneFrameReadiness(false, true);
     int switchSessionFailureCount = 0;
     var switchStatuses = new ConcurrentQueue<string>();
     await using (var switchSession = new SpeechSession(new Uri($"ws://127.0.0.1:{switchPort}/"), captureEnabled: true, capture: syntheticCapture))
@@ -1384,6 +1385,8 @@ using (var switchTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(12))
         switchSession.Failure += _ => Interlocked.Increment(ref switchSessionFailureCount);
         switchSession.Status += message => switchStatuses.Enqueue(message);
         await switchSession.StartAsync(new Preferences(), "synthetic", 1, null, null, switchTimeout.Token);
+        bool microphoneStartupRetried = syntheticCapture.MicrophoneReadinessChecks == 2
+            && syntheticCapture.SuccessfulRestarts == 1 && syntheticCapture.IsRunning;
         int framesBeforeRejectedPrepare = syntheticCapture.FramesReadWhileRunning;
         AudioDeviceSwitchException? switchError = null;
         try { await switchSession.SwitchDevicesAsync("new-speaker", null, newMode: 0); }
@@ -1395,23 +1398,29 @@ using (var switchTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(12))
             && syntheticCapture.IsRunning && syntheticCapture.Mode == 1
             && syntheticCapture.FramesReadWhileRunning > framesBeforeRejectedPrepare && syntheticCapture.StopInputsCount == 0
             && Volatile.Read(ref switchSessionFailureCount) == 0;
+        syntheticCapture.QueueMicrophoneFrameReadiness(false, true);
         syntheticCapture.NotifyDefaultDeviceChanged(DataFlow.Capture);
         DateTime deviceChangeDeadline = DateTime.UtcNow.AddSeconds(2);
-        while (syntheticCapture.SuccessfulRestarts == 0 && DateTime.UtcNow < deviceChangeDeadline)
+        while (syntheticCapture.SuccessfulRestarts < 2 && DateTime.UtcNow < deviceChangeDeadline)
             await Task.Delay(20, switchTimeout.Token);
-        bool defaultDeviceChangeContinued = syntheticCapture.SuccessfulRestarts == 1
+        bool defaultDeviceChangeContinued = syntheticCapture.SuccessfulRestarts == 2
             && syntheticCapture.IsRunning && syntheticCapture.Mode == 1
             && syntheticCapture.ActiveInputId == "synthetic-capture-default-2"
             && Volatile.Read(ref switchSessionFailureCount) == 0
             && switchStatuses.Any(message => message.Contains("已跟随系统默认音频设备切换", StringComparison.Ordinal));
         await switchSession.StopAsync();
         await switchServer.WaitAsync(switchTimeout.Token); switchListener.Stop();
+        Check(microphoneStartupRetried && Volatile.Read(ref switchConfigValid) == 1
+            && Volatile.Read(ref switchConnections) == 1 && Volatile.Read(ref switchAudioFrames) > 0,
+            "synthetic microphone startup retries after a missing first frame while keeping one recognition WebSocket");
         Check(failedPrepareKeptOldCapture && Volatile.Read(ref switchConfigValid) == 1
             && Volatile.Read(ref switchConnections) == 1 && Volatile.Read(ref switchAudioFrames) > 0,
             "synthetic live audio switch preparation failure keeps the old input running and sends audio on the same recognition WebSocket");
         Check(defaultDeviceChangeContinued && Volatile.Read(ref switchConnections) == 1
             && Volatile.Read(ref switchAudioFrames) > 0,
             "synthetic default microphone change restarts capture on the new endpoint while preserving the recognition WebSocket and audio flow");
+        Check(syntheticCapture.MicrophoneReadinessChecks == 4 && defaultDeviceChangeContinued,
+            "synthetic default microphone switch retries a candidate with no first frame before replacing the active capture");
     }
 }
 if (args.Contains("--audio"))
@@ -1566,6 +1575,9 @@ sealed class FiniteToneSampleProvider(int sampleRate, int channels, double durat
 
 sealed class SyntheticSpeechSessionCapture : ISpeechSessionCapture
 {
+    private readonly Queue<bool> microphoneFrameReadiness = new();
+    private readonly object readinessGate = new();
+    private int defaultCaptureEndpointVersion = 1;
     private int tailFrames;
     private bool readingAfterRestore;
     private bool restorePending;
@@ -1584,16 +1596,33 @@ sealed class SyntheticSpeechSessionCapture : ISpeechSessionCapture
     public int FramesReadWhileRunning => Volatile.Read(ref framesReadWhileRunning);
     private int successfulRestarts;
     public int SuccessfulRestarts => Volatile.Read(ref successfulRestarts);
+    private int microphoneReadinessChecks;
+    public int MicrophoneReadinessChecks => Volatile.Read(ref microphoneReadinessChecks);
     public bool FailNextPrepare { get; set; }
     public int StopInputsCount { get; private set; }
     private (int Mode, string? OutputId, string? InputId)? prepared;
     public bool FollowCaptureDefault { get; set; }
     public bool IsFollowingDefault(DataFlow flow) => FollowCaptureDefault && flow == DataFlow.Capture;
-    public void NotifyDefaultDeviceChanged(DataFlow flow) => defaultDeviceChanged?.Invoke(flow);
+    public void QueueMicrophoneFrameReadiness(params bool[] results)
+    {
+        lock (readinessGate) foreach (bool result in results) microphoneFrameReadiness.Enqueue(result);
+    }
+    public Task<bool> WaitForMicrophoneInputFrameAsync(bool prepared, TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        Interlocked.Increment(ref microphoneReadinessChecks);
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (readinessGate)
+            return Task.FromResult(microphoneFrameReadiness.Count == 0 || microphoneFrameReadiness.Dequeue());
+    }
+    public void NotifyDefaultDeviceChanged(DataFlow flow)
+    {
+        if (flow == DataFlow.Capture) Interlocked.Increment(ref defaultCaptureEndpointVersion);
+        defaultDeviceChanged?.Invoke(flow);
+    }
     public void Start(int mode, string? outputId, string? inputId)
     {
         Mode = mode; ActiveOutputId = mode is 0 or 2 ? outputId ?? "synthetic-render-default" : null;
-        ActiveInputId = mode is 1 or 2 ? inputId ?? (SuccessfulRestarts == 0 ? "synthetic-capture-default-1" : "synthetic-capture-default-2") : null;
+        ActiveInputId = mode is 1 or 2 ? inputId ?? $"synthetic-capture-default-{Volatile.Read(ref defaultCaptureEndpointVersion)}" : null;
         IsRunning = true; readingAfterRestore = restorePending; restorePending = false;
     }
     public void Restart(int mode, string? outputId, string? inputId)

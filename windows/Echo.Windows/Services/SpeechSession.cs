@@ -55,7 +55,7 @@ public sealed class SpeechSession : IAsyncDisposable
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (captureEnabled) capture.Start(mode, outputId, inputId);
+            if (captureEnabled) await Task.Run(() => capture.Start(mode, outputId, inputId), connectTimeout.Token);
             Task connection = socket.ConnectAsync(endpoint, connectTimeout.Token);
             Task completed = await Task.WhenAny(connection, captureFailureSignal.Task);
             if (completed == captureFailureSignal.Task)
@@ -81,6 +81,8 @@ public sealed class SpeechSession : IAsyncDisposable
             receiver = ReceiveAsync();
             if (Volatile.Read(ref captureFailure) is { } captureError) throw captureError;
             sender = SendAudioAsync();
+            if (mode is 1 or 2)
+                await EnsureMicrophoneInputStartedAsync(connectTimeout.Token);
             Volatile.Write(ref audioTransportReady, true);
             if (Volatile.Read(ref defaultFlowsPending) != 0 && Interlocked.CompareExchange(ref defaultSwitchRunning, 1, 0) == 0)
                 _ = Task.Run(FollowDefaultDeviceAsync);
@@ -99,6 +101,38 @@ public sealed class SpeechSession : IAsyncDisposable
         var match = Regex.Match(error.Message, @"status code\s+'(?<status>[1-5]\d{2})'", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         return match.Success && int.TryParse(match.Groups["status"].Value, out int messageStatus) ? messageStatus : null;
     }
+    private async Task EnsureMicrophoneInputStartedAsync(CancellationToken cancellationToken)
+    {
+        Exception? lastError = null;
+        for (int attempt = 0; attempt <= AudioCapture.MicrophoneStartupRetryLimit; attempt++)
+        {
+            try
+            {
+                if (await capture.WaitForMicrophoneInputFrameAsync(
+                    prepared: false,
+                    timeout: AudioCapture.MicrophoneFirstFrameTimeout,
+                    cancellationToken: cancellationToken)) return;
+                lastError = new TimeoutException("麦克风音频回调未到达。");
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+            catch (Exception error)
+            {
+                throw new AudioCaptureFailureException(
+                    "麦克风启动后采集异常，请检查输入设备和麦克风权限后重试。", error);
+            }
+
+            if (attempt == AudioCapture.MicrophoneStartupRetryLimit) break;
+            Status?.Invoke($"麦克风尚未收到音频，正在重试（{attempt + 1}/{AudioCapture.MicrophoneStartupRetryLimit}）…");
+            await Task.Delay(AudioCapture.MicrophoneRetryDelay, cancellationToken);
+            try { await Task.Run(() => capture.Restart(mode, outputId, inputId), cancellationToken); }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+            catch (Exception error) { lastError = error; }
+        }
+
+        throw new AudioCaptureFailureException(
+            "麦克风启动后仍未收到音频回调，请检查输入设备和麦克风权限后重试。",
+            lastError ?? new IOException("麦克风启动重试已耗尽。"));
+    }
     public async Task SwitchDevicesAsync(string? newOutputId, string? newInputId, bool forceRestart = false, int? newMode = null)
     {
         if (stopping) throw new InvalidOperationException("录音正在停止，暂时不能切换设备。");
@@ -111,12 +145,52 @@ public sealed class SpeechSession : IAsyncDisposable
             if (!forceRestart && targetMode == mode && newOutputId == outputId && newInputId == inputId) return;
             int oldMode = mode;
             string? oldOutputId = capture.ActiveOutputId ?? outputId, oldInputId = capture.ActiveInputId ?? inputId;
-            try { await Task.Run(() => capture.PrepareRestart(targetMode, newOutputId, newInputId)); }
-            catch (Exception prepareError)
+            Exception? prepareError = null;
+            for (int attempt = 0; attempt <= AudioCapture.MicrophoneStartupRetryLimit; attempt++)
             {
+                try { await Task.Run(() => capture.PrepareRestart(targetMode, newOutputId, newInputId), audioStop.Token); }
+                catch (OperationCanceledException) when (audioStop.IsCancellationRequested)
+                {
+                    capture.AbortPreparedRestart();
+                    throw;
+                }
+                catch (Exception error)
+                {
+                    capture.AbortPreparedRestart();
+                    throw new AudioDeviceSwitchException("新音源启动失败；旧音源仍在采集，录音继续。", true, error);
+                }
+
+                if (targetMode is not (1 or 2))
+                {
+                    prepareError = null;
+                    break;
+                }
+
+                try
+                {
+                    if (await capture.WaitForMicrophoneInputFrameAsync(
+                        prepared: true,
+                        timeout: AudioCapture.MicrophoneFirstFrameTimeout,
+                        cancellationToken: audioStop.Token))
+                    {
+                        prepareError = null;
+                        break;
+                    }
+                    prepareError = new TimeoutException("新麦克风在启动后未送来音频回调。");
+                }
+                catch (OperationCanceledException) when (audioStop.IsCancellationRequested)
+                {
+                    capture.AbortPreparedRestart();
+                    throw;
+                }
+                catch (Exception error) { prepareError = error; }
+
                 capture.AbortPreparedRestart();
-                throw new AudioDeviceSwitchException("新音源启动失败；旧音源仍在采集，录音继续。", true, prepareError);
+                if (attempt < AudioCapture.MicrophoneStartupRetryLimit)
+                    await Task.Delay(AudioCapture.MicrophoneRetryDelay, audioStop.Token);
             }
+            if (prepareError is not null)
+                throw new AudioDeviceSwitchException("新麦克风未能启动并送来首帧；旧音源仍在采集，录音继续。", true, prepareError);
             capture.StopInputs();
             try { await SendCaptureTailAsync(); }
             catch (Exception e)

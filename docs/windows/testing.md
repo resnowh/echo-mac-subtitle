@@ -121,3 +121,7 @@ Mac 使用不随应用失活隐藏的 floating panel；Windows 原生浮层创�
 ## A73 主界面 Narrator 控件名称（2026-10-10）
 
 静态审查发现录音开始/停止按钮依赖子元素推导名称，本地存档列表无名称，实时录音状态原先只有 Polite live region，无上下文名称。Windows XAML 为四处添加明确 AutomationProperties.Name，并保留原 AutomationId 与 live setting。160 项 CoreChecks、Release x64 构建（0 警告、0 错误）和 `git diff --check` 通过。未启动 GUI 或运行 UIA/Narrator；键盘遍历、实际播报、高对比度和 Accessibility Insights 仍待验。原始输出和源码哈希见 [A73 底稿](../sources/windows-a73-narrator-accessible-controls-2026-10-10/README.md)。
+
+## A74 麦克风首帧检测与有限重试（2026-10-10）
+
+Mac `SpeechViewModel` 在麦克风安装后 1.2 秒无原始回调时，以 450ms 间隔重试两次；回调已到但转换 PCM 未到时另以 2.5 秒报错。Windows 新增首个非空 WASAPI 回调等待；初始话筒/混合模式若超时，最多重启两次；录音中切换的候选话筒若无首帧则丢弃候选并保留旧采集，正常设备打开错误仍立即失败。合成采集器 + 本地 WebSocket 验证首帧重试、默认话筒切换失败后重试、旧输入继续发 PCM、单一 WebSocket。162 项 CoreChecks 通过；Release x64 构建 0 警告、0 错误。未访问真实话筒、Soniox 或保存音频。Windows 尚无独立的转换 PCM 健康超时；权限、拔插和真实采集连续性仍待设备验收。原始日志、源文件哈希及 Git 基线见 [A74 底稿](../sources/windows-a74-microphone-first-frame-retry-2026-10-10/README.md)。
