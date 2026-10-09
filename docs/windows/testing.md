@@ -14,7 +14,7 @@ Windows 仓库已有 `windows/Echo.CoreChecks/Program.cs`，覆盖转写 token �
 
 ## 本轮已运行
 
-1. `dotnet run --project windows/Echo.CoreChecks -c Release --no-restore`：71 项通过，包括 Mac 经济学/微积分识别纠正规则的正反例、字段级纠正/撤销、跨本地午夜日期分隔、覆盖层和分段默认值、Soniox 请求字段、端点优先、翻译等待及本地 final 化索引。Windows 10.0.26200、.NET SDK 10.0.401；检查不调用云端，不保存真实音频。分段设置数据底稿见 `docs/sources/windows-a24-soniox-segmentation-2026-10-09.md`。
+1. `dotnet run --project windows/Echo.CoreChecks -c Release --no-restore`：73 项通过，包括 Mac 经济学/微积分识别纠正规则的正反例、原文后到达译文和完整双语端点游标、连续空端点、字段级纠正/撤销、跨本地午夜日期分隔、覆盖层和分段默认值、Soniox 请求字段、端点优先、翻译等待及本地 final 化索引。Windows 10.0.26200、.NET SDK 10.0.401；检查不调用云端，不保存真实音频。Soniox 协议依据见 `docs/sources/windows-a25-soniox-endpoint-contract-2026-10-09.md`；分段参数底稿见 `docs/sources/windows-a24-soniox-segmentation-2026-10-09.md`。
 2. Windows Release x64 编译：执行 `dotnet build windows/Echo.Windows/Echo.Windows.csproj -c Release -p:Platform=x64 -p:PublishReadyToRun=false --no-restore`，最新源码成功，0 警告、0 错误；编译没有启动应用。
 3. 执行 `git diff --check`，检查提交路径确保无 `macOS/`、`tests/` 文件。
 4. UI smoke 未运行：本轮不启动应用，因此 UI、Narrator、DPI、多屏、录音硬件均未验。

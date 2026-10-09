@@ -469,8 +469,14 @@ public sealed class TokenAssembler(Segment segment, Action<Subtitle> added, Acti
         if (index >= segment.Entries.Count) return false;
         finalized?.Invoke(segment.Entries[index]);
         sourceCursor = translationCursor = index + 1;
+        ForgetRow(index);
         sourceProvisional.Clear(); translationProvisional.Clear();
         return true;
+    }
+    private void ForgetRow(int index)
+    {
+        sourceFinal.Remove(index); translationFinal.Remove(index);
+        sourceProvisional.Remove(index); translationProvisional.Remove(index);
     }
     private Subtitle Row(int index)
     {
@@ -516,31 +522,15 @@ public sealed class TokenAssembler(Segment segment, Action<Subtitle> added, Acti
             bool final = token.TryGetProperty("is_final", out var f) && f.GetBoolean();
             if (text is "<end>" or "<fin>")
             {
-                string markerLane = token.TryGetProperty("translation_status", out var marker) ? marker.GetString() ?? "" : "";
-                if (markerLane is "" or "none")
-                {
-                    // The normal untagged endpoint finalizes the complete bilingual utterance.
-                    if (final)
-                    {
-                        int completed = Math.Max(sourceCursor, translationCursor);
-                        if (completed < segment.Entries.Count) finalized?.Invoke(segment.Entries[completed]);
-                        sourceCursor = translationCursor = completed + 1;
-                    }
-                    provisionalSource = provisionalTranslation = Math.Max(provisionalSource, provisionalTranslation) + 1;
-                }
-                else
-                {
-                    if (final)
-                    {
-                        if (translation) translationCursor++;
-                        else
-                        {
-                            if (sourceCursor < segment.Entries.Count) finalized?.Invoke(segment.Entries[sourceCursor]);
-                            sourceCursor++;
-                        }
-                    }
-                    if (translation) provisionalTranslation++; else provisionalSource++;
-                }
+                // Mac treats either marker as the boundary for the active bilingual entry.
+                // Soniox emits <end>/<fin> as final markers after the whole stream segment,
+                // so the marker is not owned by the original or translation lane.
+                int completed = Math.Max(sourceCursor, translationCursor);
+                if (completed >= segment.Entries.Count) continue;
+                finalized?.Invoke(segment.Entries[completed]);
+                sourceCursor = translationCursor = completed + 1;
+                provisionalSource = provisionalTranslation = completed + 1;
+                ForgetRow(completed);
                 continue;
             }
             if (text.Length == 0 || text.StartsWith('<')) continue;
@@ -551,6 +541,7 @@ public sealed class TokenAssembler(Segment segment, Action<Subtitle> added, Acti
                     && !string.IsNullOrWhiteSpace(current.English) && current.Speaker is not null && current.Speaker != label)
                 {
                     finalized?.Invoke(current);
+                    ForgetRow(sourceCursor);
                     sourceCursor++;
                     translationCursor = Math.Max(translationCursor, sourceCursor);
                     provisionalSource = sourceCursor;

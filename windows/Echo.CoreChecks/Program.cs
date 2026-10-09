@@ -96,9 +96,19 @@ void Apply(string text) { using var doc = JsonDocument.Parse(text); assembly.App
 Apply("""{"tokens":[{"text":"Hel","is_final":false,"start_ms":0,"end_ms":200}]}""");
 Apply("""{"tokens":[{"text":"Hello","is_final":true,"start_ms":0,"end_ms":400},{"text":" world","is_final":false,"start_ms":400,"end_ms":700}]}""");
 Check(segment.Entries[0].English == "Hello world", "provisional replacement without duplicated prefix");
-Apply("""{"tokens":[{"text":" there.","is_final":true,"start_ms":400,"end_ms":800},{"text":"<end>","is_final":true,"translation_status":"original"},{"text":"Next.","is_final":true,"start_ms":1500,"end_ms":2000}]}""");
-Apply("""{"tokens":[{"text":"你好。","is_final":true,"translation_status":"translation"},{"text":"<end>","is_final":true,"translation_status":"translation"}]}""");
-Check(segment.Entries[0].English == "Hello there." && segment.Entries[0].Chinese == "你好。" && segment.Entries[1].Chinese == "", "delayed translation remains with previous source endpoint");
+Apply("""{"tokens":[{"text":" there.","is_final":true,"start_ms":400,"end_ms":800}]}""");
+Apply("""{"tokens":[{"text":"你好。","is_final":true,"translation_status":"translation"}]}""");
+Apply("""{"tokens":[{"text":"<end>","is_final":true},{"text":"Next.","is_final":true,"start_ms":1500,"end_ms":2000}]}""");
+Check(segment.Entries[0].English == "Hello there." && segment.Entries[0].Chinese == "你好。" && segment.Entries[1].Chinese == "", "translation arriving after source but before the authoritative endpoint stays paired with its utterance");
+var taggedEndpointSegment = new Segment(); var taggedEndpointAssembler = new TokenAssembler(taggedEndpointSegment, _ => { });
+using (var taggedEndpointTurn = JsonDocument.Parse("""{"tokens":[{"text":"One","is_final":true,"translation_status":"original"},{"text":"一","is_final":true,"translation_status":"translation"},{"text":"<end>","is_final":true,"translation_status":"original"},{"text":"Two","is_final":true,"translation_status":"original"},{"text":"二","is_final":true,"translation_status":"translation"},{"text":"<end>","is_final":true}]}""")) taggedEndpointAssembler.Apply(taggedEndpointTurn.RootElement);
+Check(taggedEndpointSegment.Entries.Count == 2 && taggedEndpointSegment.Entries[0].English == "One" && taggedEndpointSegment.Entries[0].Chinese == "一"
+    && taggedEndpointSegment.Entries[1].English == "Two" && taggedEndpointSegment.Entries[1].Chinese == "二",
+    "endpoint markers advance the complete bilingual stream regardless of optional lane metadata");
+var emptyEndpointSegment = new Segment(); var emptyEndpointAssembler = new TokenAssembler(emptyEndpointSegment, _ => { });
+using (var emptyEndpointTurn = JsonDocument.Parse("""{"tokens":[{"text":"<end>","is_final":true},{"text":"<fin>","is_final":true},{"text":"Real first entry","is_final":true}]}""")) emptyEndpointAssembler.Apply(emptyEndpointTurn.RootElement);
+Check(emptyEndpointSegment.Entries.Count == 1 && emptyEndpointSegment.Entries[0].English == "Real first entry",
+    "empty endpoint markers do not advance the cursor or create blank transcript rows");
 string microCorrected = TranscriptRecognitionCorrections.CorrectEnglish("micro economic theory and macroeconomic model");
 string macroCorrected = TranscriptRecognitionCorrections.CorrectEnglish("macroeconomic growth with a microeconomic class");
 Check(microCorrected == "microeconomic theory and microeconomic model"
