@@ -17,6 +17,7 @@
 - A63 将“总结新增内容”限定为本次录音开始后的 Segment，旧存档中未总结的历史字幕不会混入；当前段/全存档总结范围保持独立。146 项 CoreChecks 与 Release x64 构建（0 警告/错误）通过，见 [A63](../docs/sources/windows-a63-summary-session-scope-2026-10-10.md)。
 - A64 将 AI 总结输入与 Mac 对齐：编号、本地真实时间、中英双语文字稿，以及增量/当前段/全存档提示词。150 项 CoreChecks 与 Release x64 构建（0 警告、0 错误）通过；未调用 DeepSeek，见 [A64](../docs/sources/windows-a64-summary-input-parity-2026-10-10/README.md)。
 - A65 补齐 Mac 悬浮字幕菜单中的锁定/解锁操作，设置外观时保留当前调整状态，隐藏浮层时退出调整。152 项 CoreChecks 与 Release x64 构建（0 警告、0 错误）通过；本轮未做 GUI 实测，见 [A65](../docs/sources/windows-a65-overlay-lock-menu-2026-10-10/README.md)。
+- A66 为原生浮层的无 owner/置顶生命周期与主窗关闭清理增加回归检查。154 项 CoreChecks 与 Release x64 构建（0 警告、0 错误）通过；未启动 Echo，主窗最小化后的真实桌面呈现仍待 GUI 验收，见 [A66](../docs/sources/windows-a66-overlay-lifecycle-2026-10-10/README.md)。
 - Soniox 实时模型为 `stt-rt-v5`。Windows 在 WebSocket 握手发送 Bearer API Key，配置 JSON 不重复包含密钥；Mac 当前代码仍把密钥放在起始配置中。按项目约束不改 Mac，Windows 保持官方推荐的握手鉴权。官方迁移时间与测试证据见 [A37 Soniox protocol baseline](../docs/sources/windows-a37-soniox-auth-protocol-2026-10-10.md)。
 - 正式发行尚未就绪：真实浮层/多屏/音频验收、受信任发布者签名、干净机器安装升级和隐私政策仍待完成。Soniox 官方建议客户端使用临时 Key；当前项目没有签发临时 Key 的后端，Windows 采用个人自行填写的 Key 与本机 DPAPI 存储。Android/iOS 不在当前交付范围。
 

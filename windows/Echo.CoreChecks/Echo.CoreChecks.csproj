@@ -18,5 +18,6 @@
   <None Include="../Echo.Windows/MainPage.xaml" Link="Fixtures/MainPage.xaml" CopyToOutputDirectory="PreserveNewest" />
   <None Include="../Echo.Windows/MainPage.xaml.cs" Link="Fixtures/MainPage.xaml.cs" CopyToOutputDirectory="PreserveNewest" />
   <None Include="../Echo.Windows/NativeDesktopSubtitleOverlayWindow.cs" Link="Fixtures/NativeDesktopSubtitleOverlayWindow.cs" CopyToOutputDirectory="PreserveNewest" />
+  <None Include="../Echo.Windows/MainWindow.xaml.cs" Link="Fixtures/MainWindow.xaml.cs" CopyToOutputDirectory="PreserveNewest" />
  </ItemGroup>
 </Project>

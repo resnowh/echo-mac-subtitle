@@ -128,6 +128,16 @@ Check(normalizedNativeOverlaySource.Contains("case WmSettingChange when wParam =
     "native overlay recomputes its placement when Windows reports display or work-area changes");
 Check(normalizedNativeOverlaySource.Contains("public void HideOverlay()\n    {\n        if (adjusting) SetAdjusting(false);", StringComparison.Ordinal),
     "hiding the native overlay exits adjustment mode as Mac hide does");
+Check(normalizedNativeOverlaySource.Contains("0, 0, GetModuleHandle(null), 0);", StringComparison.Ordinal)
+    && normalizedNativeOverlaySource.Contains("ShowWindow(hwnd, SwShowNoActivate);", StringComparison.Ordinal)
+    && normalizedNativeOverlaySource.Contains("SetWindowPos(hwnd, HwndTopMost", StringComparison.Ordinal),
+    "native subtitle overlay is an unowned, topmost window shown without activating or following main-window minimization");
+string mainWindowSource = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "MainWindow.xaml.cs"));
+Check(mainWindowSource.Contains("if (RootFrame.Content is MainPage page) page.CloseSubtitleOverlay();", StringComparison.Ordinal)
+    && normalizedNativeOverlaySource.Contains("expiryTimer.Stop();\n        publishTimer.Stop();", StringComparison.Ordinal)
+    && normalizedNativeOverlaySource.Contains("feed.PropertyChanged -= Feed_PropertyChanged;", StringComparison.Ordinal)
+    && normalizedNativeOverlaySource.Contains("DestroyWindow(hwnd);", StringComparison.Ordinal),
+    "closing the main window disposes the overlay timers, feed subscription, and native HWND");
 var savedDisplaySettings = JsonSerializer.Deserialize<DesktopSubtitleOverlaySettings>(JsonSerializer.Serialize(new DesktopSubtitleOverlaySettings { DisplayId = 42, DisplayDeviceName = @"\\.\DISPLAY2" }, TranscriptFiles.Json), TranscriptFiles.Json);
 var legacyOverlaySettings = JsonSerializer.Deserialize<DesktopSubtitleOverlaySettings>("{}", TranscriptFiles.Json);
 Check(savedDisplaySettings is not null && savedDisplaySettings.DisplayId == 42 && savedDisplaySettings.DisplayDeviceName == @"\\.\DISPLAY2"
