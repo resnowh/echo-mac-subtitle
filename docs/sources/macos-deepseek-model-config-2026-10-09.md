@@ -17,4 +17,10 @@
 - 回归检查覆盖默认值、自定义 `deepseek-v4-pro` 请求、总结与校对两种请求、非法 ID 拒绝及隔离 UserDefaults 保存/加载。
 - 真实 API Key 和模型响应未测试，Echo 未启动。
 
-GitHub macOS CI 结果待代码提交后补录。
+## 验证结果
+
+GitHub Actions [37918780584](https://github.com/resnowh/echo-mac-subtitle/actions/runs/37918780584)，提交 `f68af20dcfdde03649be359df743a70f2c51d972`：
+
+- Mac `Check PCM and loopback WebSocket transport` 通过，日志明确输出 `PASS: configurable DeepSeek model ID, safe validation, and isolated persistence`；Mac Debug/Release 构建通过。
+- Windows CoreChecks、Release x64 和 Mac 生产 decoder 对 Windows 归档的往返检查通过。
+- 没有启动 Echo，没有调用 DeepSeek API，没有使用真实 Key。模型 ID 是否仍被服务端接受，仍需用户填入自己的 Key 后实际验证。
