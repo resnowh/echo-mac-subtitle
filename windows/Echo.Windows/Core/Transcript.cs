@@ -221,6 +221,10 @@ public static class TranscriptFiles
         => AtomicWrite(path, text, afterFlushBeforeReplace: null);
 
     internal static void AtomicWrite(string path, string text, Action? afterFlushBeforeReplace)
+        => AtomicWrite(path, text, static (stream, bytes) => stream.Write(bytes), afterFlushBeforeReplace);
+
+    internal static void AtomicWrite(string path, string text, Action<Stream, byte[]> writeToTemp,
+        Action? afterFlushBeforeReplace = null)
     {
         string directory = Path.GetDirectoryName(Path.GetFullPath(path))!;
         Directory.CreateDirectory(directory);
@@ -231,7 +235,7 @@ public static class TranscriptFiles
             byte[] bytes = new UTF8Encoding(false).GetBytes(text);
             using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
             {
-                stream.Write(bytes);
+                writeToTemp(stream, bytes);
                 stream.Flush(flushToDisk: true);
             }
             afterFlushBeforeReplace?.Invoke();
@@ -243,6 +247,12 @@ public static class TranscriptFiles
             try { if (File.Exists(temp)) File.Delete(temp); }
             catch { /* A failed cleanup must not hide the original write/replace error. */ }
         }
+    }
+    public static string SaveFailureMessage(Exception error)
+    {
+        if (error is IOException && (error.HResult & 0xFFFF) is 39 or 112)
+            return "磁盘空间不足，存档未保存。请释放磁盘空间后重试。";
+        return "存档尚未保存，请导出备份：" + error.Message;
     }
     private static void CleanupAbandonedWrites(string directory, string fileName)
     {

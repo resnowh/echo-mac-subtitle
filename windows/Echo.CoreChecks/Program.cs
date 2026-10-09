@@ -167,6 +167,31 @@ try
     Check(replacedSafely && failedSafely && replacementFailureSafe, "atomic archive replacement flushes data, preserves the last good file and backup on replace failure, and cleans temporary writes");
 }
 finally { if (Directory.Exists(atomicTestRoot)) Directory.Delete(atomicTestRoot, recursive: true); }
+string diskFullTestRoot = Path.Combine(Path.GetTempPath(), "Echo-DiskFullWrite-" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(diskFullTestRoot);
+try
+{
+    string diskFullArchive = Path.Combine(diskFullTestRoot, "archive.json");
+    TranscriptFiles.AtomicWrite(diskFullArchive, "磁盘耗尽前的完整存档");
+    IOException? diskFull = null;
+    try
+    {
+        TranscriptFiles.AtomicWrite(diskFullArchive, new string('新', 8192), (stream, bytes) =>
+        {
+            stream.Write(bytes, 0, Math.Min(64, bytes.Length));
+            throw new IOException("simulated disk full", unchecked((int)0x80070070));
+        });
+    }
+    catch (IOException error) { diskFull = error; }
+    bool diskFullRecovery = diskFull is not null && (diskFull.HResult & 0xFFFF) == 112
+        && File.ReadAllText(diskFullArchive) == "磁盘耗尽前的完整存档"
+        && !File.Exists(diskFullArchive + ".bak")
+        && !Directory.EnumerateFiles(diskFullTestRoot, ".archive.json.*.tmp", SearchOption.TopDirectoryOnly).Any()
+        && TranscriptFiles.SaveFailureMessage(diskFull!) == "磁盘空间不足，存档未保存。请释放磁盘空间后重试。";
+    Check(diskFullRecovery,
+        "simulated disk-full during a partial temp write preserves the previous archive, removes the temp file and reports actionable guidance");
+}
+finally { if (Directory.Exists(diskFullTestRoot)) Directory.Delete(diskFullTestRoot, recursive: true); }
 string crashTestRoot = Path.Combine(Path.GetTempPath(), "Echo-CrashWrite-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(crashTestRoot);
 try

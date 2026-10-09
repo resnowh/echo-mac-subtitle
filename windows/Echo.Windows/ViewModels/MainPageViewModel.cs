@@ -165,18 +165,18 @@ public partial class MainPageViewModel : ObservableObject
     private async Task ReportSaveFailureAsync(Task pending)
     {
         try { await pending; }
-        catch (Exception e) { ui.TryEnqueue(() => Status = "存档尚未保存，请导出备份：" + e.Message); }
+        catch (Exception e) { ui.TryEnqueue(() => Status = TranscriptFiles.SaveFailureMessage(e)); }
     }
     private async Task<bool> SaveArchiveAndWaitAsync(Archive archive)
     {
         try { await EnqueueSave(archive); return true; }
-        catch (Exception e) { Status = "存档尚未保存，请导出备份：" + e.Message; return false; }
+        catch (Exception e) { Status = TranscriptFiles.SaveFailureMessage(e); return false; }
     }
     public async Task<bool> FlushPendingSavesAsync()
     {
         if (SelectedArchive is not null && !await SaveArchiveAndWaitAsync(SelectedArchive)) return false;
         try { await saves.FlushAsync(); return true; }
-        catch (Exception e) { Status = "存档尚未保存，请导出备份：" + e.Message; return false; }
+        catch (Exception e) { Status = TranscriptFiles.SaveFailureMessage(e); return false; }
     }
     public void SaveCorrection(Subtitle entry, string source, string translation)
     {
