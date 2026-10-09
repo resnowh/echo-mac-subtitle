@@ -12,6 +12,7 @@ Windows 来源：当前 PR 分支 `feature/windows-mac-parity`；其历史迁移
 | 当前 Mac 行为 | GitHub `origin/main`，以上 SHA；PR #1–#4 均已合并 | 本表逐项记录 UI、配置、字幕和浮层的源码位置 | 只代表该提交，不代表之后尚未拉取的远端更新 |
 | Windows 实现 | 当前 PR 分支 `windows/`；历史迁移来源见上文 | 文件清单、现有能力、待对齐行为 | 没有运行 UI 或真实音频硬件 |
 | Windows 检查底稿 | `docs/sources/windows-*` | 保留原有构建、核心检查和签名包记录 | 历史测试结论只适用于底稿注明的代码版本 |
+| AI 总结呈现 | Mac `EchoMacApp.swift`、`TranscriptViews.swift` | A29 记录 Markdown 分块、默认展开、收起/复制与 Windows 合成验证 | 尚无 GUI 视觉或剪贴板实测 |
 
 本次核验前已执行 fetch 并以最新 `origin/main` 建立独立分支；没有把旧混合分支合并进来。旧分支曾含 Mac 源码提交，因此不得整体 cherry-pick 或合并。详细测试证据见 [testing.md](testing.md) 与 `docs/sources/windows-*`。
 
@@ -31,7 +32,7 @@ Windows 来源：当前 PR 分支 `feature/windows-mac-parity`；其历史迁移
 | Soniox 端点最大延迟、灵敏度、延迟级别、本地静音兜底、超长段兜底 | 按 Mac 默认值和范围保存；Soniox 请求发送三项端点参数；500ms 本地策略以相同词数/时长双阈值兜底，翻译开启时等待译文，语义端点优先 | 功能存在但行为不同 | Mac `macOS/Models/TranscriptModels.swift`、`SpeechViewModel.swift`、`SonioxRequestBuilder.swift`；Windows `Core/Preferences.cs`、`TranscriptSegmentationPolicy.cs`、`SonioxRequestBuilder.cs`、`MainPageViewModel.cs`。核心契约自动检查；见 A24 数据底稿，真实云端行为未验 |
 | 归档选择、新建、续录、导出、清空、拆分已完成段 | Mac 载入列表按 `updatedAt` 降序；归档中的多个 segment 按各自开始日期保留 | Windows 按 `updatedAt` 降序载入并在保存后移动更新项；多 segment JSON、字幕 metadata 和跨段 SRT 时间间隔有 Swift 形状合成 round-trip 检查 | 部分实现 | Mac `Storage/TranscriptArchiveStore.swift`、`SpeechViewModel.swift`、archive models；Windows `Core/Transcript.cs`、`MainPageViewModel.cs`、`Echo.CoreChecks/Program.cs`。多段验证仅为 Codable 形状夹具，仍缺真实 Mac 生产 encoder 生成的多段 fixture 和用户历史归档双向验证；见 A17/A27 |
 | 停止后生成 SRT；不默认保存原始音频 | Windows 停止后写 SRT，不保存原始音频 | 完全一致 | Windows `MainPageViewModel.cs`、`Core/Transcript.cs`、`Services/AudioCapture.cs`；格式细节见 A17 底稿 |
-| 总结新增内容、当前段或完整归档；可选停止后自动总结；AI 校对与重新翻译建议需人工采纳 | Windows 提供相同总结范围、停止后自动总结开关（默认关闭）、术语和人工确认校对；校对请求区分重译/校对说明、固定 Mac 模型、关闭 thinking、要求完整结果；手动任务优先于待处理自动任务 | 功能存在但行为不同 | Mac `Services/DeepSeekService.swift`、`SpeechViewModel.swift`、`EchoMacApp.swift`；Windows `Services/SubtitleCorrectionService.cs`、`MainPageViewModel.cs`、`Core/Transcript.cs`、`Core/Preferences.cs`。请求与队列合成契约有本地检查；总结交互与 Mac 折叠面板不同；未调用云服务，UI 和实际模型结果未验；见 A28 |
+| 总结新增内容、当前段或完整归档；Markdown 呈现、展开/收起与复制；可选停止后自动总结；AI 校对和重译建议需人工采纳 | Windows 支持三种范围与停止后自动总结开关；总结 Markdown 按 Mac 标题、小标题、项目符号和段落规则展示，默认展开，可收起/展开和复制；校对请求固定 Mac 模型并要求人工确认，手动优先于待自动任务 | 功能存在但行为不同 | Mac `Services/DeepSeekService.swift`、`SpeechViewModel.swift`、`EchoMacApp.swift`、`Views/TranscriptViews.swift`；Windows `Services/SubtitleCorrectionService.cs`、`MainPage.xaml(.cs)`、`MainPageViewModel.cs`、`Core/TranscriptSummaryMarkdown.cs`。Markdown 分块有合成检查；总结状态反馈、面板可见条件、GUI 排版及实际云端结果仍未对齐/验收；见 A28/A29 |
 | 全局透明悬浮双语字幕；位置/大小；锁定；点击穿透；多桌面与全屏空间 | 已实现独立 WinUI 窗口、Topmost、layered/DWM 透明窗口样式、无激活/无边框、点击穿透切换、调整时拖动和缩放、规范化位置/大小保存；显示器选择和全屏应用行为尚未运行验收 | 尚未验证 | Mac `macOS/Views/DesktopSubtitleOverlay.swift`、`macOS/Models/DesktopSubtitleOverlayModels.swift`；Windows `windows/Echo.Windows/DesktopSubtitleOverlayWindow.xaml(.cs)`、`MainPage.xaml(.cs)`、`Core/Preferences.cs`。Windows 显示合成、点击穿透和 DPI 需真实 GUI 验证 |
 | 浮层显示临时识别；最终文本按保留时长消失；更新或更正重置倒计时 | Windows feed 直接投影当前 `Subtitle`，50ms 节流；final 后按配置隐藏；迟到译文/文字更正重置计时，相同文字不延长；不创建第二条采集或 Soniox 会话 | 部分实现 | Mac `macOS/Services/DesktopSubtitleOverlayFeed.swift`、`macOS/Models/DesktopSubtitleOverlayModels.swift`；Windows `Core/DesktopSubtitleOverlay.cs`、`ViewModels/MainPageViewModel.cs`、`DesktopSubtitleOverlayWindow.xaml.cs`；核心语义有 6 项自动检查，GUI 对拍尚未运行 |
 | API Key 本机保护；录音音频不落盘 | Windows 以当前用户 DPAPI 保护密钥；音频缓冲仅用于流式发送 | 部分实现 | Windows `Core/Preferences.cs`、`Services/AudioCapture.cs`；还需对照 Mac Keychain 的错误恢复和设置更新时机 |
@@ -43,7 +44,7 @@ Windows 来源：当前 PR 分支 `feature/windows-mac-parity`；其历史迁移
 1. P0：补齐完整 Mac/Windows 合成 token 序列的自动输出对拍；A17 已验证的合成 Archive 双向 runtime fixture 已通过，但真实用户历史 Archive 仍未覆盖。
 2. P1：主界面语言菜单、滚动跟随行为、四类设置和分段配置已接入；需 GUI smoke 与同一 Soniox 事件序列对拍。
 3. P1：悬浮字幕逻辑和窗口已实现；优先完成透明合成、点击穿透、DPI、多屏和全屏应用验收。它复用同一识别会话和当前字幕状态。
-4. P2：总结面板交互、主题和窗口布局细节。
+4. P2：总结面板已补齐 Mac 风格 Markdown 分块、折叠/展开和复制；继续核验自动总结状态反馈、显示条件、主题和窄窗口布局。
 5. 发布：签名证书、CI 构建产物留存和干净 Windows 机器安装升级验证。
 
 当前状态只反映源码静态比对和既有自动检查记录；未运行 Echo，未做 UI 实机、真实设备采集或正式签名安装验收。

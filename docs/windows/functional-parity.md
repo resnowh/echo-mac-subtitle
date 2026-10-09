@@ -20,7 +20,7 @@
 
 ## P2：AI 与易用性
 
-- 对齐总结新增/当前段/完整存档范围、增量去重、可折叠显示及复制行为。
+- 总结新增/当前段/完整存档、增量去重、Mac 同款 Markdown 分块、默认展开、收起/展开和复制已接入；summaryStatus 与面板可见条件仍待对齐/GUI 验收。呈现底稿见 [A29 summary panel baseline](../sources/windows-a29-summary-panel-2026-10-09.md)。
 - 字幕纠正按改动字段提交：未编辑字段读取当前最新识别值，保持继续接收识别更新；编辑器显示新识别提示，可载入最新文本，关闭未保存修改时先确认。AI 校对继续采用建议后人工确认；不把模型输出自动写回字幕。校对/重新翻译提示、Mac 固定模型、thinking 开关、必需响应字段及手动任务优先级有合成契约检查；云端结果和 UI 交互仍待核对。来源清单见 [A28 AI correction request baseline](../sources/windows-a28-ai-correction-2026-10-09.md)。
 - Soniox 与 DeepSeek 请求均使用 Mac 固定模型；Windows 不再暴露不同模型输入。继续核对 Key 保护、网络失败、费用提示及云端行为。
 

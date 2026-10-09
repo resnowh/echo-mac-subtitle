@@ -59,6 +59,14 @@ Check(overlayFeed.Current!.FinalizedAt == overlayAt.AddSeconds(4) && overlayFeed
 overlayFeed.Clear();
 Check(overlayFeed.Current is null, "overlay feed clears stale subtitle state");
 var segmentation = new TranscriptSegmentationSettings();
+var summaryBlocks = TranscriptSummaryMarkdown.Parse("## 课程总结\r\n\r\n概览第一行\r\n第二行\r\n\r\n### 要点\r\n- 第一项\r\n* 第二项\r\n");
+Check(summaryBlocks.Select(block => (block.Kind, block.Text)).SequenceEqual([
+    (SummaryMarkdownBlockKind.Title, "课程总结"),
+    (SummaryMarkdownBlockKind.Paragraph, "概览第一行\n第二行"),
+    (SummaryMarkdownBlockKind.Heading, "要点"),
+    (SummaryMarkdownBlockKind.Bullet, "第一项"),
+    (SummaryMarkdownBlockKind.Bullet, "第二项")
+]), "summary markdown blocks match the Mac title, heading, bullet, and paragraph rules across Windows line endings");
 Check(segmentation.SonioxMaxEndpointDelayMilliseconds == 3000 && segmentation.SonioxEndpointSensitivity == -.3
     && segmentation.LocalSilenceThresholdSeconds == 4.5 && segmentation.LocalSilenceMinimumWordCount == 5
     && segmentation.LongSegmentWordThreshold == 80 && segmentation.LongSegmentDurationThresholdSeconds == 90,

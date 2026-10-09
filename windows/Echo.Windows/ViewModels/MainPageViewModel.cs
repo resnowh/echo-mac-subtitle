@@ -66,6 +66,7 @@ public partial class MainPageViewModel : ObservableObject
     [ObservableProperty] public partial bool IsBusy { get; set; }
     [ObservableProperty] public partial bool IsRecording { get; set; }
     [ObservableProperty] public partial bool IsSummarizing { get; set; }
+    [ObservableProperty] public partial bool HasGeneratedSummary { get; set; }
     [ObservableProperty] public partial double Level { get; set; }
     public bool CanEdit => !IsBusy && !IsRecording;
     public bool CanSwitchAudioDevices => IsRecording && !IsBusy;
@@ -82,6 +83,7 @@ public partial class MainPageViewModel : ObservableObject
         Entries.Clear(); correctionSuggestions.Clear(); correctionStatuses.Clear();
         if (value is not null) foreach (var entry in value.Segments.OrderBy(s => s.StartedAt).SelectMany(s => s.Entries)) Entries.Add(entry);
         Summary = value?.Summary ?? "可总结新增内容、当前录音段或整个存档。";
+        HasGeneratedSummary = !string.IsNullOrWhiteSpace(value?.Summary);
     }
     public MainPageViewModel()
     {
@@ -782,6 +784,7 @@ public partial class MainPageViewModel : ObservableObject
             Summary = scope == 0 && !string.IsNullOrWhiteSpace(requestedArchive.Summary)
                 ? requestedArchive.Summary + "\n\n" + combined : combined;
             requestedArchive.Summary = Summary;
+            HasGeneratedSummary = true;
             foreach (var e in submitted) requestedArchive.SummarizedEntries[e.Key] = TranscriptFiles.SummarySignature(e.Value);
             if (Save()) Status = "总结已生成并保存在当前存档中。";
         }

@@ -8,10 +8,12 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
+using Microsoft.UI.Text;
 using Microsoft.Windows.Storage.Pickers;
 using System.Diagnostics;
 using System.Collections.Specialized;
 using System.Text.Json;
+using Windows.ApplicationModel.DataTransfer;
 
 namespace Echo_Windows;
 
@@ -37,6 +39,7 @@ public sealed partial class MainPage : Page
     private readonly HashSet<Guid> observedSubtitleIds = [];
     private int waveformFrame;
     private bool initialized;
+    private bool isSummaryExpanded = true;
     private bool loadingSettings = true;
     public MainPageViewModel ViewModel { get; } = new();
     public MainPage()
@@ -104,7 +107,10 @@ public sealed partial class MainPage : Page
         {
             if (e.PropertyName is nameof(ViewModel.Level) or nameof(ViewModel.IsRecording) or nameof(ViewModel.Status)) UpdateAudioDisplay();
             if (e.PropertyName == nameof(ViewModel.IsRecording)) UpdateRecordingLanguageHint();
+            if (e.PropertyName == nameof(ViewModel.Summary)) RenderSummary();
+            if (e.PropertyName == nameof(ViewModel.HasGeneratedSummary)) UpdateSummaryVisibility();
         };
+        RenderSummary();
         UpdateAudioDisplay();
         UpdateLanguageHeaders();
         UpdateOverlayMenuText();
@@ -464,6 +470,70 @@ public sealed partial class MainPage : Page
         NewContentButton.Visibility = Visibility.Collapsed;
     }
     private async void Summary_Click(object sender, RoutedEventArgs e) => await ViewModel.SummarizeAsync(SummaryScope.SelectedIndex);
+    private void SummaryExpand_Click(object sender, RoutedEventArgs e)
+    {
+        isSummaryExpanded = !isSummaryExpanded;
+        UpdateSummaryVisibility();
+    }
+    private void SummaryCopy_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var package = new DataPackage();
+            package.SetText(ViewModel.Summary);
+            Clipboard.SetContent(package);
+            SummaryCopyButton.Content = "已复制";
+        }
+        catch { SummaryCopyButton.Content = "复制失败"; }
+    }
+    private void RenderSummary()
+    {
+        SummaryBlocks.Children.Clear();
+        SummaryCopyButton.Content = "复制";
+        foreach (var block in TranscriptSummaryMarkdown.Parse(ViewModel.Summary))
+        {
+            if (block.Kind == SummaryMarkdownBlockKind.Bullet)
+            {
+                var row = new Grid { ColumnSpacing = 8 };
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                var marker = new TextBlock { Text = "•", FontSize = 15, VerticalAlignment = VerticalAlignment.Top };
+                var body = CreateSummaryText(block.Text, 15);
+                Grid.SetColumn(body, 1);
+                row.Children.Add(marker);
+                row.Children.Add(body);
+                SummaryBlocks.Children.Add(row);
+                continue;
+            }
+
+            double fontSize = block.Kind switch
+            {
+                SummaryMarkdownBlockKind.Title => 18,
+                SummaryMarkdownBlockKind.Heading => 16,
+                _ => 15
+            };
+            var text = CreateSummaryText(block.Text, fontSize,
+                emphasize: block.Kind is SummaryMarkdownBlockKind.Title or SummaryMarkdownBlockKind.Heading);
+            if (block.Kind == SummaryMarkdownBlockKind.Heading) text.Margin = new Thickness(0, 8, 0, 0);
+            else if (block.Kind == SummaryMarkdownBlockKind.Title) text.Margin = new Thickness(0, 2, 0, 0);
+            SummaryBlocks.Children.Add(text);
+        }
+        UpdateSummaryVisibility();
+    }
+    private void UpdateSummaryVisibility()
+    {
+        SummaryScrollViewer.Visibility = ViewModel.HasGeneratedSummary && isSummaryExpanded ? Visibility.Visible : Visibility.Collapsed;
+        SummaryExpandButton.Content = isSummaryExpanded ? "收起" : "展开全部";
+    }
+    private static TextBlock CreateSummaryText(string value, double fontSize, bool emphasize = false) => new()
+    {
+        Text = value,
+        FontSize = fontSize,
+        FontWeight = emphasize ? FontWeights.SemiBold : FontWeights.Normal,
+        TextWrapping = TextWrapping.Wrap,
+        IsTextSelectionEnabled = true,
+        HorizontalAlignment = HorizontalAlignment.Stretch
+    };
     private async void Correction_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button { DataContext: Subtitle entry }) return;
