@@ -138,7 +138,7 @@ void ApplyEdited(string text) { using var doc = JsonDocument.Parse(text); edited
 ApplyEdited("""{"tokens":[{"text":"Recognized","is_final":false}]}""");
 var edited = editedSegment.Entries[0]; edited.Edit("人工纠正", "");
 ApplyEdited("""{"tokens":[{"text":"Recognized text","is_final":false}]}""");
-ApplyEdited("""{"tokens":[{"text":"识别译文","is_final":false,"translation_status":"translation"}]}""");
+ApplyEdited("""{"tokens":[{"text":"Recognized text","is_final":false},{"text":"识别译文","is_final":false,"translation_status":"translation"}]}""");
 Check(edited.English == "人工纠正" && edited.Chinese == "识别译文" && edited.Correction?.RawSource == "Recognized text", "manual source lock preserves correction while live recognition updates raw text and unlocked translation");
 var correctionSnapshot = JsonSerializer.Serialize(new Archive { Segments = [editedSegment] }, TranscriptFiles.Json);
 Check(edited.UndoCorrection() && edited.English == "Recognized" && edited.Correction?.SourceLocked == true, "undo restores prior subtitle and locks the restored human choice");
@@ -165,6 +165,14 @@ using (var invalidMetadata = JsonDocument.Parse("""{"tokens":[{"text":"metadata"
 Check(provisionalLanguageStable && languageSegment.Entries[0].Language == "ja"
     && invalidMetadataSegment.Entries[0].Speaker is null && invalidMetadataSegment.Entries[0].Language is null,
     "provisional language stays stable until final, null metadata is ignored, and non-string speaker/language values are rejected");
+var provisionalSnapshotSegment = new Segment(); var provisionalSnapshotAssembler = new TokenAssembler(provisionalSnapshotSegment, _ => { });
+void ApplyProvisionalSnapshot(string text) { using var doc = JsonDocument.Parse(text); provisionalSnapshotAssembler.Apply(doc.RootElement); }
+ApplyProvisionalSnapshot("""{"tokens":[{"text":"Hello","is_final":false},{"text":"你好","is_final":false,"translation_status":"translation"}]}""");
+ApplyProvisionalSnapshot("""{"tokens":[{"text":"Hello there","is_final":false}]}""");
+bool previousTranslationCleared = provisionalSnapshotSegment.Entries[0].English == "Hello there" && provisionalSnapshotSegment.Entries[0].Chinese == "";
+ApplyProvisionalSnapshot("""{"tokens":[{"text":"Hello there!","is_final":false},{"text":"你好！","is_final":false,"translation_status":"translation"}]}""");
+Check(previousTranslationCleared && provisionalSnapshotSegment.Entries[0].English == "Hello there!" && provisionalSnapshotSegment.Entries[0].Chinese == "你好！",
+    "each Mac-style response replaces provisional source and translation as one snapshot, preventing stale opposite-lane text");
 var archive = new Archive { CreatedAt = 800000000, Summary = "已保存总结", SummarizedEntries = { [segment.Entries[0].Id] = TranscriptFiles.SummarySignature(segment.Entries[0].English) }, Segments = [segment, new Segment { StartedAt = 800000010, Entries = [new Subtitle { Start = 0, End = 1, English = "Again" }] }] };
 var snapshot = TranscriptFiles.Snapshot(archive);
 archive.Segments[0].Entries[0].English = "后续编辑";

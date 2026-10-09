@@ -498,23 +498,20 @@ public sealed class TokenAssembler(Segment segment, Action<Subtitle> added, Acti
     }
     public void Apply(JsonElement message)
     {
-        if (!message.TryGetProperty("tokens", out var tokens)) return;
-        bool hasSourceUpdate = false, hasTranslationUpdate = false;
-        foreach (var token in tokens.EnumerateArray())
+        // Mac resets both provisional buffers for every WebSocket response. Treat the
+        // response as the latest provisional snapshot across both lanes.
+        sourceProvisional.Clear(); translationProvisional.Clear();
+        if (!message.TryGetProperty("tokens", out var tokens) || tokens.ValueKind != JsonValueKind.Array)
         {
-            if (!token.TryGetProperty("text", out var value)) continue;
-            var text = value.GetString() ?? "";
-            if (text.Length == 0 || text.StartsWith('<')) continue;
-            bool isTranslation = token.TryGetProperty("translation_status", out var lane) && lane.GetString() == "translation";
-            if (isTranslation) hasTranslationUpdate = true; else hasSourceUpdate = true;
+            int activeRowWithoutTokenArray = Math.Max(sourceCursor, translationCursor);
+            if (activeRowWithoutTokenArray < segment.Entries.Count
+                && (!string.IsNullOrEmpty(sourceFinal.GetValueOrDefault(activeRowWithoutTokenArray))
+                    || !string.IsNullOrEmpty(translationFinal.GetValueOrDefault(activeRowWithoutTokenArray))))
+                ApplyRecognition(activeRowWithoutTokenArray);
+            return;
         }
-        // Some services send source and translation provisional updates in separate messages.
-        // Replace only the lane present in this response and preserve the other lane's latest snapshot.
-        var affectedRows = new HashSet<int>();
-        if (hasSourceUpdate) { affectedRows.UnionWith(sourceProvisional.Keys); sourceProvisional.Clear(); }
-        if (hasTranslationUpdate) { affectedRows.UnionWith(translationProvisional.Keys); translationProvisional.Clear(); }
-        foreach (int i in affectedRows) ApplyRecognition(i);
         int provisionalSource = sourceCursor, provisionalTranslation = translationCursor;
+        var changedRows = new HashSet<int>();
         foreach (var token in tokens.EnumerateArray())
         {
             string text = token.TryGetProperty("text", out var tv) ? tv.GetString() ?? "" : "";
@@ -527,6 +524,8 @@ public sealed class TokenAssembler(Segment segment, Action<Subtitle> added, Acti
                 // so the marker is not owned by the original or translation lane.
                 int completed = Math.Max(sourceCursor, translationCursor);
                 if (completed >= segment.Entries.Count) continue;
+                ApplyRecognition(completed);
+                changedRows.Remove(completed);
                 finalized?.Invoke(segment.Entries[completed]);
                 sourceCursor = translationCursor = completed + 1;
                 provisionalSource = provisionalTranslation = completed + 1;
@@ -539,8 +538,11 @@ public sealed class TokenAssembler(Segment segment, Action<Subtitle> added, Acti
             {
                 string label = "Speaker " + finalSpeaker.GetString();
                 if (sourceCursor < segment.Entries.Count && segment.Entries[sourceCursor] is { } current
-                    && !string.IsNullOrWhiteSpace(current.English) && current.Speaker is not null && current.Speaker != label)
+                    && !string.IsNullOrWhiteSpace(sourceFinal.GetValueOrDefault(sourceCursor))
+                    && current.Speaker is not null && current.Speaker != label)
                 {
+                    ApplyRecognition(sourceCursor);
+                    changedRows.Remove(sourceCursor);
                     finalized?.Invoke(current);
                     ForgetRow(sourceCursor);
                     sourceCursor++;
@@ -572,8 +574,14 @@ public sealed class TokenAssembler(Segment segment, Action<Subtitle> added, Acti
                 var dict = translation ? translationProvisional : sourceProvisional;
                 dict[index] = dict.GetValueOrDefault(index, "") + text;
             }
-            ApplyRecognition(index);
+            changedRows.Add(index);
         }
+        int activeRow = Math.Max(sourceCursor, translationCursor);
+        if (activeRow < segment.Entries.Count
+            && (!string.IsNullOrEmpty(sourceFinal.GetValueOrDefault(activeRow))
+                || !string.IsNullOrEmpty(translationFinal.GetValueOrDefault(activeRow))))
+            changedRows.Add(activeRow);
+        foreach (int index in changedRows.OrderBy(i => i)) ApplyRecognition(index);
         segment.UpdatedAt = Archive.Now;
     }
 }

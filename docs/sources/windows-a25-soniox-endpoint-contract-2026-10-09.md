@@ -20,6 +20,7 @@
 - 译文可以在原文 token 之后到达，但按官方实时翻译流顺序，端点标记属于整个定稿 segment 的尾部。若翻译在端点之后才到达，不属于该协议说明的标准顺序；Mac 当前实现也不会把这种 token 回填到前一条已结束字幕。
 - 连续的空 `<end>`/`<fin>` 不应跳过字幕索引或生成空行；Windows 回归对此单独检查。
 - Mac `SpeechViewModel.handleTranscriptResponse` 在 provisional token 上只填入尚为空的 speaker/language 标签；final token 才能更新已存在的标签。Windows 逐字幕行实现相同语言规则，并以 `en` provisional → `ja` provisional → `ja` final 的固定序列验证。
+- Mac 在处理每条响应前都把 `partialEnglish` 与 `partialChinese` 同时清空，再由本次 `tokens` 建立新快照；Windows 也整体清空两 lane provisional 缓冲，防止只更新原文时把上一响应的临时译文继续显示。CoreChecks 对“原文+译文 → 仅新原文 → 新的原文+译文”序列验证。
 
 关于“翻译结果在端点标记前完成”是根据官方所述的统一流、原文先于译文、`<end>` 位于 segment 末尾综合得出的实现推论；官方页面没有逐例展示带翻译的 `<end>` 响应全文。因此保留端到端 token fixture 对拍待验状态。
 
