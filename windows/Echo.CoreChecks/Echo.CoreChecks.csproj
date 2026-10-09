@@ -5,6 +5,7 @@
   <Compile Include="../Echo.Windows/Services/AudioCapture.cs" Link="AudioCapture.cs" />
   <Compile Include="../Echo.Windows/Services/ClockDriftController.cs" Link="ClockDriftController.cs" />
   <Compile Include="../Echo.Windows/Services/SleepRecoveryState.cs" Link="SleepRecoveryState.cs" />
+  <Compile Include="../Echo.Windows/Services/SubtitleCorrectionService.cs" Link="SubtitleCorrectionService.cs" />
   <Compile Include="../Echo.Windows/Services/SpeechSession.cs" Link="SpeechSession.cs" />
   <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
   <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.12" />

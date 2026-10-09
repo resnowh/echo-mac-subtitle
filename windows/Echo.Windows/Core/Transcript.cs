@@ -173,7 +173,11 @@ public sealed class SubtitleRevision
     public DateTimeOffset Date { get; set; }
 }
 
-public sealed record CorrectionSuggestion(string Source, string Translation, string Reason, bool Uncertain);
+public sealed record CorrectionSuggestion(
+    [property: JsonRequired] string Source,
+    [property: JsonRequired] string Translation,
+    [property: JsonRequired] string Reason,
+    [property: JsonRequired] bool Uncertain);
 
 public static class TranscriptTextChunks
 {

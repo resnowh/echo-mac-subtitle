@@ -125,6 +125,22 @@ Apply("""{"tokens":[{"text":" there.","is_final":true,"start_ms":400,"end_ms":80
 Apply("""{"tokens":[{"text":"你好。","is_final":true,"translation_status":"translation"}]}""");
 Apply("""{"tokens":[{"text":"<end>","is_final":true},{"text":"Next.","is_final":true,"start_ms":1500,"end_ms":2000}]}""");
 Check(segment.Entries[0].English == "Hello there." && segment.Entries[0].Chinese == "你好。" && segment.Entries[1].Chinese == "", "translation arriving after source but before the authoritative endpoint stays paired with its utterance");
+using var translationOnlyRequest = SubtitleCorrectionService.CreateRequest("test-key", "deepseek-v4-flash", "Exact source", "旧译文", "nearby context", "term", "zh", translationOnly: true);
+using var translationOnlyBody = JsonDocument.Parse(await translationOnlyRequest.Content!.ReadAsStringAsync());
+var translationOnlyMessages = translationOnlyBody.RootElement.GetProperty("messages");
+using var translationOnlyPayload = JsonDocument.Parse(translationOnlyMessages[1].GetProperty("content").GetString()!);
+using var correctionRequest = SubtitleCorrectionService.CreateRequest("test-key", "deepseek-v4-flash", "Source to review", "译文", "previous\ncurrent\nnext", "term", "zh", translationOnly: false);
+using var correctionBody = JsonDocument.Parse(await correctionRequest.Content!.ReadAsStringAsync());
+Check(translationOnlyRequest.Headers.Authorization?.Scheme == "Bearer"
+    && translationOnlyBody.RootElement.GetProperty("thinking").GetProperty("type").GetString() == "disabled"
+    && translationOnlyMessages[0].GetProperty("content").GetString()!.Contains("source 必须逐字保持输入原文", StringComparison.Ordinal)
+    && translationOnlyPayload.RootElement.GetProperty("source").GetString() == "Exact source"
+    && correctionBody.RootElement.GetProperty("messages")[0].GetProperty("content").GetString()!.Contains("前后文仅用于判断，不并入当前句", StringComparison.Ordinal),
+    "DeepSeek correction requests match Mac thinking and distinguish translation-only from contextual proofreading instructions");
+bool missingUncertainRejected = false;
+try { JsonSerializer.Deserialize<CorrectionSuggestion>("""{"source":"s","translation":"t","reason":"r"}""", TranscriptFiles.Json); }
+catch (JsonException) { missingUncertainRejected = true; }
+Check(missingUncertainRejected, "DeepSeek correction response requires the Mac Codable uncertain field instead of silently defaulting to false");
 var taggedEndpointSegment = new Segment(); var taggedEndpointAssembler = new TokenAssembler(taggedEndpointSegment, _ => { });
 using (var taggedEndpointTurn = JsonDocument.Parse("""{"tokens":[{"text":"One","is_final":true,"translation_status":"original"},{"text":"一","is_final":true,"translation_status":"translation"},{"text":"<end>","is_final":true,"translation_status":"original"},{"text":"Two","is_final":true,"translation_status":"original"},{"text":"二","is_final":true,"translation_status":"translation"},{"text":"<end>","is_final":true}]}""")) taggedEndpointAssembler.Apply(taggedEndpointTurn.RootElement);
 Check(taggedEndpointSegment.Entries.Count == 2 && taggedEndpointSegment.Entries[0].English == "One" && taggedEndpointSegment.Entries[0].Chinese == "一"

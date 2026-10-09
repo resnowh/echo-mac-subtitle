@@ -288,9 +288,14 @@ public partial class MainPageViewModel : ObservableObject
     public string? GetCorrectionStatus(Subtitle entry) => correctionStatuses.GetValueOrDefault(entry.Id);
     public async Task<CorrectionSuggestion?> RequestCorrectionAsync(Subtitle entry, bool translateOnly = false, bool automatic = false)
     {
+        bool acquiredCorrectionQueue = false;
         try
         {
             if (automatic && !Config.AutoCorrectionEnabled) return null;
+            await correctionQueue.WaitAsync();
+            acquiredCorrectionQueue = true;
+            if (automatic && !Config.AutoCorrectionEnabled) return null;
+            if (!Entries.Contains(entry) || string.IsNullOrWhiteSpace(entry.English)) return null;
             string key = Preferences.Unprotect(Config.DeepSeekSecret).Trim();
             if (key.Length == 0) throw new InvalidOperationException("请先在设置中填写 DeepSeek API Key。");
             if (entry.English.Length is 0 or > 4000 || entry.Chinese.Length > 4000) throw new InvalidOperationException("本条文字为空或过长，无法请求校对。");
@@ -300,7 +305,7 @@ public partial class MainPageViewModel : ObservableObject
             Status = translateOnly ? "正在请求重新翻译…" : "正在请求 AI 校对建议…";
             correctionStatuses[entry.Id] = automatic ? "正在自动生成校对建议…" : Status;
             var suggestion = await corrections.SuggestAsync(key, Config.DeepSeekModel, source, translation, context,
-                Config.CorrectionTerms, Config.Translate ? Config.TargetLanguage : "none", CancellationToken.None);
+                Config.CorrectionTerms, Config.Translate ? Config.TargetLanguage : "none", translateOnly, CancellationToken.None);
             if ((automatic && !Config.AutoCorrectionEnabled) || !Entries.Contains(entry) || entry.English != source || entry.Chinese != translation || (entry.Correction?.Revision ?? Guid.Empty) != revision)
                 throw new InvalidOperationException("字幕在请求期间已变化，旧建议已忽略。");
             if (translateOnly && suggestion.Source != source) throw new InvalidDataException("重新翻译返回了不同原文，已忽略。");
@@ -310,6 +315,7 @@ public partial class MainPageViewModel : ObservableObject
             return suggestion;
         }
         catch (Exception e) { Status = "AI 校对失败：" + e.Message; correctionStatuses[entry.Id] = Status; return null; }
+        finally { if (acquiredCorrectionQueue) correctionQueue.Release(); }
     }
     private void ScheduleAutomaticCorrection(Subtitle entry)
     {
@@ -323,7 +329,6 @@ public partial class MainPageViewModel : ObservableObject
         try
         {
             await Task.Delay(TimeSpan.FromSeconds(3));
-            await correctionQueue.WaitAsync();
             var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             if (!ui.TryEnqueue(async () =>
             {
@@ -332,8 +337,8 @@ public partial class MainPageViewModel : ObservableObject
                     if (generation == correctionGeneration && Config.AutoCorrectionEnabled && Entries.Contains(entry))
                         await RequestCorrectionAsync(entry, automatic: true);
                 }
-                finally { correctionScheduled.Remove(entry.Id); correctionQueue.Release(); completed.TrySetResult(); }
-            })) { correctionQueue.Release(); return; }
+                finally { correctionScheduled.Remove(entry.Id); completed.TrySetResult(); }
+            })) return;
             await completed.Task;
         }
         catch { /* Automatic suggestions are optional; recording and saved text remain unaffected. */ }
