@@ -14,7 +14,7 @@ Windows 仓库已有 `windows/Echo.CoreChecks/Program.cs`，覆盖转写 token �
 
 ## 本轮已运行
 
-1. 2026-10-10 当前本机工作区 `dotnet run --project windows/Echo.CoreChecks/Echo.CoreChecks.csproj -c Release --no-restore`：127 项通过，含 A35/A42/A43 Soniox 18 响应 fixture、A51 音源模式路由、A52/A53 纠正历史/滚动视口源码契约，以及既有字幕纠正、归档、AI 请求、分段、浮层和音频处理检查；不调用云端、不保存真实音频。Windows Release x64 构建成功，0 警告、0 错误。Mac production differential 与 Archive 往返以各自 CI 底稿为准；PR #5 的当前远端 HEAD 是 A52 commit `91bb68b`，A53 尚未推送，其 GUI 行为也没有实测。此前 95/97/99/100/104/105/111/116/119/120/123/126 项结果只适用于各自记录的版本。
+1. 2026-10-10 当前本机工作区 `dotnet run --project windows/Echo.CoreChecks/Echo.CoreChecks.csproj -c Release --no-restore`：128 项通过，含 A35/A42/A43 Soniox 18 响应 fixture、A51 音源模式路由、A52/A53 纠正历史/滚动视口源码契约、A54 automatic/specified 语言请求契约，以及既有字幕纠正、归档、AI 请求、分段、浮层和音频处理检查；不调用云端、不保存真实音频。Windows Release x64 构建成功，0 警告、0 错误。A54 抓取的 Soniox 官方页面 HTML 原文和 SHA-256 见对应底稿。PR #5 的远端 HEAD 与本地提交应单独核验；GUI 编辑器交互、设置动态切换和真实音频会话仍未验收。此前 95/97/99/100/104/105/111/116/119/120/123/126/127 项结果只适用于各自记录的版本。
 2. 2026-10-10 Windows Release x64 编译：执行 `dotnet build windows/Echo.Windows/Echo.Windows.csproj -c Release -p:Platform=x64 -p:PublishReadyToRun=false --no-restore`，成功，0 警告、0 错误；编译没有启动应用。
 3. 执行 `git diff --check`。本轮改动仅限 `windows/` 和 `docs/`，未改 `macOS/` 或 `tests/`。
 4. Windows 调试实例已启动并完成 `windows/ui-smoke.ps1` 的 12 项 UIA 检查：录音页、停止按钮隐藏、电脑音频默认项、源/目标语言可读标签、设置入口、AI 服务分类和 Soniox Key 控件存在、模型输入不开放、返回主界面、导出菜单及字幕列表。没有点击录音、保存设置或调用云端；应用加载了 MSIX 包隔离目录中的既有存档，因此原始截图和 UIA 全树未留存，避免把本机字幕纳入仓库。仅留检查名称/结果。A33 还记录首次启动的 NullReferenceException 及修复。UIA 通过不等于视觉、浮层透明、键盘、Narrator、DPI 或多屏验收。

@@ -187,13 +187,23 @@ segmentation.SonioxMaxEndpointDelayMilliseconds = 4000; segmentation.SonioxEndpo
 segmentation.LocalSilenceThresholdSeconds = -1; segmentation.Validate();
 Check(segmentation.SonioxMaxEndpointDelayMilliseconds == 3000 && segmentation.SonioxEndpointSensitivity == -.3
     && segmentation.LocalSilenceThresholdSeconds == 4.5, "invalid segmentation preferences recover to safe defaults");
-var requestPreferences = new Preferences { SourceLanguage = "", Translate = false, SonioxModel = "user-selected-model" };
+var requestPreferences = new Preferences { SourceLanguage = "", Strict = true, Translate = false, SonioxModel = "user-selected-model" };
 var requestSegmentation = new TranscriptSegmentationSettings { SonioxMaxEndpointDelayMilliseconds = 1750, SonioxEndpointSensitivity = .2, SonioxEndpointLatencyAdjustmentLevel = 2 };
 var sonioxRequest = SonioxRequestBuilder.Build(requestPreferences, requestSegmentation);
 Check((int)sonioxRequest["max_endpoint_delay_ms"] == 1750 && (double)sonioxRequest["endpoint_sensitivity"] == .2
     && (int)sonioxRequest["endpoint_latency_adjustment_level"] == 2 && !sonioxRequest.ContainsKey("language_hints")
-    && !sonioxRequest.ContainsKey("translation") && (string)sonioxRequest["model"] == EchoServiceModels.SonioxRealtime,
-    "Soniox request uses the Mac fixed model, carries configured endpoint settings, and omits disabled language and translation options");
+    && !sonioxRequest.ContainsKey("language_hints_strict") && !sonioxRequest.ContainsKey("translation")
+    && (string)sonioxRequest["model"] == EchoServiceModels.SonioxRealtime,
+    "Soniox automatic-language request removes both hints and strict mode, carries endpoint settings, and omits disabled translation");
+requestPreferences.SourceLanguage = "en";
+var strictLanguageRequest = SonioxRequestBuilder.Build(requestPreferences, requestSegmentation);
+requestPreferences.SourceLanguage = "";
+var automaticAfterStrictRequest = SonioxRequestBuilder.Build(requestPreferences, requestSegmentation);
+Check(((string[])strictLanguageRequest["language_hints"])[0] == "en"
+    && (bool)strictLanguageRequest["language_hints_strict"]
+    && !automaticAfterStrictRequest.ContainsKey("language_hints")
+    && !automaticAfterStrictRequest.ContainsKey("language_hints_strict"),
+    "source-language selection and strict preference match Mac specified/automatic transitions without applying strict restriction to auto mode");
 var sonioxContext = (Dictionary<string, object>)sonioxRequest["context"];
 var sonioxGeneral = (Dictionary<string, string>[])sonioxContext["general"];
 var sonioxTerms = (string[])sonioxContext["terms"];
