@@ -62,9 +62,9 @@ jobs:
           path: windows/Echo.CoreChecks/Fixtures/Runtime
 
       - name: Run core checks including Mac Archive import and SRT comparison
-        run: >-
-          $env:ECHO_MAC_ARCHIVE_FIXTURE = "windows/Echo.CoreChecks/Fixtures/Runtime/mac-archive.json"
-          dotnet run --project windows/Echo.CoreChecks -c Release --no-restore
+        env:
+          ECHO_MAC_ARCHIVE_FIXTURE: windows/Echo.CoreChecks/Fixtures/Runtime/mac-archive.json
+        run: dotnet run --project windows/Echo.CoreChecks -c Release --no-restore
 
       - name: Upload Windows Archive round trip
         uses: actions/upload-artifact@v4
