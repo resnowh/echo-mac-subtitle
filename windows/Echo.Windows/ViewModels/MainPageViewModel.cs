@@ -164,8 +164,8 @@ public partial class MainPageViewModel : ObservableObject
                 }
                 return (Archives: archives, Unreadable: unreadable);
             });
-            foreach (var archive in result.Archives) Archives.Add(archive);
-            SelectedArchive = Archives.OrderByDescending(a => a.UpdatedAt).FirstOrDefault();
+            foreach (var archive in ArchiveOrdering.NewestFirst(result.Archives)) Archives.Add(archive);
+            SelectedArchive = Archives.FirstOrDefault();
             Status = result.Unreadable > 0 ? $"有 {result.Unreadable} 份存档无法读取，原文件已保留。" : readyStatus;
         }
         catch (Exception e) { Status = "本地存档读取失败，原文件已保留：" + e.Message; }
@@ -233,8 +233,16 @@ public partial class MainPageViewModel : ObservableObject
     private Task EnqueueSave(Archive archive)
     {
         archive.UpdatedAt = Archive.Now;
+        MoveArchiveToNewest(archive);
         var snapshot = TranscriptFiles.Snapshot(archive);
         return saves.Enqueue(snapshot);
+    }
+    private void MoveArchiveToNewest(Archive archive)
+    {
+        int currentIndex = Archives.IndexOf(archive);
+        if (currentIndex < 0) return;
+        int newestIndex = ArchiveOrdering.NewestFirst(Archives).IndexOf(archive);
+        if (newestIndex != currentIndex) Archives.Move(currentIndex, newestIndex);
     }
     private async Task ReportSaveFailureAsync(Task pending)
     {

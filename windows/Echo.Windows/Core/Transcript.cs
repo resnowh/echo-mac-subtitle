@@ -254,6 +254,12 @@ public sealed class Archive
     public override string ToString() => Title;
 }
 
+public static class ArchiveOrdering
+{
+    public static List<Archive> NewestFirst(IEnumerable<Archive> archives) =>
+        archives.OrderByDescending(archive => archive.UpdatedAt).ToList();
+}
+
 public sealed record ArchiveSegmentSplit(Archive ExtractedArchive, Segment Segment, int OriginalIndex,
     Dictionary<Guid, string> RemovedSummarySignatures);
 

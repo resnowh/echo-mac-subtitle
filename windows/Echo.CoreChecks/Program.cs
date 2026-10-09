@@ -199,6 +199,13 @@ ApplyProvisionalSnapshot("""{"tokens":[{"text":"Hello there!","is_final":false},
 Check(previousTranslationCleared && provisionalSnapshotSegment.Entries[0].English == "Hello there!" && provisionalSnapshotSegment.Entries[0].Chinese == "你好！",
     "each Mac-style response replaces provisional source and translation as one snapshot, preventing stale opposite-lane text");
 var archive = new Archive { CreatedAt = 800000000, Summary = "已保存总结", SummarizedEntries = { [segment.Entries[0].Id] = TranscriptFiles.SummarySignature(segment.Entries[0].English) }, Segments = [segment, new Segment { StartedAt = 800000010, Entries = [new Subtitle { Start = 0, End = 1, English = "Again" }] }] };
+var archiveOrdering = ArchiveOrdering.NewestFirst([
+    new Archive { UpdatedAt = 10, Title = "older" },
+    new Archive { UpdatedAt = 30, Title = "newest" },
+    new Archive { UpdatedAt = 20, Title = "middle" }
+]);
+Check(archiveOrdering.Select(item => item.Title).SequenceEqual(["newest", "middle", "older"]),
+    "archive selection order follows Mac updatedAt descending semantics");
 var snapshot = TranscriptFiles.Snapshot(archive);
 archive.Segments[0].Entries[0].English = "后续编辑";
 archive.Segments[0].Entries[0].Correction = new SubtitleCorrection { RawSource = "后来补充" };
@@ -272,6 +279,18 @@ Check(macParsed.CreatedAt == 0 && macParsed.Segments[0].StartedAt == 0
     && macRoundTrip.Segments[0].Entries[1].Correction?.History[0].Date == Archive.AppleEpoch
     && macWindowsSrt == macReferenceSrt,
     "Swift Codable-shaped archive preserves Apple epoch and correction history, and Windows SRT matches Mac speaker, offset, and millisecond formatting");
+const string multiSegmentMacArchiveFixture = """
+{"id":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","title":"Mac multi-segment fixture","createdAt":100,"updatedAt":201,"segments":[{"id":"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb","startedAt":100,"updatedAt":101,"entries":[{"id":"cccccccc-cccc-cccc-cccc-cccccccccccc","start":0,"end":1,"recordedAt":100,"english":"第一段","chinese":"First segment"}]},{"id":"dddddddd-dddd-dddd-dddd-dddddddddddd","startedAt":200,"updatedAt":201,"entries":[{"id":"eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee","start":0,"end":1,"recordedAt":200,"english":"第二段","chinese":"Second segment","speaker":"Speaker 2","language":"zh"}]}]}
+""";
+var multiSegmentArchive = TranscriptFiles.Parse(multiSegmentMacArchiveFixture);
+var multiSegmentRoundTrip = TranscriptFiles.Parse(JsonSerializer.Serialize(TranscriptFiles.Snapshot(multiSegmentArchive), TranscriptFiles.Json));
+string multiSegmentSrt = TranscriptFiles.Srt(multiSegmentRoundTrip).Replace("\r\n", "\n");
+Check(multiSegmentRoundTrip.Segments.Count == 2
+    && multiSegmentRoundTrip.Segments.Select(s => s.Id).SequenceEqual([Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"), Guid.Parse("dddddddd-dddd-dddd-dddd-dddddddddddd")])
+    && multiSegmentRoundTrip.Segments[1].Entries[0].RecordedAt == 200
+    && multiSegmentRoundTrip.Segments[1].Entries[0].Speaker == "Speaker 2"
+    && multiSegmentSrt == "1\n00:00:00,000 --> 00:00:01,000\n第一段\nFirst segment\n\n2\n00:01:40,000 --> 00:01:41,000\n[Speaker 2]\n第二段\nSecond segment\n",
+    "Swift-shaped multi-segment archive round trip preserves segment IDs, wall-clock gaps, metadata, and cross-segment SRT order");
 string? runtimeMacFixturePath = Environment.GetEnvironmentVariable("ECHO_MAC_ARCHIVE_FIXTURE");
 if (!string.IsNullOrWhiteSpace(runtimeMacFixturePath))
 {
