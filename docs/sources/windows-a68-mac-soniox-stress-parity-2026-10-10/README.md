@@ -16,7 +16,8 @@ A67 已让 Windows 生产 `TokenAssembler` 跑完两小时合成时间轴，但�
 - Windows CoreChecks：155 项通过；包含 14,400 条响应 / 7,200 条双语字幕的本地压力、JSON 往返和 SRT 导出。该本机运行没有 Mac artifact，所以不算 A68 跨端对拍通过。
 - Windows Release x64 构建：成功，0 警告、0 错误。
 - `.github/workflows/windows-ci.yml` 通过 PyYAML 解析；本机未安装 `actionlint`，Swift harness 由 macOS GitHub Actions 编译执行。
-- PR #5 新提交的 Windows/macOS Actions 是 A68 Mac/Windows 对拍的权威验收来源；报告状态以推送后的运行结果补充。
+- PR #5 Actions 已完成并全部通过：Mac 生产 handler 处理同一 14,400 条合成响应，Windows `build-and-check` 消费 Mac artifact 并通过 7,200 行逐字段对拍，`verify-mac-archive-roundtrip` 也通过。运行：[37998251868](https://github.com/resnowh/echo-mac-subtitle/actions/runs/37998251868)，提交 `e11bdd2dd7d7eddf50798ea0bc9b6d32e1f93eb5`。
+- 下载并保留 Mac CI 原始 artifact `ci-artifact/mac-soniox-stress.json`：1,594,242 字节，SHA-256 `616690F14145747D1B6DE4260EDCBE18F875793E6E257698B84E0949E7724BF0`；包含 7,200 条字幕及 7,200 次定稿的预期字段。
 
 ## 复现和边界
 
@@ -25,3 +26,4 @@ PR workflow 会提取未修改的 Mac production method、运行 stress mode、�
 - `corechecks.log`：Windows 本机全量输出。
 - `release-build.log`：Windows 本机 Release x64 构建输出。
 - `source-hashes.txt`：Mac 基线与 harness、工作流、Windows 比较逻辑和文档的 SHA-256。
+- `ci-artifact/mac-soniox-stress.json`：本次 Mac 生产 handler 的 CI 原始输出，供本地复核；全部为合成字幕。
