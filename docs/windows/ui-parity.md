@@ -41,7 +41,7 @@ Windows 当前分支已实现独立顶层窗口，显示原文与译文两行，
 
 窗口只订阅当前活动字幕 entry：临时识别持续更新；最终文本开始倒计时；有意义的迟到翻译或更正重置倒计时；相同文本更新不重置。禁止为浮层另建录音、音频采集器或 Soniox 连接。
 
-A49 首次在独立包和临时数据目录启动浮层，实际扩展样式缺少 `WS_EX_LAYERED`，黑底遮挡后方内容。A50 已替换为上述原生 layered HWND。隔离 GUI 共 10 项通过：确认 layered/tool/no-activate 样式、主窗口上方、可见、点击穿透、合成双语文字、透明/可见像素、预乘 Alpha，以及调整模式取消点击穿透并在退出后恢复。测试缓冲区为 1920×225，透明像素 418,425、可见像素 13,575，未发现非预乘像素。测试未保存桌面截图；缓冲区统计不等同于 Mac 并排视觉验收。多显示器/DPI 切换、全屏和虚拟桌面仍待验证。详细结果和 SHA-256 见 [A50 底稿](../sources/windows-a50-native-overlay-2026-10-10.md)。
+A49 首次在独立包和临时数据目录启动浮层，实际扩展样式缺少 `WS_EX_LAYERED`，黑底遮挡后方内容。A50 已替换为上述原生 layered HWND。隔离 GUI 共 10 项通过：确认 layered/tool/no-activate 样式、主窗口上方、可见、点击穿透、合成双语文字、透明/可见像素、预乘 Alpha，以及调整模式取消点击穿透并在退出后恢复。测试缓冲区为 1920×225，透明像素 418,425、可见像素 13,575，未发现非预乘像素。A58 增加 `SPI_SETWORKAREA` 处理，使任务栏位置或可用工作区变化时重新计算浮层位置；消息分支通过 CoreChecks 源码契约验证，真实任务栏变化仍待 GUI 验收。测试未保存桌面截图；缓冲区统计不等同于 Mac 并排视觉验收。多显示器/DPI 切换、全屏和虚拟桌面仍待验证。详细结果和 SHA-256 见 [A50 底稿](../sources/windows-a50-native-overlay-2026-10-10.md) 与 [A58 底稿](../sources/windows-a58-overlay-work-area-2026-10-10.md)。
 
 实现参考：[UpdateLayeredWindow](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-updatelayeredwindow)、[Win2D alpha modes](https://learn.microsoft.com/en-us/windows/apps/develop/win2d/premultiplied-alpha)、[Win2D](https://microsoft.github.io/Win2D/)。历史 WinUI windowing 与 DPI 参考见前版记录。
 

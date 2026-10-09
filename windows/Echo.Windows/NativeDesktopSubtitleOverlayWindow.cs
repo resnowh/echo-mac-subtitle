@@ -37,6 +37,8 @@ public sealed class NativeDesktopSubtitleOverlayWindow
     private const int WmNcDestroy = 0x0082;
     private const int WmDisplayChange = 0x007E;
     private const int WmDpiChanged = 0x02E0;
+    private const int WmSettingChange = 0x001A;
+    private const nuint SpiSetWorkArea = 0x002F;
     private const int WmSize = 0x0005;
     private const int WmEraseBkgnd = 0x0014;
     private const int WmLButtonDown = 0x0201;
@@ -575,6 +577,9 @@ public sealed class NativeDesktopSubtitleOverlayWindow
                 OnSizeChanged();
                 return 0;
             case WmDisplayChange:
+                OnDisplayConfigurationChanged();
+                return 0;
+            case WmSettingChange when wParam == SpiSetWorkArea:
                 OnDisplayConfigurationChanged();
                 return 0;
             case WmDpiChanged:

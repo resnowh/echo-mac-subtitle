@@ -55,3 +55,7 @@ Windows 仓库已有 `windows/Echo.CoreChecks/Program.cs`，覆盖转写 token �
 - loopback、麦克风、设备切换、拔插、睡眠/唤醒等真实硬件行为。
 - 真实 Mac 用户存档与 Windows 双向互操作，除非对应 A17 CI fixture 明确记录。
 - 正式签名、干净机器安装升级、卸载和回滚。
+
+## A58 原生浮层适配工作区变化（2026-10-10）
+
+新增 CoreChecks 消息接线断言：确认 `WM_SETTINGCHANGE` 仅在 `wParam == SPI_SETWORKAREA` 时与 `WM_DISPLAYCHANGE` 一起进入浮层位置重算。该检查覆盖源码分支，不模拟任务栏或多屏系统事件；真实 GUI 验收仍待隔离环境执行。本轮 CoreChecks、Release x64 构建和 Actions 结果见 [A58 底稿](../sources/windows-a58-overlay-work-area-2026-10-10.md)。

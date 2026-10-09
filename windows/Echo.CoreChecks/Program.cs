@@ -98,6 +98,11 @@ Check(overlayAt100 == new OverlayPlacement(240, 833, 1440, 150)
     && overlayAt150 == new OverlayPlacement(-2240, 1086, 1920, 225)
     && overlayAt200 == new OverlayPlacement(2240, -200, 960, 300),
     "overlay placement scales with DPI, supports negative multi-monitor origins, and clamps to short work areas");
+string nativeOverlaySource = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "NativeDesktopSubtitleOverlayWindow.cs"));
+string normalizedNativeOverlaySource = nativeOverlaySource.Replace("\r\n", "\n", StringComparison.Ordinal);
+Check(normalizedNativeOverlaySource.Contains("case WmSettingChange when wParam == SpiSetWorkArea:\n                OnDisplayConfigurationChanged();\n                return 0;", StringComparison.Ordinal)
+    && normalizedNativeOverlaySource.Contains("case WmDisplayChange:\n                OnDisplayConfigurationChanged();\n                return 0;", StringComparison.Ordinal),
+    "native overlay recomputes its placement when Windows reports display or work-area changes");
 var savedDisplaySettings = JsonSerializer.Deserialize<DesktopSubtitleOverlaySettings>(JsonSerializer.Serialize(new DesktopSubtitleOverlaySettings { DisplayId = 42, DisplayDeviceName = @"\\.\DISPLAY2" }, TranscriptFiles.Json), TranscriptFiles.Json);
 var legacyOverlaySettings = JsonSerializer.Deserialize<DesktopSubtitleOverlaySettings>("{}", TranscriptFiles.Json);
 Check(savedDisplaySettings is not null && savedDisplaySettings.DisplayId == 42 && savedDisplaySettings.DisplayDeviceName == @"\\.\DISPLAY2"

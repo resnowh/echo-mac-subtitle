@@ -20,7 +20,7 @@ Windows 来源：当前 PR 分支 `feature/windows-mac-parity`；其历史迁移
 | 浮层语言可见性与长文本 | Mac 翻译关闭时即使“显示原文”开关关闭也显示原文；每路字幕最多两行并尾部截断 | Windows 现按 Mac 规则计算可见行，原文/译文/阴影均限制两行并省略尾部 | A38 修正源码差异，并以规则和 XAML 合成检查覆盖 | 浮层实际渲染、字体裁切和透明合成仍未 GUI 验收，见 A38 |
 | Soniox WebSocket 鉴权 | Mac `SpeechViewModel.openSonioxSocket` 仍把 `api_key` 放在起始配置 JSON；Windows 在握手发送 Bearer header，并从配置 JSON 排除密钥 | Windows 按 Soniox 当前推荐方式实现；保留 Mac 当前行为，不反向降级 Windows | 功能存在但行为不同 | 本地模拟 WebSocket 检查验证 Bearer header、配置不含密钥、握手后 401/402/403/429/503/413 错误分类；官方旧方式迁移时间及源码证据见 [A37](../sources/windows-a37-soniox-auth-protocol-2026-10-10.md) |
 | 默认主题与切换顺序 | Mac 默认深色，`AppThemeMode.allCases` 为浅色、深色、系统 | Windows 新配置/缺省字段默认深色，设置项和循环顺序与 Mac 一致；显式保存值保留 | 静态源码及 CoreChecks 通过；系统外观 GUI 尚未实测，见 A31 |
-| 跨显示器悬浮字幕布局与 DPI 变化 | Mac 监听显示器配置变化，按目标屏幕重新计算透明字幕窗位置和宽度，并恢复已保存的屏幕位置 | Windows 按显示器 ID 记住上次屏幕；`AppWindow.Changed` 与 `DisplayAreaWatcher` 更新后重新计算物理像素矩形；拖动/缩放使用屏幕坐标 | A34 的 100/150/200% 合成布局检查通过；真实异 DPI 显示器、拔插、工作区变化仍待 GUI 验收 |
+| 跨显示器悬浮字幕布局与 DPI 变化 | Mac 监听显示器配置变化，按目标屏幕重新计算透明字幕窗位置和宽度，并恢复已保存的屏幕位置 | Windows 按设备名记住上次屏幕；处理 `WM_DISPLAYCHANGE`、`WM_DPICHANGED` 与 `SPI_SETWORKAREA`，重新计算物理像素矩形；拖动/缩放使用屏幕坐标 | A34 的 100/150/200% 合成布局与 A58 消息接线检查通过；真实异 DPI 显示器、拔插、任务栏/工作区变化仍待 GUI 验收 |
 | 音源模式：电脑音频、话筒、混合；录音中热切换 | Mac 默认话筒并保存模式；录音中按需启动新来源，成功后再移除不需要的来源；授权/启动失败时保留旧模式和会话 | Windows 默认并持久化话筒；录音中模式菜单可用，当前 `SpeechSession` 暂停发送、排空采集尾部并重启 WASAPI 来源，不重建 Soniox WebSocket 或当前字幕段；失败回滚，无法恢复时保存并停止 | 126 项 CoreChecks 检查默认值、旧配置、路由选择和菜单可操作性；源码确认切换不创建第二个 session。真实设备、权限拒绝和连续性仍待验收，见 A51 |
 
 本次核验前已执行 fetch 并以最新 `origin/main` 建立独立分支；没有把旧混合分支合并进来。旧分支曾含 Mac 源码提交，因此不得整体 cherry-pick 或合并。详细测试证据见 [testing.md](testing.md) 与 `docs/sources/windows-*`。
