@@ -89,8 +89,8 @@ struct StreamChecks {
         print("PASS: 20 loopback reconnects, ordered PCM/EOF, cancel reset, bounded backlog failure")
         print("PASS: not-ready rejection and replacement connection after 20 handshake cancellations")
 
-        let fixtureDirectory = URL(fileURLWithPath: CommandLine.arguments[2], isDirectory: true)
-        let callbackMarker = fixtureDirectory.appendingPathComponent("callback-probe-received")
+        let callbackFixtureDirectory = URL(fileURLWithPath: CommandLine.arguments[2], isDirectory: true)
+        let callbackMarker = callbackFixtureDirectory.appendingPathComponent("callback-probe-received")
         try? FileManager.default.removeItem(at: callbackMarker)
         let callbackQueue = DispatchQueue(label: "test.soniox-callbacks")
         let callbackGate = DispatchSemaphore(value: 0)
