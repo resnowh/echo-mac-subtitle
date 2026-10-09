@@ -24,6 +24,16 @@ if (args.Length == 4 && args[0] == "--atomic-write-crash-child")
 
 int passed = 0;
 void Check(bool condition, string name) { if (!condition) throw new Exception("FAIL: " + name); Console.WriteLine("PASS: " + name); passed++; }
+void RunIcacls(string path, params string[] arguments)
+{
+    var startInfo = new ProcessStartInfo("icacls.exe") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+    startInfo.ArgumentList.Add(path);
+    foreach (string argument in arguments) startInfo.ArgumentList.Add(argument);
+    using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Unable to start icacls for the isolated ACL check.");
+    string output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
+    process.WaitForExit();
+    if (process.ExitCode != 0) throw new InvalidOperationException($"icacls failed with exit code {process.ExitCode}: {output}");
+}
 var segment = new Segment { StartedAt = 800000000 };
 var assembly = new TokenAssembler(segment, _ => { });
 void Apply(string text) { using var doc = JsonDocument.Parse(text); assembly.Apply(doc.RootElement); }
@@ -219,6 +229,36 @@ try
     finally { aclDirectory.SetAccessControl(originalSecurity); }
 }
 finally { if (Directory.Exists(aclTestRoot)) Directory.Delete(aclTestRoot, recursive: true); }
+string aclReplaceRoot = Path.Combine(Path.GetTempPath(), "Echo-AclReplace-" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(aclReplaceRoot);
+try
+{
+    string aclArchive = Path.Combine(aclReplaceRoot, "replace-denied.json");
+    TranscriptFiles.AtomicWrite(aclArchive, "拒绝替换前的完整存档");
+    bool reachedReplaceBoundary = false, replacementDenied = false;
+    string currentUserSid = WindowsIdentity.GetCurrent().User!.Value;
+    bool denyRuleApplied = false;
+    try
+    {
+        RunIcacls(aclArchive, "/deny", $"*{currentUserSid}:(D)");
+        denyRuleApplied = true;
+        try
+        {
+            TranscriptFiles.AtomicWrite(aclArchive, "不应替换的新存档", () => reachedReplaceBoundary = true);
+        }
+        catch (Exception error) when (error is UnauthorizedAccessException or IOException)
+        {
+            replacementDenied = !File.Exists(aclArchive + ".bak");
+        }
+    }
+    finally { if (denyRuleApplied) RunIcacls(aclArchive, "/remove:d", $"*{currentUserSid}"); }
+    bool cleanAfterPermissionsRestored = File.ReadAllText(aclArchive) == "拒绝替换前的完整存档"
+        && !File.Exists(aclArchive + ".bak")
+        && !Directory.EnumerateFiles(aclReplaceRoot, ".replace-denied.json.*.tmp", SearchOption.TopDirectoryOnly).Any();
+    Check(reachedReplaceBoundary && replacementDenied && cleanAfterPermissionsRestored,
+        "ACL denial at atomic replace preserves the previous archive; restoring the test ACL allows orphan cleanup");
+}
+finally { if (Directory.Exists(aclReplaceRoot)) Directory.Delete(aclReplaceRoot, recursive: true); }
 var firstSaveStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 var releaseFirstSave = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 var saveAttempts = new List<int>(); var durableSaves = new List<int>();
