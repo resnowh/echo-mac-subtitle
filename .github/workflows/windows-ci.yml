@@ -1,0 +1,33 @@
+name: Windows CI
+
+on:
+  push:
+    branches:
+      - main
+      - feature/windows-mac-parity
+  pull_request:
+
+jobs:
+  build-and-check:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore locked dependencies
+        run: dotnet restore windows/Echo.Windows/Echo.Windows.csproj --locked-mode -p:Platform=x64
+
+      - name: Restore core check dependencies
+        run: dotnet restore windows/Echo.CoreChecks/Echo.CoreChecks.csproj --locked-mode
+
+      - name: Run core checks
+        run: dotnet run --project windows/Echo.CoreChecks -c Release --no-restore
+
+      - name: Build Release x64
+        run: dotnet build windows/Echo.Windows/Echo.Windows.csproj -c Release -p:Platform=x64 --no-restore

@@ -1,0 +1,30 @@
+# Windows 验证范围和证据
+
+## 基线
+
+- Mac 来源：`origin/main` `ae0359dc90da0ccb5e526a275da1747954a49a4f`。
+- Windows 来源：旧 `feature/windows-preview` 分支；其本地快照为 `d500bbb`，远端为 `64f2b89`。该旧分支混有后来 Mac 变更，当前工作只选择 Windows 子树及 Windows 证据文件。
+- 当前任务不启动 Echo，不切换或操作用户已运行的应用。
+
+## 现有自动验证
+
+Windows 仓库已有 `windows/Echo.CoreChecks/Program.cs`，覆盖转写 token 组装、语言/说话人/翻译边界、人工纠正和撤销、归档格式与日期、SRT、增量总结选择、DPAPI round-trip、网络重试、WASAPI 帧规范化和恢复策略等纯逻辑/本机模拟场景。具体历史通过项和版本以 `docs/sources/windows-*` 记录为准，不能把历史数字当作本次 HEAD 的新结果。
+
+`windows/README.md` 中记录曾在 Windows SDK/WinApp CLI 环境执行 Release x64 构建，亦有自签名 MSIX 底稿。自签名证书不等于公众信任的正式签名；历史包不代表此分支的当前构建产物。
+
+## 本轮已运行
+
+1. `dotnet run --project windows/Echo.CoreChecks -c Release`：52 项通过。运行于 Windows 10.0.26200、.NET SDK 10.0.401；检查中包含本地模拟服务，不调用云端，不保存真实音频。
+2. Windows Release x64 编译：`dotnet restore ... --locked-mode -p:Platform=x64` 后执行 `dotnet build ... -c Release -p:Platform=x64 --no-restore`，成功，0 警告、0 错误；编译没有启动应用。
+3. 执行 `git diff --check`，检查提交路径确保无 `macOS/`、`tests/` 文件。
+4. UI smoke 未运行：本轮不启动应用，因此 UI、Narrator、DPI、多屏、录音硬件均未验。
+
+## 尚未验证
+
+- 本次源码比对后的所有自动检查结果（运行后在此更新）。
+- 新版矩阵覆盖每个 Mac 行为的自动化契约。
+- 真实 Soniox/DeepSeek 云响应；本地模拟服务不等于云端验收。
+- Windows GUI 的字体、窗口缩放、键盘、Narrator、高对比度与多 DPI。
+- loopback、麦克风、设备切换、拔插、睡眠/唤醒等真实硬件行为。
+- 真实 Mac 用户存档与 Windows 双向互操作，除非对应 A17 CI fixture 明确记录。
+- 正式签名、干净机器安装升级、卸载和回滚。

@@ -1,0 +1,48 @@
+# Windows 与 macOS 功能对照底稿
+
+核验日期：2026-10-09
+macOS 基线：`origin/main`，`ae0359dc90da0ccb5e526a275da1747954a49a4f`
+Windows 来源：`feature/windows-preview` 本地 `d500bbb`（远端为 `64f2b89`）；本分支只迁移 `windows/` 和 `docs/sources/windows-*`，未迁移 Mac 文件。
+状态：`完全一致`、`功能存在但行为不同`、`部分实现`、`缺失`、`平台客观限制`、`尚未验证`。
+
+## 数据底稿与来源清单
+
+| 数据 | 来源及范围 | 本次记录 | 限制 |
+|---|---|---|---|
+| 当前 Mac 行为 | GitHub `origin/main`，以上 SHA；PR #1–#4 均已合并 | 本表逐项记录 UI、配置、字幕和浮层的源码位置 | 只代表该提交，不代表之后尚未拉取的远端更新 |
+| Windows 实现 | 本机旧 Windows 分支的 `windows/` | 文件清单、现有能力、待对齐行为 | 没有运行 UI 或真实音频硬件 |
+| Windows 检查底稿 | `docs/sources/windows-*` | 保留原有构建、核心检查和签名包记录 | 历史测试结论只适用于底稿注明的代码版本 |
+
+本次核验前已执行 fetch 并以最新 `origin/main` 建立独立分支；没有把旧混合分支合并进来。旧分支曾含 Mac 源码提交，因此不得整体 cherry-pick 或合并。详细测试证据见 [testing.md](testing.md) 与 `docs/sources/windows-*`。
+
+## 逐项对照
+
+| Mac 行为 | Windows 当前实现 | 状态 | 证据与下一步 |
+|---|---|---|---|
+| 简洁主窗口：品牌、主题、置顶、字幕优先、底部录音与存档工具 | 单页 WinUI，双语列表、主题、置顶、录音、归档、导出等均存在；设置是独立页面 | 功能存在但行为不同 | `macOS/EchoMacApp.swift`；`windows/Echo.Windows/MainPage.xaml`。压缩布局和视觉尺寸需实机对照 |
+| 双语字幕列表；支持选择、纠正、说话人、时间 | 双列字幕，带时间、说话人、检测语言、纠正入口 | 部分实现 | `macOS/Views/TranscriptViews.swift`；`windows/Echo.Windows/MainPage.xaml`。日分隔、字体与紧凑行距未对齐 |
+| 用户滚离底部后停止跟随，并显示“有新内容”按钮 | ListView 绑定字幕集合；未发现离底检测和新内容提示 | 缺失 | Mac `SynchronizedTranscriptView` 的 `isAtBottom`、`hasNewContent`、`contentDidChange`；Windows `TranscriptList`。应补滚动锚点状态与显式返回最新按钮 |
+| 主字幕区可选识别语言及翻译目标，录音中提示下次录音生效 | 设置页用文本框填写源/目标语言代码；没有主界面语言菜单 | 功能存在但行为不同 | `macOS/Views/TranscriptViews.swift`、`macOS/Models/TranscriptModels.swift`；Windows `MainPage.xaml`、`Preferences.cs`。应使用同一受支持语言清单及自动识别/不翻译项 |
+| 四个设置分类：常规、识别、分段、AI 服务 | 一个滚动页面，以卡片分组；没有 Soniox 端点/本地兜底分段设置 | 功能存在但行为不同 | `macOS/EchoMacApp.swift` `SettingsView`；`windows/Echo.Windows/MainPage.xaml`。保持 Windows 原生控件，按四类重组并补齐分段配置 |
+| 音源：电脑音频、麦克风、混合；授权状态和音频电平 | WASAPI loopback、麦克风及本地混音；设备切换、恢复策略和电平已实现 | 部分实现 | `macOS/EchoMacApp.swift`；Windows `Services/AudioCapture.cs`、`SpeechSession.cs`、`MainPageViewModel.cs`。API 权限表达、声卡和睡眠行为尚未端到端对拍 |
+| Soniox 临时字幕更新、最终字幕落定、翻译迟到、端点与说话人 | Token assembler、临时替换、最终追加、翻译延迟关联、说话人分段及回归检查存在 | 尚未验证 | Windows `Core/Transcript.cs`、`Services/SpeechSession.cs`、`Echo.CoreChecks/Program.cs`；需要基于同一合成事件序列与 Mac 结果逐项对拍 |
+| 设置识别模式、优先语言、严格限制、翻译、目标语言、说话人 | 同类能力存在，但以语言代码文本框表达；当前录音配置冻结与 Mac 交互提示需复核 | 功能存在但行为不同 | Mac `TranscriptModels.swift`、`EchoMacApp.swift`；Windows `Core/Preferences.cs`、`MainPageViewModel.cs`。完成设置模型映射后补行为测试 |
+| Soniox 端点最大延迟、灵敏度、延迟级别、本地静音兜底、超长段兜底 | 未见对应 Windows 配置模型或设置项 | 缺失 | Mac `macOS/Models/TranscriptModels.swift`；Windows `Core/Preferences.cs`、`Services/SpeechSession.cs`。沿用 Mac 参数范围、默认值和“下一会话生效”规则 |
+| 归档选择、新建、续录、导出、清空、拆分已完成段 | Windows 有多段归档、续录、JSON/SRT、清空、段拆分与回收站 | 部分实现 | Mac `EchoMacApp.swift` 与 archive models；Windows `Core/Transcript.cs`、`MainPageViewModel.cs`。JSON 日期及字段已有合成契约测试；真实用户档案双向验证仍缺 |
+| 停止后生成 SRT；不默认保存原始音频 | Windows 停止后写 SRT，不保存原始音频 | 完全一致 | Windows `MainPageViewModel.cs`、`Core/Transcript.cs`、`Services/AudioCapture.cs`；格式细节见 A17 底稿 |
+| 总结新增内容、当前段或完整归档；AI 校对生成建议需人工采纳 | Windows 提供相同总结范围、术语、校对建议和人工编辑；总结交互与 Mac 折叠面板不同 | 功能存在但行为不同 | Mac `EchoMacApp.swift`；Windows `MainPage.xaml`、`MainPageViewModel.cs`、`SubtitleCorrectionService.cs`。核对 API 模型和网络错误体验 |
+| 全局透明悬浮双语字幕；位置/大小；锁定；点击穿透；多桌面与全屏空间 | 当前没有独立字幕窗口和对应设置 | 缺失 | Mac `macOS/Views/DesktopSubtitleOverlay.swift`、`DesktopSubtitleOverlayModels.swift`、`DesktopSubtitleOverlayFeed.swift`；Windows 需原生 WinUI/AppWindow 或 HWND 无激活透明窗口。平台行为需先做技术验证 |
+| 浮层显示临时识别；最终文本按保留时长消失；更新或更正重置倒计时 | 未实现 | 缺失 | Mac `DesktopSubtitleOverlayFeed.swift` 和 overlay models；Windows 浮层必须订阅当前活动字幕投影，不得建立第二个音频/网络会话 |
+| API Key 本机保护；录音音频不落盘 | Windows 以当前用户 DPAPI 保护密钥；音频缓冲仅用于流式发送 | 部分实现 | Windows `Core/Preferences.cs`、`Services/AudioCapture.cs`；还需对照 Mac Keychain 的错误恢复和设置更新时机 |
+| macOS 桌面音频采集受系统屏幕与系统音频权限约束 | Windows 使用 WASAPI loopback 和麦克风权限 | 平台客观限制 | 权限弹窗、设备默认值和系统环回授权由平台决定；需在 Windows 上清楚显示授权和设备状态 |
+| GitHub CI 及正式签名安装 | Windows 有 Release 构建、CoreChecks、历史自签名 MSIX 底稿；公众信任链、正式发布流水线未确认 | 尚未验证 | `windows/README.md`、`docs/sources/windows-a18-*`。签名、干净机器安装升级和回滚需要正式发布配置及设备验证 |
+
+## 最高优先级缺口
+
+1. P0：Mac 行为基线回归数据、Soniox 临时/最终/翻译事件契约，以及 Mac JSON 档案双向兼容。
+2. P1：主界面语言菜单、滚动跟随行为、四类设置和分段配置。
+3. P1：透明悬浮字幕窗及点击穿透、移动/缩放/锁定、显示器与全屏行为。它必须复用同一识别会话和当前字幕状态。
+4. P2：总结面板交互、主题和窗口布局细节。
+5. 发布：签名证书、CI 构建产物留存和干净 Windows 机器安装升级验证。
+
+当前状态只反映源码静态比对和既有自动检查记录；未运行 Echo，未做 UI 实机、真实设备采集或正式签名安装验收。
