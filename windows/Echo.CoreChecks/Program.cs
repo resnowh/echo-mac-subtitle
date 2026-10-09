@@ -96,6 +96,11 @@ overlayFeed.Clear();
 Check(overlayFeed.Current is null, "overlay feed clears stale subtitle state");
 var segmentation = new TranscriptSegmentationSettings();
 var summaryBlocks = TranscriptSummaryMarkdown.Parse("## 课程总结\r\n\r\n概览第一行\r\n第二行\r\n\r\n### 要点\r\n- 第一项\r\n* 第二项\r\n");
+Check(!SummaryPanelPresentation.ShouldShow(false, false, false)
+    && SummaryPanelPresentation.ShouldShow(true, false, false)
+    && SummaryPanelPresentation.ShouldShow(false, true, false)
+    && SummaryPanelPresentation.ShouldShow(false, false, true),
+    "AI summary panel visibility matches Mac auto-summary, existing-summary and status conditions");
 Check(summaryBlocks.Select(block => (block.Kind, block.Text)).SequenceEqual([
     (SummaryMarkdownBlockKind.Title, "课程总结"),
     (SummaryMarkdownBlockKind.Paragraph, "概览第一行\n第二行"),

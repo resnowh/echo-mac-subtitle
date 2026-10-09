@@ -106,7 +106,7 @@ public sealed partial class MainPage : Page
             if (e.PropertyName is nameof(ViewModel.Level) or nameof(ViewModel.IsRecording) or nameof(ViewModel.Status) or nameof(ViewModel.AudioWaveformSamples)) UpdateAudioDisplay();
             if (e.PropertyName == nameof(ViewModel.IsRecording)) UpdateRecordingLanguageHint();
             if (e.PropertyName == nameof(ViewModel.Summary)) RenderSummary();
-            if (e.PropertyName == nameof(ViewModel.HasGeneratedSummary)) UpdateSummaryVisibility();
+            if (e.PropertyName is nameof(ViewModel.HasGeneratedSummary) or nameof(ViewModel.SummaryStatus) or nameof(ViewModel.IsRecording)) UpdateSummaryVisibility();
         };
         RenderSummary();
         UpdateAudioDisplay();
@@ -529,6 +529,7 @@ public sealed partial class MainPage : Page
     {
         SummaryScrollViewer.Visibility = ViewModel.HasGeneratedSummary && isSummaryExpanded ? Visibility.Visible : Visibility.Collapsed;
         SummaryExpandButton.Content = isSummaryExpanded ? "收起" : "展开全部";
+        SummaryRecordingHint.Visibility = ViewModel.IsRecording && !ViewModel.HasGeneratedSummary ? Visibility.Visible : Visibility.Collapsed;
     }
     private static TextBlock CreateSummaryText(string value, double fontSize, bool emphasize = false) => new()
     {
@@ -706,6 +707,7 @@ public sealed partial class MainPage : Page
             c.AutoSummaryEnabled = AutoSummary.IsOn;
             c.Theme = ThemePreference.FromIndex(ThemeChoice.SelectedIndex);
             c.Save();
+            ViewModel.RefreshSummaryPanelVisibility();
             loadingSettings = true;
             LoadSegmentationSettings(c.Segmentation);
             loadingSettings = false;

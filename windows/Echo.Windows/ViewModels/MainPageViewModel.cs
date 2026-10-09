@@ -68,8 +68,10 @@ public partial class MainPageViewModel : ObservableObject
     [ObservableProperty] public partial bool IsRecording { get; set; }
     [ObservableProperty] public partial bool IsSummarizing { get; set; }
     [ObservableProperty] public partial bool HasGeneratedSummary { get; set; }
+    [ObservableProperty] public partial string SummaryStatus { get; set; } = string.Empty;
     [ObservableProperty] public partial double Level { get; set; }
     public IReadOnlyList<double> AudioWaveformSamples => audioLevelHistory.Samples;
+    public bool IsSummaryPanelVisible => SummaryPanelPresentation.ShouldShow(Config.AutoSummaryEnabled, HasGeneratedSummary, SummaryStatus.Length > 0);
     public bool CanEdit => !IsBusy && !IsRecording;
     public bool CanSwitchAudioDevices => IsRecording && !IsBusy;
     public bool CanStopRecording => IsRecording && (!IsBusy || recoveryCancellation is not null);
@@ -78,6 +80,9 @@ public partial class MainPageViewModel : ObservableObject
     partial void OnIsBusyChanged(bool value) { OnPropertyChanged(nameof(CanEdit)); OnPropertyChanged(nameof(CanSwitchAudioDevices)); OnPropertyChanged(nameof(CanStopRecording)); OnPropertyChanged(nameof(CanSplitCompletedSegment)); OnPropertyChanged(nameof(CanDeleteSelectedArchive)); }
     partial void OnIsRecordingChanged(bool value) { OnPropertyChanged(nameof(CanEdit)); OnPropertyChanged(nameof(CanSwitchAudioDevices)); OnPropertyChanged(nameof(CanStopRecording)); OnPropertyChanged(nameof(CanSplitCompletedSegment)); OnPropertyChanged(nameof(CanDeleteSelectedArchive)); }
     partial void OnIsSummarizingChanged(bool value) => OnPropertyChanged(nameof(CanDeleteSelectedArchive));
+    partial void OnSummaryStatusChanged(string value) => OnPropertyChanged(nameof(IsSummaryPanelVisible));
+    partial void OnHasGeneratedSummaryChanged(bool value) => OnPropertyChanged(nameof(IsSummaryPanelVisible));
+    public void RefreshSummaryPanelVisibility() => OnPropertyChanged(nameof(IsSummaryPanelVisible));
     partial void OnSelectedArchiveChanged(Archive? value)
     {
         OnPropertyChanged(nameof(CanDeleteSelectedArchive));
@@ -86,6 +91,7 @@ public partial class MainPageViewModel : ObservableObject
         if (value is not null) foreach (var entry in value.Segments.OrderBy(s => s.StartedAt).SelectMany(s => s.Entries)) Entries.Add(entry);
         Summary = value?.Summary ?? "可总结新增内容、当前录音段或整个存档。";
         HasGeneratedSummary = !string.IsNullOrWhiteSpace(value?.Summary);
+        SummaryStatus = string.Empty;
     }
     public MainPageViewModel()
     {
@@ -449,6 +455,7 @@ public partial class MainPageViewModel : ObservableObject
             if (string.IsNullOrWhiteSpace(key)) throw new InvalidOperationException("请先填写并保存 Soniox API Key。");
             activeTranslationEnabled = Config.Translate;
             activeSegmentation = Config.Segmentation.Copy().Validate();
+            SummaryStatus = string.Empty;
             lastResponseReceivedAt = null;
             audioLevelHistory.Reset();
             Level = 0;
@@ -766,33 +773,43 @@ public partial class MainPageViewModel : ObservableObject
     }
     public async Task SummarizeAsync(int scope)
     {
-        if (IsSummarizing || SelectedArchive is null) return;
+        if (IsSummarizing) return;
+        if (SelectedArchive is null) { SummaryStatus = "请先选择一个存档。"; return; }
         var requestedArchive = SelectedArchive;
         IsSummarizing = true;
+        SummaryStatus = scope == 2 ? "正在总结整个存档…" : (scope == 1 ? "正在重新总结当前录音段…" : "正在总结新增内容…");
         try
         {
             string key = Preferences.Unprotect(Config.DeepSeekSecret);
             if (key.Length == 0) throw new InvalidOperationException("请先在设置中填写 DeepSeek API Key。");
             var source = TranscriptSummarySelection.Select(requestedArchive, scope);
-            if (source.Count == 0) throw new InvalidOperationException("没有可总结的新文字。");
+            if (source.Count == 0)
+            {
+                SummaryStatus = scope == 0 ? "没有新的文字可以总结。" : "本次没有可总结的文字。";
+                return;
+            }
             var submitted = source.ToDictionary(e => e.Id, e => e.English);
             var chunks = TranscriptTextChunks.Create(source);
             var summaries = new List<string>(chunks.Count);
             for (int i = 0; i < chunks.Count; i++)
             {
-                Status = chunks.Count == 1 ? "正在生成总结，录音不受影响…" : $"正在分段总结 {i + 1}/{chunks.Count}，录音不受影响…";
+                SummaryStatus = chunks.Count == 1 ? "正在生成总结，录音不受影响…" : $"正在分段总结 {i + 1}/{chunks.Count}，录音不受影响…";
                 summaries.Add(await RequestSummaryChunkAsync(key, chunks[i]));
             }
-            if (!ReferenceEquals(SelectedArchive, requestedArchive)) { Status = "总结完成，但当前存档已切换，请回到原存档重新生成。"; return; }
+            if (!ReferenceEquals(SelectedArchive, requestedArchive)) { SummaryStatus = "总结完成，但当前存档已切换，请回到原存档重新生成。"; return; }
             string combined = string.Join("\n\n", summaries);
             Summary = scope == 0 && !string.IsNullOrWhiteSpace(requestedArchive.Summary)
                 ? requestedArchive.Summary + "\n\n" + combined : combined;
             requestedArchive.Summary = Summary;
             HasGeneratedSummary = true;
             foreach (var e in submitted) requestedArchive.SummarizedEntries[e.Key] = TranscriptFiles.SummarySignature(e.Value);
-            if (Save()) Status = "总结已生成并保存在当前存档中。";
+            if (Save())
+            {
+                SummaryStatus = "已生成";
+                Status = "总结已生成并保存在当前存档中。";
+            }
         }
-        catch (Exception e) { Status = "总结失败：" + e.Message; }
+        catch (Exception e) { SummaryStatus = "AI 总结失败：" + e.Message; Status = SummaryStatus; }
         finally { IsSummarizing = false; }
     }
     private async Task<string> RequestSummaryChunkAsync(string key, string transcript)
