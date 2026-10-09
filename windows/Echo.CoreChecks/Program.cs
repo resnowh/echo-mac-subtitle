@@ -129,6 +129,21 @@ var alwaysVisibleReturnButton = mainPageXaml.Descendants(presentationNamespace +
     .Any(element => element.Attribute("AutomationProperties.AutomationId")?.Value == "ReturnToLatest");
 Check(!alwaysVisibleReturnButton,
     "the main toolbar does not show a permanent return-to-latest button when Mac only shows it for unread content");
+var mainPageCode = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "MainPage.xaml.cs"));
+Check(mainPageCode.Contains("DirectManipulationStarted") && mainPageCode.Contains("DirectManipulationCompleted")
+    && mainPageCode.Contains("PointerWheelChanged") && mainPageCode.Contains("PreviewKeyDown")
+    && mainPageCode.Contains("transcriptFollowState.ViewChanged"),
+    "transcript follow state tracks direct, wheel and keyboard scrolling separately from content layout changes");
+var transcriptFollow = new TranscriptFollowState();
+Check(transcriptFollow.ContentChanged() && transcriptFollow.IsAtEnd && !transcriptFollow.HasNewContent,
+    "new transcript content stays followed when the user is at the live end");
+transcriptFollow.ViewChanged(isAtEnd: false, isUserScrolling: true);
+transcriptFollow.ViewChanged(isAtEnd: false, isUserScrolling: false);
+Check(!transcriptFollow.IsAtEnd && !transcriptFollow.ContentChanged() && transcriptFollow.HasNewContent,
+    "content growth and passive view changes do not resume following after the user scrolls into history");
+transcriptFollow.ViewChanged(isAtEnd: true, isUserScrolling: true);
+Check(transcriptFollow.IsAtEnd && !transcriptFollow.HasNewContent && transcriptFollow.ContentChanged(),
+    "returning to the live end clears the new-content hint and resumes following");
 var settingsOverlay = mainPageXaml.Descendants(presentationNamespace + "Grid")
     .Single(element => element.Attribute(xamlNamespace + "Name")?.Value == "SettingsOverlay");
 var settingsPanelBorder = settingsOverlay.Element(presentationNamespace + "Border");

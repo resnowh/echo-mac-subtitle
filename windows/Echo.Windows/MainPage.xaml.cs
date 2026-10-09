@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
 using Microsoft.UI.Text;
@@ -15,6 +16,7 @@ using System.Diagnostics;
 using System.Collections.Specialized;
 using System.Text.Json;
 using Windows.ApplicationModel.DataTransfer;
+using Windows.System;
 
 namespace Echo_Windows;
 
@@ -36,7 +38,11 @@ public sealed partial class MainPage : Page
         new("ko", "한국어"), new("es", "Español"), new("fr", "Français"), new("de", "Deutsch"),
         new("it", "Italiano"), new("pt", "Português"), new("ru", "Русский"), new("ar", "العربية"), new("hi", "हिन्दी")
     ];
-    private bool isAtTranscriptEnd = true;
+    private readonly TranscriptFollowState transcriptFollowState = new();
+    private ScrollViewer? transcriptScrollViewer;
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? transcriptScrollIdleTimer;
+    private bool isDirectlyManipulatingTranscript;
+    private bool isDiscreteTranscriptScrollActive;
     private readonly HashSet<Guid> observedSubtitleIds = [];
     private bool initialized;
     private bool syncingAudioMode;
@@ -84,18 +90,46 @@ public sealed partial class MainPage : Page
         EmptyHint.Visibility = ViewModel.Entries.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         TranscriptList.Loaded += (_, _) =>
         {
+            if (transcriptScrollViewer is not null) return;
             var scrollViewer = FindDescendant<ScrollViewer>(TranscriptList);
             if (scrollViewer is not null)
+            {
+                transcriptScrollViewer = scrollViewer;
+                transcriptScrollIdleTimer = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread().CreateTimer();
+                transcriptScrollIdleTimer.IsRepeating = false;
+                transcriptScrollIdleTimer.Interval = TimeSpan.FromMilliseconds(650);
+                transcriptScrollIdleTimer.Tick += (_, _) =>
+                {
+                    isDiscreteTranscriptScrollActive = false;
+                    UpdateTranscriptViewportState();
+                };
                 scrollViewer.ViewChanged += (_, _) =>
                 {
-                    bool atEnd = scrollViewer.ScrollableHeight - scrollViewer.VerticalOffset <= 32;
-                    if (atEnd)
+                    if (isDiscreteTranscriptScrollActive)
                     {
-                        isAtTranscriptEnd = true;
-                        NewContentButton.Visibility = Visibility.Collapsed;
+                        transcriptScrollIdleTimer.Stop();
+                        transcriptScrollIdleTimer.Start();
                     }
-                    else isAtTranscriptEnd = false;
+                    UpdateTranscriptViewportState();
                 };
+                scrollViewer.DirectManipulationStarted += (_, _) =>
+                {
+                    isDirectlyManipulatingTranscript = true;
+                    UpdateTranscriptViewportState();
+                };
+                scrollViewer.DirectManipulationCompleted += (_, _) =>
+                {
+                    isDirectlyManipulatingTranscript = false;
+                    UpdateTranscriptViewportState();
+                };
+                scrollViewer.AddHandler(UIElement.PointerWheelChangedEvent,
+                    new PointerEventHandler((_, _) => BeginDiscreteTranscriptScroll()), handledEventsToo: true);
+                scrollViewer.PreviewKeyDown += (_, args) =>
+                {
+                    if (args.Key is VirtualKey.Up or VirtualKey.Down or VirtualKey.PageUp or VirtualKey.PageDown or VirtualKey.Home or VirtualKey.End)
+                        BeginDiscreteTranscriptScroll();
+                };
+            }
             if (ViewModel.Entries.Count > 0) TranscriptList.ScrollIntoView(ViewModel.Entries[^1]);
         };
         for (int i = 0; i < 48; i++)
@@ -203,12 +237,26 @@ public sealed partial class MainPage : Page
     }
     private void TranscriptContentChanged()
     {
-        if (isAtTranscriptEnd)
+        bool shouldFollow = transcriptFollowState.ContentChanged();
+        if (shouldFollow)
         {
             if (ViewModel.Entries.Count > 0) TranscriptList.ScrollIntoView(ViewModel.Entries[^1]);
-            NewContentButton.Visibility = Visibility.Collapsed;
         }
-        else NewContentButton.Visibility = Visibility.Visible;
+        NewContentButton.Visibility = transcriptFollowState.HasNewContent ? Visibility.Visible : Visibility.Collapsed;
+    }
+    private void BeginDiscreteTranscriptScroll()
+    {
+        if (transcriptScrollIdleTimer is null) return;
+        isDiscreteTranscriptScrollActive = true;
+        transcriptScrollIdleTimer.Stop();
+        transcriptScrollIdleTimer.Start();
+    }
+    private void UpdateTranscriptViewportState()
+    {
+        if (transcriptScrollViewer is null) return;
+        bool atEnd = transcriptScrollViewer.ScrollableHeight - transcriptScrollViewer.VerticalOffset <= 32;
+        transcriptFollowState.ViewChanged(atEnd, isDirectlyManipulatingTranscript || isDiscreteTranscriptScrollActive);
+        NewContentButton.Visibility = transcriptFollowState.HasNewContent ? Visibility.Visible : Visibility.Collapsed;
     }
     private static T? FindDescendant<T>(DependencyObject parent) where T : DependencyObject
     {
@@ -400,7 +448,7 @@ public sealed partial class MainPage : Page
     {
         subtitleOverlayWindow ??= new NativeDesktopSubtitleOverlayWindow(
             ViewModel.SubtitleOverlayFeed, ViewModel.Config.SubtitleOverlay, PersistOverlayPlacement,
-            DispatcherQueue.GetForCurrentThread(), App.WindowHandle);
+            Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread(), App.WindowHandle);
         subtitleOverlayWindow.ApplySettings(ViewModel.Config.SubtitleOverlay, reposition: true);
         subtitleOverlayWindow.ShowOverlay();
     }
@@ -494,7 +542,7 @@ public sealed partial class MainPage : Page
     private void Latest_Click(object sender, RoutedEventArgs e)
     {
         if (ViewModel.Entries.Count > 0) TranscriptList.ScrollIntoView(ViewModel.Entries.Last());
-        isAtTranscriptEnd = true;
+        transcriptFollowState.ReturnToEnd();
         NewContentButton.Visibility = Visibility.Collapsed;
     }
     private async void Summary_Click(object sender, RoutedEventArgs e) => await ViewModel.SummarizeAsync(SummaryScope.SelectedIndex);
