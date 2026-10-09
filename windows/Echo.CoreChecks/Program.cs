@@ -170,6 +170,20 @@ Check(overlaySubtitleTexts.Length == 4 && overlaySubtitleTexts.All(element =>
         element.Attribute("MaxLines")?.Value == "2" && element.Attribute("TextTrimming")?.Value == "CharacterEllipsis"),
     "overlay original, translation and shadow text all follow Mac two-line tail truncation");
 var mainPageXaml = XDocument.Load(Path.Combine(AppContext.BaseDirectory, "Fixtures", "MainPage.xaml"));
+var startRecordingControl = mainPageXaml.Descendants(presentationNamespace + "Button")
+    .Single(element => element.Attribute("AutomationProperties.AutomationId")?.Value == "StartRecording");
+var stopRecordingControl = mainPageXaml.Descendants(presentationNamespace + "Button")
+    .Single(element => element.Attribute("AutomationProperties.AutomationId")?.Value == "StopRecording");
+var archiveListControl = mainPageXaml.Descendants(presentationNamespace + "ListView")
+    .Single(element => element.Attribute("AutomationProperties.AutomationId")?.Value == "ArchiveList");
+var recordingStatusControl = mainPageXaml.Descendants(presentationNamespace + "TextBlock")
+    .Single(element => element.Attribute("AutomationProperties.AutomationId")?.Value == "Status");
+Check(startRecordingControl.Attribute("AutomationProperties.Name")?.Value == "开始录音"
+    && stopRecordingControl.Attribute("AutomationProperties.Name")?.Value == "停止录音"
+    && archiveListControl.Attribute("AutomationProperties.Name")?.Value == "本地存档"
+    && recordingStatusControl.Attribute("AutomationProperties.Name")?.Value.Contains("AccessibleText('录音状态', ViewModel.Status)", StringComparison.Ordinal) == true
+    && recordingStatusControl.Attribute("AutomationProperties.LiveSetting")?.Value == "Polite",
+    "recording actions, archive picker, and live status expose contextual Narrator names");
 var recognitionModeSelector = mainPageXaml.Descendants(presentationNamespace + "SelectorBar")
     .FirstOrDefault(element => element.Attribute(xamlNamespace + "Name")?.Value == "SettingsSourceMode");
 var preferredSourceGroup = mainPageXaml.Descendants(presentationNamespace + "StackPanel")

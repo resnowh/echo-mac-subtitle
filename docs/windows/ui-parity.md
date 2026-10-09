@@ -9,6 +9,7 @@
 - 中央区域优先给字幕；双列原文/译文，保留说话人、时间、纠正入口和日期分隔。
 - 已实现：用户向上查看历史时冻结自动滚动，新字幕到达时出现“有新内容”入口；点击后回到最新字幕。A56 按 Mac 区分用户操作与内容增长，接入 WinUI Direct Manipulation、滚轮和键盘滚动输入；134 项 CoreChecks 与 Release x64 构建通过。触控板惯性、滚轮及 ListView 虚拟化仍待隔离 UI smoke 验收，见 [A56](../sources/windows-a56-transcript-follow-2026-10-10.md)。
 - 底部保留音源选择、开始/停止、连接/音频状态、存档选择、新建/导出、更多操作和波形；窄窗口可折叠次要动作。
+- A73 为“开始录音”“停止录音”、本地存档列表和实时录音状态名称绑定当前状态文本（“录音状态：…”），并保留 Polite live region。160 项 CoreChecks 检查 XAML 契约，Release x64 构建通过。实际键盘遍历、Narrator/NVDA 播报和 Accessibility Insights 检查仍待隔离 GUI 验收。
 - 新建 Archive 默认名遵循 Mac 的“课程 MM-dd HH:mm”本地时间格式；A45 以固定时间通过自动检查。存档选择器、命名和实际界面排版仍需 GUI 对照。
 - 设置面板按 Mac 的 520×560 DIP 作为常规目标尺寸；Windows 面板将其作为最大尺寸，窄窗口或短工作区下随窗口收缩，表单留在内部滚动区。A47 修复滚动器在纵向 StackPanel 中无法取得有限高度的问题；隔离 UIA 在 144 DPI 下实测 430×360 DIP 窗口，确认滚动到底时底部控件与“完成”均可见。125%/200% DPI、键盘和 Narrator 仍待 GUI 验收，证据见 `docs/sources/windows-a47-responsive-settings-scroll-2026-10-10.md`。
 - 字幕纠正编辑器使用 480 DIP 最大高度的纵向滚动视口，避免长文本和历史版本挤出保存/关闭操作；“识别稿与修改前版本”折叠面板展示原始识别和带本地时间的逐次修订，UI Automation ID 为 `CorrectionHistory`。源码契约与构建通过；动态展开、窄窗口滚动和键盘导航仍待隔离 GUI 验收，见 `docs/sources/windows-a53-correction-editor-scroll-2026-10-10.md`。

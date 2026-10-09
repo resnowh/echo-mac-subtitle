@@ -117,3 +117,7 @@ Mac 使用不随应用失活隐藏的 floating panel；Windows 原生浮层创�
 新增仅手动触发、仅允许 `main` 的 `Windows Signed Release Candidate`。流程从 Actions secrets 读取密码保护的 Base64 PFX，在临时 runner 上导入发布证书；校验证书 Code Signing EKU、有效期、Subject/清单 Publisher 一致，使用 SHA-256 与 RFC 3161 HTTPS 时间戳签 MSIX；随后要求 Authenticode 状态为 `Valid`、SignTool 验签通过，并对比包内 exe/dll 与 Release 构建。artifact 保留 30 天，不自动创建或发布 GitHub Release。
 
 `package-release-candidate.ps1` 与打包脚本通过 PowerShell AST 解析；工作流通过 YAML 解析，`git diff --check` 通过。没有可用的正式 PFX/密码 secrets，因此本轮没有签名产物，也没有安装或发布。正式证书身份仍需替换清单占位 `CN=AppPublisher`；只有完成可信证书构建、可信时间戳和干净 Windows 安装/升级后，才可标记正式签名安装已验证。原始验证日志、源哈希与官方 Microsoft/GitHub 规则摘要见 [A69 来源底稿](../sources/windows-a69-release-signing-pipeline-2026-10-10/README.md)。
+
+## A73 主界面 Narrator 控件名称（2026-10-10）
+
+静态审查发现录音开始/停止按钮依赖子元素推导名称，本地存档列表无名称，实时录音状态原先只有 Polite live region，无上下文名称。Windows XAML 为四处添加明确 AutomationProperties.Name，并保留原 AutomationId 与 live setting。160 项 CoreChecks、Release x64 构建（0 警告、0 错误）和 `git diff --check` 通过。未启动 GUI 或运行 UIA/Narrator；键盘遍历、实际播报、高对比度和 Accessibility Insights 仍待验。原始输出和源码哈希见 [A73 底稿](../sources/windows-a73-narrator-accessible-controls-2026-10-10/README.md)。
