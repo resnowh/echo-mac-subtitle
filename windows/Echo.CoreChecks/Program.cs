@@ -37,6 +37,11 @@ void RunIcacls(string path, params string[] arguments)
 }
 var segment = new Segment { StartedAt = 800000000 };
 var assembly = new TokenAssembler(segment, _ => { });
+Check(new Preferences().Theme == "Dark" && JsonSerializer.Deserialize<Preferences>("{}", TranscriptFiles.Json)?.Theme == "Dark",
+    "new and legacy preferences default to the Mac dark theme when no explicit theme is stored");
+Check(ThemePreference.IndexFor("Light") == 0 && ThemePreference.IndexFor("Dark") == 1 && ThemePreference.IndexFor("Default") == 2
+    && ThemePreference.Next("Dark") == "Default" && ThemePreference.Next("Default") == "Light" && ThemePreference.Next("Light") == "Dark",
+    "theme choices and main-window cycling follow the Mac light, dark, system order");
 var overlaySettings = new DesktopSubtitleOverlaySettings();
 Check(overlaySettings.OriginalFontSize == 26 && overlaySettings.TranslationFontSize == 24 && overlaySettings.WidthFraction == .75 && overlaySettings.RetentionSeconds == 5,
     "desktop subtitle overlay defaults match the Mac visual baseline");

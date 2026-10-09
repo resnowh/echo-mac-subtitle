@@ -25,7 +25,7 @@ public sealed class Preferences
     public string SonioxSecret { get; set; } = "";
     public string DeepSeekSecret { get; set; } = "";
     public string CorrectionTerms { get; set; } = "";
-    public string Theme { get; set; } = "Default";
+    public string Theme { get; set; } = "Dark";
     public DesktopSubtitleOverlaySettings SubtitleOverlay { get; set; } = new();
     public TranscriptSegmentationSettings Segmentation { get; set; } = new();
     public static string Protect(string value) => value.Length == 0 ? "" : Convert.ToBase64String(ProtectedData.Protect(Encoding.UTF8.GetBytes(value), null, DataProtectionScope.CurrentUser));

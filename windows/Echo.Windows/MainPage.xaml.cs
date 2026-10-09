@@ -56,7 +56,7 @@ public sealed partial class MainPage : Page
         Translate.IsOn = c.Translate; Speakers.IsOn = c.Speakers; Strict.IsOn = c.Strict;
         try { SonioxKey.Password = Preferences.Unprotect(c.SonioxSecret); DeepSeekKey.Password = Preferences.Unprotect(c.DeepSeekSecret); }
         catch { ViewModel.Status = "密钥无法解密，请重新输入并保存。"; }
-        ThemeChoice.SelectedIndex = c.Theme == "Light" ? 1 : c.Theme == "Dark" ? 2 : 0;
+        ThemeChoice.SelectedIndex = ThemePreference.IndexFor(c.Theme);
         TranscriptFolderPath.Text = TranscriptFiles.Root;
         SettingsSections.SelectedItem = SettingsGeneral;
         LoadSegmentationSettings(c.Segmentation);
@@ -249,11 +249,7 @@ public sealed partial class MainPage : Page
     }
     private void CycleTheme_Click(object sender, RoutedEventArgs e)
     {
-        ThemeChoice.SelectedIndex = (ThemeChoice.SelectedIndex + 1) % 3;
-        ViewModel.Config.Theme = ThemeChoice.SelectedIndex == 1 ? "Light" : ThemeChoice.SelectedIndex == 2 ? "Dark" : "Default";
-        ApplyWindowTheme();
-        UpdateAudioDisplay();
-        ViewModel.Config.Save();
+        ThemeChoice.SelectedIndex = ThemePreference.IndexFor(ThemePreference.Next(ViewModel.Config.Theme));
     }
     private void ApplyWindowTheme()
     {
@@ -265,6 +261,14 @@ public sealed partial class MainPage : Page
         }
         RequestedTheme = Enum.Parse<ElementTheme>(ViewModel.Config.Theme);
         if (App.Window?.Content is FrameworkElement root) root.RequestedTheme = RequestedTheme;
+    }
+    private void ThemeChoice_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (loadingSettings || ThemeChoice.SelectedIndex < 0) return;
+        ViewModel.Config.Theme = ThemePreference.FromIndex(ThemeChoice.SelectedIndex);
+        ViewModel.Config.Save();
+        ApplyWindowTheme();
+        UpdateAudioDisplay();
     }
     private void Settings_Click(object sender, RoutedEventArgs e)
     {
@@ -699,7 +703,7 @@ public sealed partial class MainPage : Page
             }.Validate();
             c.AutoCorrectionEnabled = AutoCorrection.IsOn;
             c.AutoSummaryEnabled = AutoSummary.IsOn;
-            c.Theme = ThemeChoice.SelectedIndex == 1 ? "Light" : ThemeChoice.SelectedIndex == 2 ? "Dark" : "Default";
+            c.Theme = ThemePreference.FromIndex(ThemeChoice.SelectedIndex);
             c.Save();
             loadingSettings = true;
             LoadSegmentationSettings(c.Segmentation);
