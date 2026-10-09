@@ -26,9 +26,9 @@ Echo captures **microphone input, macOS playback audio, or both**, sends the aud
 | **Configurable segmentation** | Adjust Soniox endpoint sensitivity/delay and local silence/long-segment fallbacks. |
 | **Local archives and SRT** | Save multiple recording sessions in one archive, resume an archive, export SRT. Raw audio is **not saved by default**. |
 | **Editing and optional AI** | Edit/undo subtitles and preserve correction history; request DeepSeek suggestions and summaries when desired. |
-| **Native macOS interface** | SwiftUI, dark/light themes, always-on-top option, sleep/wake recovery logic. |
+| **Transparent subtitle overlay** | Optional bilingual video-style overlay with drag-to-position, click-through, and appearance settings; real macOS GUI/fullscreen acceptance is pending. |\n| **Native macOS interface** | SwiftUI, dark/light themes, always-on-top option, sleep/wake recovery logic. |
 
-**Not shipped:** standalone desktop subtitle overlay, notarized installer, automatic updates, mobile apps, or a public Windows installer. Roadmap items are not current features.
+**Not shipped:** notarized installer, automatic updates, mobile apps, or a public Windows installer. The desktop subtitle overlay is implemented in source and covered by isolated checks, but **not yet verified on real macOS GUI/fullscreen setups**.
 
 ## Getting started
 
@@ -64,7 +64,7 @@ xcodebuild -project macOS/EchoMac.xcodeproj \
 
 ### First use
 
-1. Open **Settings → Service**, enter your Soniox API key; DeepSeek is optional. (On `main`, settings are still sections in a scrollable view; the [tabbed settings PR](https://github.com/resnowh/echo-mac-subtitle/pull/1) has not been merged.)
+1. Open **Settings → AI 服务**, enter your Soniox API key; DeepSeek is optional. (Settings are organized into tabs.)
 2. Choose the microphone, computer audio, or combined input mode. Grant microphone and/or screen & system audio capture permissions when prompted.
 3. Pick recognition and translation languages in the subtitle column headers, then start recording.
 4. Stop recording to inspect local archives, edit subtitles, optionally summarize, and export SRT.

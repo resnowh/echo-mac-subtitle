@@ -22,6 +22,7 @@ enum AudioCaptureState: Equatable {
 }
 
 final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
+    let desktopSubtitleOverlayFeed = DesktopSubtitleOverlayFeed()
     @Published var isRecording = false
     @Published var english = ""
     @Published var chinese = ""
@@ -527,6 +528,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         currentSourceEnd = nil
         lastTokenReceivedAt = nil
         currentEntryID = nil
+        desktopSubtitleOverlayFeed.clear()
         currentSessionFileURL = nil
         lastSessionFileSaveAt = nil
         currentSessionFinished = false
@@ -834,6 +836,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         pcmPrebuffer.clear()
         pcmMixer.reset()
         audioFrameCursors.removeAll(keepingCapacity: true)
+        desktopSubtitleOverlayFeed.clear()
         socketReady = false
         sonioxConnectionState = .idle
         activeSessionID = UUID()
@@ -1230,6 +1233,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         currentSessionFinished = true
         updateCurrentEntry()
         finalizeCurrentEntry()
+        desktopSubtitleOverlayFeed.clear()
         saveCurrentSessionFile(force: true)
         completedArchiveID = currentArchiveID
         completedSegmentID = currentSegmentID
@@ -1401,6 +1405,9 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         entries[index].language = currentLanguage
         entries[index].start = currentSourceStart ?? entries[index].start
         entries[index].end = max(entries[index].start + 0.1, currentSourceEnd ?? elapsedSinceSessionStart)
+        if isRecording {
+            desktopSubtitleOverlayFeed.update(entries[index], translationEnabled: activeRecognitionConfig.translationEnabled)
+        }
         refreshFullTranscript()
         if currentSessionFinished { saveCurrentSessionFile() }
     }
@@ -1411,6 +1418,9 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
               let index = entries.firstIndex(where: { $0.id == currentEntryID }) else { return }
         if entries[index].english.isEmpty && entries[index].chinese.isEmpty {
             entries.remove(at: index)
+            desktopSubtitleOverlayFeed.clear()
+        } else if isRecording {
+            desktopSubtitleOverlayFeed.finalize(entries[index], translationEnabled: activeRecognitionConfig.translationEnabled)
         }
         self.currentEntryID = nil
         if isAICorrectionEnabled {
@@ -1624,6 +1634,9 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         guard !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               source != entries[index].english || translation != entries[index].chinese else { return }
         entries[index].edit(source: source, translation: translation)
+        if desktopSubtitleOverlayFeed.current?.entryID == id, isRecording {
+            desktopSubtitleOverlayFeed.update(entries[index], translationEnabled: activeRecognitionConfig.translationEnabled)
+        }
         correctionSuggestions[id] = nil
         correctionStatuses[id] = "已手动纠正；修改字段已锁定"
         persistCorrection(entries[index])
@@ -1633,6 +1646,9 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         guard let index = entries.firstIndex(where: { $0.id == id }),
               entries[index].correction?.history.isEmpty == false else { return }
         entries[index].undoCorrection()
+        if desktopSubtitleOverlayFeed.current?.entryID == id, isRecording {
+            desktopSubtitleOverlayFeed.update(entries[index], translationEnabled: activeRecognitionConfig.translationEnabled)
+        }
         correctionSuggestions[id] = nil
         correctionStatuses[id] = "已撤销上次纠正；保留手动选择"
         persistCorrection(entries[index])
@@ -2212,6 +2228,7 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
             audioFrameCursors.removeAll(keepingCapacity: true)
         }
         entries = []
+        desktopSubtitleOverlayFeed.clear()
         english = ""
         chinese = ""
         audioLevel = 0

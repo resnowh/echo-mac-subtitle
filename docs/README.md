@@ -4,6 +4,7 @@
 
 ## 用户文档
 
+- [透明桌面悬浮字幕](features/desktop-subtitle-overlay.md)：实际交互、显示策略、外观与已知限制。
 - [常见问题 FAQ](FAQ.md)：系统要求、API Key、权限、收费、安装与数据安全。
 - [变更记录](../CHANGELOG.md)：已实现的代码变更，非未来承诺。
 - [发布与安装状态](release.md)：为什么目前没有官方 DMG；未来签名、公证与验收要求。
@@ -12,6 +13,7 @@
 
 - [当前架构](architecture.md)：macOS 采集、PCM、Soniox、字幕与持久化。
 - [数据模型](data-model.md)：字幕、Speaker、纠正历史、Archive 与 SRT 时间线。
+- [悬浮字幕验收](testing/desktop-subtitle-overlay.md)：隔离验证和真实 GUI 待验收项目。
 - [自动化测试](../tests/README.md)：隔离测试范围和不能替代的真实设备验收。
 - [CI 构建](https://github.com/resnowh/echo-mac-subtitle/actions/workflows/ci.yml)：macOS Debug/Release 与无设备依赖测试。
 
