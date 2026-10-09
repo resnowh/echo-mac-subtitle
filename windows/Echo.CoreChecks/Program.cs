@@ -949,6 +949,23 @@ Check(streamedRowsAdded == 7200 && streamedRowsFinalized == 7200 && tokenStressE
     && tokenStressSrt.Contains("02:00:00,000", StringComparison.Ordinal)
     && tokenStressSrt.Contains("Lecture point 7199.", StringComparison.Ordinal),
     "two-hour synthetic Soniox provisional/final stream preserves 7200 bilingual rows, timestamps, metadata, and SRT output");
+string? macStressFixturePath = Environment.GetEnvironmentVariable("ECHO_MAC_SONIOX_STRESS_FIXTURE");
+if (!string.IsNullOrWhiteSpace(macStressFixturePath))
+{
+    using var macStressFixture = JsonDocument.Parse(File.ReadAllText(macStressFixturePath));
+    var macStressRun = macStressFixture.RootElement.GetProperty("events")[0];
+    var macStressRows = macStressRun.GetProperty("expected").EnumerateArray().ToArray();
+    Check(macStressFixture.RootElement.GetProperty("mode").GetString() == "two-hour-stress"
+        && macStressRun.GetProperty("expectedFinalizations").GetInt32() == 7200
+        && macStressRows.Length == tokenStressEntries.Count
+        && macStressRows.Select((row, i) => row.GetProperty("english").GetString() == tokenStressEntries[i].English
+            && row.GetProperty("chinese").GetString() == tokenStressEntries[i].Chinese
+            && row.GetProperty("start").GetDouble() == tokenStressEntries[i].Start
+            && row.GetProperty("end").GetDouble() == tokenStressEntries[i].End
+            && row.GetProperty("speaker").GetString() == tokenStressEntries[i].Speaker
+            && row.GetProperty("language").GetString() == tokenStressEntries[i].Language).All(matches => matches),
+        "two-hour synthetic Soniox stream matches all 7200 rows and finalizations from the Mac production handler");
+}
 Check(Archive.AppleEpoch.AddSeconds(0).Year == 2001, "Apple date reference is not Unix time");
 Check(SpeechRetryPolicy.MaxRetries == 2 && SpeechRetryPolicy.Delay(1) == TimeSpan.FromSeconds(1) && SpeechRetryPolicy.Delay(2) == TimeSpan.FromSeconds(3)
     && SpeechRetryPolicy.IsTransient(new System.Net.WebSockets.WebSocketException())

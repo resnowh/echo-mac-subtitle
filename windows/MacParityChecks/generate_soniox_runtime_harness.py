@@ -114,14 +114,27 @@ struct SonioxRuntimeFixtureRunner {
         let outputURL = URL(fileURLWithPath: CommandLine.arguments[2])
         let inputData = try Data(contentsOf: inputURL)
         let fixture = try JSONSerialization.jsonObject(with: inputData) as! [String: Any]
-        let events = fixture["events"] as! [[String: Any]]
         let model = ProductionSonioxHarness()
         var outputs: [[String: Any]] = []
 
-        for (index, event) in events.enumerated() {
-            let message = event["message"] as! [String: Any]
-            let messageData = try JSONSerialization.data(withJSONObject: message, options: [.sortedKeys])
-            model.handleSonioxMessage(String(data: messageData, encoding: .utf8)!)
+        if fixture["mode"] as? String == "two-hour-stress" {
+            func send(_ tokens: [[String: Any]]) throws {
+                let messageData = try JSONSerialization.data(withJSONObject: ["tokens": tokens], options: [.sortedKeys])
+                model.handleSonioxMessage(String(data: messageData, encoding: .utf8)!)
+            }
+            for index in 0..<7200 {
+                let start = Double(index)
+                try send([["text": "Partial \(index)", "is_final": false,
+                           "start_ms": start * 1000, "end_ms": (start + 1) * 1000]])
+                try send([
+                    ["text": "Lecture point \(index).", "is_final": true,
+                     "start_ms": start * 1000, "end_ms": (start + 1) * 1000,
+                     "speaker": "1", "language": "en"],
+                    ["text": "课程点 \(index)。", "is_final": true, "translation_status": "translation"],
+                    ["text": "<end>", "is_final": true]
+                ])
+                if (index + 1) % 1200 == 0 { print("Mac production stress: \(index + 1)/7200 rows") }
+            }
             let expected = model.entries.map { entry -> [String: Any] in
                 var value: [String: Any] = [
                     "english": entry.english,
@@ -134,16 +147,39 @@ struct SonioxRuntimeFixtureRunner {
                 return value
             }
             outputs.append([
-                "message": message,
                 "expectedFinalizations": model.finalizationCount,
                 "expected": expected
             ])
-            print("Mac production Soniox handler response \(index + 1): entries=\(expected.count), finalizations=\(model.finalizationCount)")
+        } else {
+            let events = fixture["events"] as! [[String: Any]]
+            for (index, event) in events.enumerated() {
+                let message = event["message"] as! [String: Any]
+                let messageData = try JSONSerialization.data(withJSONObject: message, options: [.sortedKeys])
+                model.handleSonioxMessage(String(data: messageData, encoding: .utf8)!)
+                let expected = model.entries.map { entry -> [String: Any] in
+                    var value: [String: Any] = [
+                        "english": entry.english,
+                        "chinese": entry.chinese,
+                        "start": entry.start,
+                        "end": entry.end
+                    ]
+                    if let speaker = entry.speaker { value["speaker"] = speaker }
+                    if let language = entry.language { value["language"] = language }
+                    return value
+                }
+                outputs.append([
+                    "message": message,
+                    "expectedFinalizations": model.finalizationCount,
+                    "expected": expected
+                ])
+                print("Mac production Soniox handler response \(index + 1): entries=\(expected.count), finalizations=\(model.finalizationCount)")
+            }
         }
 
         let result: [String: Any] = [
             "source": "macOS/ViewModels/SpeechViewModel.swift production method extraction",
             "sourceCommit": ProcessInfo.processInfo.environment["ECHO_SOURCE_SHA"] ?? "unknown",
+            "mode": fixture["mode"] as? String ?? "sequence",
             "events": outputs
         ]
         let outputData = try JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys])

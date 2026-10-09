@@ -19,6 +19,7 @@
 - A65 补齐 Mac 悬浮字幕菜单中的锁定/解锁操作，设置外观时保留当前调整状态，隐藏浮层时退出调整。152 项 CoreChecks 与 Release x64 构建（0 警告、0 错误）通过；本轮未做 GUI 实测，见 [A65](../docs/sources/windows-a65-overlay-lock-menu-2026-10-10/README.md)。
 - A66 为原生浮层的无 owner/置顶生命周期与主窗关闭清理增加回归检查。154 项 CoreChecks 与 Release x64 构建（0 警告、0 错误）通过；未启动 Echo，主窗最小化后的真实桌面呈现仍待 GUI 验收，见 [A66](../docs/sources/windows-a66-overlay-lifecycle-2026-10-10/README.md)。
 - A67 用生产 token assembler 快速回放 7,200 秒跨度的双语 provisional/final 字幕，共 14,400 条合成响应；验证字幕和时间戳、Archive JSON 往返、SRT 末尾时间。155 项 CoreChecks 与 Release x64 构建通过。该测试不等同于两小时真实运行或 Soniox 云端验收，见 [A67](../docs/sources/windows-a67-two-hour-token-stream-2026-10-10/README.md)。
+- A68 将同一大序列加入 macOS CI，使用 Mac 生产 handler 生成 7,200 条最终状态，再由 Windows CI 逐条对拍生产 token assembler 的文本、时间和元数据；Mac artifact 与 Windows 检查结果见该提交的 GitHub Actions。尚待远端检查完成，且不代表真实云端或两小时墙钟测试。
 - Soniox 实时模型为 `stt-rt-v5`。Windows 在 WebSocket 握手发送 Bearer API Key，配置 JSON 不重复包含密钥；Mac 当前代码仍把密钥放在起始配置中。按项目约束不改 Mac，Windows 保持官方推荐的握手鉴权。官方迁移时间与测试证据见 [A37 Soniox protocol baseline](../docs/sources/windows-a37-soniox-auth-protocol-2026-10-10.md)。
 - 正式发行尚未就绪：真实浮层/多屏/音频验收、受信任发布者签名、干净机器安装升级和隐私政策仍待完成。Soniox 官方建议客户端使用临时 Key；当前项目没有签发临时 Key 的后端，Windows 采用个人自行填写的 Key 与本机 DPAPI 存储。Android/iOS 不在当前交付范围。
 

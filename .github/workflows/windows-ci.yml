@@ -55,6 +55,18 @@ jobs:
           path: ${{ runner.temp }}/mac-soniox-runtime.json
           if-no-files-found: error
 
+      - name: Run two-hour synthetic stream through Mac production handler
+        env:
+          ECHO_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: '"$RUNNER_TEMP/soniox-runtime-checks" windows/Echo.CoreChecks/Fixtures/soniox-two-hour-stress-mode.json "$RUNNER_TEMP/mac-soniox-stress.json"'
+
+      - name: Upload Mac production two-hour Soniox result
+        uses: actions/upload-artifact@v4
+        with:
+          name: echo-mac-soniox-stress-fixture
+          path: ${{ runner.temp }}/mac-soniox-stress.json
+          if-no-files-found: error
+
   build-and-check:
     needs: [generate-mac-archive-fixture, generate-mac-soniox-runtime-fixture]
     runs-on: windows-latest
@@ -86,10 +98,17 @@ jobs:
           name: echo-mac-soniox-runtime-fixture
           path: windows/Echo.CoreChecks/Fixtures/MacRuntime
 
+      - name: Download Mac production two-hour Soniox result
+        uses: actions/download-artifact@v4
+        with:
+          name: echo-mac-soniox-stress-fixture
+          path: windows/Echo.CoreChecks/Fixtures/MacStress
+
       - name: Run core checks including Mac Archive and Soniox production output
         env:
           ECHO_MAC_ARCHIVE_FIXTURE: windows/Echo.CoreChecks/Fixtures/Runtime/mac-archive.json
           ECHO_MAC_SONIOX_FIXTURE: windows/Echo.CoreChecks/Fixtures/MacRuntime/mac-soniox-runtime.json
+          ECHO_MAC_SONIOX_STRESS_FIXTURE: windows/Echo.CoreChecks/Fixtures/MacStress/mac-soniox-stress.json
         run: dotnet run --project windows/Echo.CoreChecks -c Release --no-restore
 
       - name: Upload Windows Archive round trip

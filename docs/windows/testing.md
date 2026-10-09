@@ -95,3 +95,7 @@ Mac 使用不随应用失活隐藏的 floating panel；Windows 原生浮层创�
 ## A67 两小时合成 Soniox 字幕流压力（2026-10-10）
 
 用生产 `TokenAssembler` 顺序处理 7,200 秒字幕时间轴：每秒一条 provisional 响应，随后一条双语 final 和 endpoint，共 14,400 条合成 WebSocket 响应。最终检查 7,200 条字幕各自仅落定一次，英文、中文、开始/结束时间、现实时间、speaker 和 language 均正确；再经 Archive JSON 序列化/解析与完整 SRT 导出，末尾时间达到 02:00:00。CoreChecks 155 项通过；该流处理、JSON/SRT 回读耗时 178ms（本机单次观测），Release x64 构建 0 警告、0 错误。此测试快速生成两小时跨度，不经过两小时墙钟时间、不采集音频、不连接 Soniox，也不覆盖 UI/内存曲线或真实网络故障。完整日志和源码哈希见 [A67 底稿](../sources/windows-a67-two-hour-token-stream-2026-10-10/README.md)。
+
+## A68 两小时 Soniox 大序列 Mac/Windows 生产对拍（2026-10-10）
+
+在 A67 合成输入上，GitHub macOS CI 将从当前 `SpeechViewModel.swift` 提取未修改的生产 handler，连续处理 14,400 条响应并只输出最终紧凑字幕数组；Windows CI 对生产 `TokenAssembler` 的 7,200 条结果逐条比较英文、中文、起止时间、speaker、language 和最终定稿数。Mac 期望结果作为 CI artifact 传递，不会产生 O(n²) 的逐响应快照。Windows 本机 155 项检查与 Release x64 构建通过；Mac/Windows 大序列对拍以该提交 Actions 结果为准。合成数据，不等待两小时、不调用云服务、不采集音频；单次性能观测不作为 SLA。可复现输入模式见 `windows/Echo.CoreChecks/Fixtures/soniox-two-hour-stress-mode.json`。
