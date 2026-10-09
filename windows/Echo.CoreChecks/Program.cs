@@ -69,14 +69,18 @@ Check(audioModeControl?.Attribute("SelectionChanged")?.Value == "AudioMode_Selec
     && audioModeControl.Attribute("IsEnabled")?.Value.Contains("CanChangeAudioMode", StringComparison.Ordinal) == true,
     "audio input mode remains available during recording and routes selections through the live switch handler");
 string correctionEditorSource = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "MainPage.xaml.cs"));
-Check(correctionEditorSource.Contains("new Expander { Header = \"识别稿与修改前版本\"", StringComparison.Ordinal)
+Check(correctionEditorSource.Contains("var historyExpander = new Expander { Header = \"识别稿与修改前版本\"", StringComparison.Ordinal)
+    && correctionEditorSource.Contains("SetAutomationId(historyExpander, \"CorrectionHistory\")", StringComparison.Ordinal)
     && correctionEditorSource.Contains("correction.RawSource", StringComparison.Ordinal)
     && correctionEditorSource.Contains("correction.RawTranslation", StringComparison.Ordinal)
     && correctionEditorSource.Contains("foreach (var version in correction.History)", StringComparison.Ordinal)
     && correctionEditorSource.Contains("version.Date.ToLocalTime().ToString(\"t\")", StringComparison.Ordinal)
     && correctionEditorSource.Contains("version.Source", StringComparison.Ordinal)
-    && correctionEditorSource.Contains("version.Translation", StringComparison.Ordinal),
-    "subtitle correction editor exposes the original recognition and each dated revision like the Mac disclosure group");
+    && correctionEditorSource.Contains("version.Translation", StringComparison.Ordinal)
+    && correctionEditorSource.Contains("var bodyHost = new ScrollViewer", StringComparison.Ordinal)
+    && correctionEditorSource.Contains("VerticalScrollBarVisibility = ScrollBarVisibility.Auto", StringComparison.Ordinal)
+    && correctionEditorSource.Contains("MaxHeight = 480", StringComparison.Ordinal),
+    "subtitle correction editor exposes dated revision history in an accessible disclosure and a bounded scroll viewport like Mac");
 Check(ThemePreference.IndexFor("Light") == 0 && ThemePreference.IndexFor("Dark") == 1 && ThemePreference.IndexFor("Default") == 2
     && ThemePreference.Next("Dark") == "Default" && ThemePreference.Next("Default") == "Light" && ThemePreference.Next("Light") == "Dark",
     "theme choices and main-window cycling follow the Mac light, dark, system order");

@@ -593,7 +593,9 @@ public sealed partial class MainPage : Page
                 history.Children.Add(new TextBlock { Text = version.Source, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true });
                 history.Children.Add(new TextBlock { Text = version.Translation, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true });
             }
-            body.Children.Add(new Expander { Header = "识别稿与修改前版本", Content = history, IsExpanded = false });
+            var historyExpander = new Expander { Header = "识别稿与修改前版本", Content = history, IsExpanded = false };
+            AutomationProperties.SetAutomationId(historyExpander, "CorrectionHistory");
+            body.Children.Add(historyExpander);
         }
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         var ai = new Button { Content = "AI 校对" };
@@ -609,7 +611,13 @@ public sealed partial class MainPage : Page
         suggestionText.Text = ViewModel.GetCorrectionStatus(entry) ?? "";
         body.Children.Add(new TextBlock { Text = "AI 只读取文字。点击请求会把本句和相邻上下文发送给 DeepSeek，可能产生费用；建议需手动应用。", TextWrapping = TextWrapping.Wrap, Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"] });
         var root = new Grid();
-        var bodyHost = new ContentControl { Content = body };
+        var bodyHost = new ScrollViewer
+        {
+            Content = body,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            MaxHeight = 480
+        };
         root.Children.Add(bodyHost);
         var discardConfirmation = new Border
         {

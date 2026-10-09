@@ -8,7 +8,7 @@
 - Mac 产品基线：`origin/main` `ae0359dc90da0ccb5e526a275da1747954a49a4f`。
 - 2026-10-10：A45 后本地 CoreChecks 120 项通过；A46/A47 设置页布局契约和 A48 窗口布局后为 123 项通过，Release x64 构建 0 警告、0 错误。A45 对齐 Mac Archive 默认标题，Mac/Windows/Archive 检查和 unsigned package preflight 通过，证据见 [A45](../docs/sources/windows-a45-archive-title-parity-2026-10-10.md)。A46 保留 Mac 520×560 DIP 设置面板目标并允许收缩；A47 修复长设置页滚动，见 [A47](../docs/sources/windows-a47-responsive-settings-scroll-2026-10-10.md)。A48 对齐主窗口 820×650 DIP 理想尺寸及 680×520 DIP 最小尺寸，移除空字幕时常驻的回底按钮；144 DPI 隔离 UIA 实测通过，见 [A48](../docs/sources/windows-a48-main-window-size-2026-10-10.md)。A44 对齐 Soniox 控制帧，见 [A44](../docs/sources/windows-a44-soniox-control-frames-2026-10-10.md)。截图并排、其他 DPI、无障碍及真实设备验收仍待进行。
 - A50 将字幕层改为原生 Win32 layered HWND，并用 Win2D/Direct2D 透明像素通过 `UpdateLayeredWindow` 呈现；隔离 GUI 10 项通过，1920×225 缓冲区确认透明像素和预乘 Alpha。多屏/DPI、全屏及虚拟桌面仍待验收；记录见 [A50](../docs/sources/windows-a50-native-overlay-2026-10-10.md)。
-- A51 对齐 Mac 音源模式顺序与默认话筒；录音中可在电脑音频、话筒和混合模式间切换，复用同一 Soniox 会话，失败时按原模式回滚。126 项 CoreChecks 与 Release x64 构建通过；实际 WASAPI 设备和授权恢复尚未验收，见 [A51](../docs/sources/windows-a51-live-audio-mode-switch-2026-10-10.md)。
+- A51 对齐 Mac 音源模式顺序与默认话筒；录音中可在电脑音频、话筒和混合模式间切换，复用同一 Soniox 会话，失败时按原模式回滚。当前 127 项 CoreChecks 与 Release x64 构建通过；实际 WASAPI 设备和授权恢复尚未验收，见 [A51](../docs/sources/windows-a51-live-audio-mode-switch-2026-10-10.md)。A52/A53 为字幕纠正编辑器补上可折叠修订历史和受限滚动视口；源码契约与构建通过，动态 GUI 行为仍待隔离验收，见 [A53](../docs/sources/windows-a53-correction-editor-scroll-2026-10-10.md)。
 - Soniox 实时模型为 `stt-rt-v5`。Windows 在 WebSocket 握手发送 Bearer API Key，配置 JSON 不重复包含密钥；Mac 当前代码仍把密钥放在起始配置中。按项目约束不改 Mac，Windows 保持官方推荐的握手鉴权。官方迁移时间与测试证据见 [A37 Soniox protocol baseline](../docs/sources/windows-a37-soniox-auth-protocol-2026-10-10.md)。
 - 正式发行尚未就绪：真实浮层/多屏/音频验收、受信任发布者签名、干净机器安装升级和隐私政策仍待完成。Soniox 官方建议客户端使用临时 Key；当前项目没有签发临时 Key 的后端，Windows 采用个人自行填写的 Key 与本机 DPAPI 存储。Android/iOS 不在当前交付范围。
 
@@ -37,7 +37,7 @@ UI 方案见 [ui-parity.md](../docs/windows/ui-parity.md)，功能计划见 [fun
 - Soniox 端点最大延迟、灵敏度、延迟等级、本地静音兜底和超长段兜底参数按 Mac 默认值/范围保存；当前会话使用冻结参数，更新在下一次连接生效。
 - Mac 默认深色、浅色/深色/跟随系统主题循环，窗口置顶、录音波形、重复启动保护。波形基于实际输入来源的 RMS 电平，使用 Mac 同款 20Hz 平滑和 48 点历史；静音时不会凭空起伏。真实设备表现仍需验收。
 - API Key 用 Windows DPAPI 当前用户加密；不保存原始音频。
-- 字幕逐条手动纠正、撤销及原始识别稿保留；可按需请求 DeepSeek 校对/重新翻译建议，并编辑后再应用。设置可选择开启分句后的自动语境校对；默认关闭，只生成待人工确认的建议。
+- 字幕逐条手动纠正、撤销及原始识别稿保留；可展开查看带时间的修订历史，编辑器支持滚动长内容。可按需请求 DeepSeek 校对/重新翻译建议，并编辑后再应用。设置可选择开启分句后的自动语境校对；默认关闭，只生成待人工确认的建议。
 - 存档可在存档菜单中重命名；新名称立即写入现有存档文件。
 - 刚完成的录音段可经确认拆到独立存档；原存档保留 `.bak` 备份。
 - 存档可经二次确认移入本地 `Deleted/` 回收区；将 JSON 移回 `Archives/` 可恢复。
