@@ -23,4 +23,10 @@
 
 ## 验证结果
 
-待本次 Mac CI 完成后补录结果与运行链接。
+GitHub Actions [37912660564](https://github.com/resnowh/echo-mac-subtitle/actions/runs/37912660564) 全部 3 个 job 成功：
+
+- macOS `Check PCM and loopback WebSocket transport` 通过，执行本文件所列状态回归及既有 PCM、WebSocket、纠正、分段和 Archive 测试。
+- macOS Debug 与 Release 构建通过。
+- Windows 核心检查与 Release x64 构建通过；macOS 生产 decoder 成功读取 Windows 生成的 Archive。
+
+测试不启动 Echo、不访问音频设备或真实云服务。该 CI 证明状态转换代码及编译通过，不证明真实 Mac 睡眠/唤醒和硬件录音恢复体验。
