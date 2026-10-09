@@ -14,10 +14,11 @@ Windows 仓库已有 `windows/Echo.CoreChecks/Program.cs`，覆盖转写 token �
 
 ## 本轮已运行
 
-1. `dotnet run --project windows/Echo.CoreChecks/Echo.CoreChecks.csproj -c Release`：91 项通过，包括 Mac 主题默认/循环顺序、fixed model 请求、DeepSeek 校对/重译请求语义、手动优先队列和必需响应字段、响应级双语端点、五响应 Soniox parity fixture、Mac 规则的总结 Markdown 分块、字幕纠正/撤销、Soniox 上下文与 Unicode 术语、Archive 顺序/时间线、音频转换与恢复策略。Soniox fixture 期望值按 Mac 源码静态推导，未运行 Mac handler。检查不调用云端，不保存真实音频。Soniox 协议依据见 `docs/sources/windows-a25-soniox-endpoint-contract-2026-10-09.md`；上下文与术语基线见 `docs/sources/windows-a26-soniox-context-2026-10-09.md`；Archive 依据与边界见 `docs/sources/windows-a27-archive-order-multisegment-2026-10-09.md`；AI 请求依据见 `docs/sources/windows-a28-ai-correction-2026-10-09.md`；总结呈现底稿见 `docs/sources/windows-a29-summary-panel-2026-10-09.md`；Soniox 多响应 fixture 见 `docs/sources/windows-a30-soniox-stream-parity-fixture-2026-10-09.md`；默认主题底稿见 `docs/sources/windows-a31-theme-parity-2026-10-09.md`；分段参数底稿见 `docs/sources/windows-a24-soniox-segmentation-2026-10-09.md`。
-2. Windows Release x64 编译：执行 `dotnet build windows/Echo.Windows/Echo.Windows.csproj -c Release -p:Platform=x64 -p:PublishReadyToRun=false --no-restore`，最新源码成功，0 警告、0 错误；编译没有启动应用。
+1. `dotnet run --project windows/Echo.CoreChecks/Echo.CoreChecks.csproj -c Release`：本轮 93 项通过，包括新增的 100%、150%、200% DPI、负坐标显示器、窄工作区边界以及显示器偏好 JSON 兼容检查。Soniox fixture 期望值按 Mac 源码静态推导，未运行 Mac handler。检查不调用云端，不保存真实音频。其他测试覆盖项和历史依据见 A24–A31 底稿。
+2. Windows Release x64 编译：执行 `dotnet build windows/Echo.Windows/Echo.Windows.csproj -c Release -p:Platform=x64 -p:PublishReadyToRun=false --no-restore`，本轮源码成功，0 警告、0 错误；编译没有启动应用。
 3. 执行 `git diff --check`，检查提交路径确保无 `macOS/`、`tests/` 文件。
 4. Windows 调试实例已启动并完成 `windows/ui-smoke.ps1` 的 12 项 UIA 检查：录音页、停止按钮隐藏、电脑音频默认项、源/目标语言可读标签、设置入口、AI 服务分类和 Soniox Key 控件存在、模型输入不开放、返回主界面、导出菜单及字幕列表。没有点击录音、保存设置或调用云端；应用加载了 MSIX 包隔离目录中的既有存档，因此原始截图和 UIA 全树未留存，避免把本机字幕纳入仓库。仅留检查名称/结果。A33 还记录首次启动的 NullReferenceException 及修复。UIA 通过不等于视觉、浮层透明、键盘、Narrator、DPI 或多屏验收。
+5. A34 本轮未启动 GUI 或已安装 Echo；显示器事件、透明像素与点击穿透在真实多屏设备上的行为仍待 UI 验收。
 
 ## 跨平台 Archive runtime 对拍
 

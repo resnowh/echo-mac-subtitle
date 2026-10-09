@@ -29,13 +29,13 @@ A33 UIA smoke 确认两种语言菜单显示当前选择，并覆盖设置分类
 
 Windows 当前分支已实现独立顶层窗口，显示原文与译文两行，可分别显示/隐藏。Mac 默认外观及关键交互：透明背景、白字和阴影、底部居中、宽度占可用屏幕约 75%、非调整状态点击穿透、可拖动调整并记忆位置、可锁定。Windows 设置默认值为 5 秒保留、原文 26 pt、译文 24 pt，字号/透明度/宽度/阴影范围与 Mac 一致；位置采用当前显示区域内的规范化坐标。
 
-窗口使用 WinUI `Window` + `AppWindow`，通过受支持的 Win32 extended styles 控制 layered、no-activate 和点击穿透，并扩展 DWM frame；XAML root 保持透明。主菜单可开关、进入/退出调整，设置面板可改两种文字显示、字号、透明度、宽度、保留时间、阴影、点击穿透和位置锁定，也可恢复默认或重置位置。
+窗口使用 WinUI `Window` + `AppWindow`，通过受支持的 Win32 extended styles 控制 layered、no-activate 和点击穿透，并扩展 DWM frame；XAML root 保持透明。主菜单可开关、进入/退出调整，设置面板可改两种文字显示、字号、透明度、宽度、保留时间、阴影、点击穿透和位置锁定，也可恢复默认或重置位置。A34 增加上次显示器 ID 保存；拖动进入异 DPI 屏幕后重新计算尺寸，拖动/缩放采用屏幕物理坐标并在跨屏时重设输入起点。
 
 窗口只订阅当前活动字幕 entry：临时识别持续更新；最终文本开始倒计时；有意义的迟到翻译或更正重置倒计时；相同文本更新不重置。禁止为浮层另建录音、音频采集器或 Soniox 连接。
 
-当前只完成源码、编译和字幕状态语义检查；尚未启动应用验证实际透明像素、鼠标命中、失焦、DPI、多显示器、虚拟桌面或全屏应用行为。AppWindow 是 WinUI Window 对应的顶层 HWND 抽象，`Show(false)` 用于显示而不激活；Win32 文档规定 layered window 可做 alpha 混合，layered + `WS_EX_TRANSPARENT` 可把鼠标事件传给下层窗口。真实呈现仍必须在 GUI smoke 阶段验证，源码和编译不能证明桌面透明效果。
+源码、编译、字幕状态语义及布局几何合成检查已完成；尚未启动应用验证实际透明像素、鼠标命中、失焦、异 DPI、多显示器拔插、虚拟桌面或全屏应用行为。A34 几何检查在 100%、150%、200% 缩放和负屏幕坐标下通过，不能替代真实显示器验收。`AppWindow.Changed` 用于窗口稳定后的尺寸/位置变更；`DisplayAreaWatcher` 监听显示配置变化。Microsoft 的 DPI 指南要求 per-monitor-aware 应用在 DPI 变化时重新评估布局；Windows App SDK 为显示区域提供 `DisplayAreaWatcher`。真实呈现仍必须在 GUI smoke 阶段验证，源码和编译不能证明桌面透明效果。
 
-实现参考（Microsoft 官方文档，读取日期：2026-10-09）：[WinUI Windowing overview](https://learn.microsoft.com/en-us/windows/apps/develop/ui/windowing-overview)、[AppWindow API](https://learn.microsoft.com/en-us/windows/windows-app-sdk/api/winrt/microsoft.ui.windowing.appwindow?view=windows-app-sdk-1.8)、[Win32 extended window styles](https://learn.microsoft.com/en-us/windows/win32/winmsg/extended-window-styles)、[layered window behavior](https://learn.microsoft.com/en-us/windows/win32/winmsg/window-features)、[SetLayeredWindowAttributes](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setlayeredwindowattributes)。
+实现参考（Microsoft 官方文档，读取日期：2026-10-09）：[WinUI Windowing overview](https://learn.microsoft.com/en-us/windows/apps/develop/ui/windowing-overview)、[AppWindow API](https://learn.microsoft.com/en-us/windows/windows-app-sdk/api/winrt/microsoft.ui.windowing.appwindow?view=windows-app-sdk-1.8)、[AppWindow.Changed](https://learn.microsoft.com/en-us/windows/windows-app-sdk/api/winrt/microsoft.ui.windowing.appwindow.changed?view=windows-app-sdk-2.0)、[DisplayAreaWatcher](https://learn.microsoft.com/en-us/windows/windows-app-sdk/api/winrt/microsoft.ui.windowing.displayareawatcher?view=windows-app-sdk-2.0)、[High DPI desktop development](https://learn.microsoft.com/en-us/windows/win32/hidpi/high-dpi-desktop-application-development-on-windows)、[Win32 extended window styles](https://learn.microsoft.com/en-us/windows/win32/winmsg/extended-window-styles)、[layered window behavior](https://learn.microsoft.com/en-us/windows/win32/winmsg/window-features)、[SetLayeredWindowAttributes](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setlayeredwindowattributes)。
 
 ## 视觉与无障碍验收
 

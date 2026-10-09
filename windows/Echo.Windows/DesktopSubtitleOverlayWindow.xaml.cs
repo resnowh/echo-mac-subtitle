@@ -32,10 +32,14 @@ public sealed partial class DesktopSubtitleOverlayWindow : Window
     private bool adjusting;
     private bool resizing;
     private bool dragging;
-    private Point dragOrigin;
+    private bool reflowingForDisplayChange;
+    private bool isClosed;
+    private PointInt32 pointerOrigin;
     private PointInt32 startPosition;
     private SizeInt32 startSize;
     private double dpiScale = 1;
+    private ulong activeDisplayId;
+    private readonly DisplayAreaWatcher displayAreaWatcher;
 
     public DesktopSubtitleOverlayWindow(DesktopSubtitleOverlayFeed feed, DesktopSubtitleOverlaySettings settings, Action<DesktopSubtitleOverlaySettings> settingsChanged)
     {
@@ -64,13 +68,29 @@ public sealed partial class DesktopSubtitleOverlayWindow : Window
             pendingState = null;
             if (pending is not null) Accept(pending);
         };
-        Closed += (_, _) => { expiryTimer.Stop(); publishTimer.Stop(); feed.PropertyChanged -= Feed_PropertyChanged; };
         feed.PropertyChanged += Feed_PropertyChanged;
 
         // Activate creates the HWND; hide it immediately, then show without activation after configuration.
         Activate();
         AppWindow.Hide();
         ConfigureNativeStyles();
+        AppWindow.Changed += AppWindow_Changed;
+        displayAreaWatcher = DisplayArea.CreateWatcher();
+        displayAreaWatcher.Updated += DisplayAreaWatcher_Changed;
+        displayAreaWatcher.Added += DisplayAreaWatcher_Changed;
+        displayAreaWatcher.Removed += DisplayAreaWatcher_Changed;
+        displayAreaWatcher.Start();
+        Closed += (_, _) =>
+        {
+            isClosed = true;
+            expiryTimer.Stop(); publishTimer.Stop();
+            feed.PropertyChanged -= Feed_PropertyChanged;
+            AppWindow.Changed -= AppWindow_Changed;
+            displayAreaWatcher.Updated -= DisplayAreaWatcher_Changed;
+            displayAreaWatcher.Added -= DisplayAreaWatcher_Changed;
+            displayAreaWatcher.Removed -= DisplayAreaWatcher_Changed;
+            displayAreaWatcher.Stop();
+        };
         ApplySettings(this.settings, reposition: true);
     }
 
@@ -135,24 +155,91 @@ public sealed partial class DesktopSubtitleOverlayWindow : Window
 
     private void ResizeToConfiguredWidth()
     {
-        DisplayArea area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Nearest);
-        int width = Math.Clamp((int)(area.WorkArea.Width * settings.WidthFraction), (int)(280 * dpiScale), area.WorkArea.Width);
-        int height = (int)(150 * dpiScale);
-        AppWindow.Resize(new SizeInt32(width, height));
+        PlaceOnCurrentDisplay(useSavedPosition: true);
     }
 
     private void PlaceOnCurrentDisplay(bool useSavedPosition)
     {
-        DisplayArea area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Nearest);
+        DisplayArea area = useSavedPosition ? SavedOrCurrentDisplayArea() : CurrentDisplayArea();
+        OverlayPlacement placement = CalculatePlacement(area, useSavedPosition);
+        activeDisplayId = area.DisplayId.Value;
+        settings.DisplayId = activeDisplayId;
+        reflowingForDisplayChange = true;
+        try
+        {
+            AppWindow.MoveAndResize(new RectInt32(placement.X, placement.Y, placement.Width, placement.Height), area);
+        }
+        finally { reflowingForDisplayChange = false; }
+    }
+
+    private DisplayArea CurrentDisplayArea() => DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Nearest);
+
+    private DisplayArea SavedOrCurrentDisplayArea()
+    {
+        if (settings.DisplayId is ulong savedDisplayId)
+        {
+            foreach (DisplayArea area in DisplayArea.FindAll())
+                if (area.DisplayId.Value == savedDisplayId) return area;
+        }
+        return DisplayArea.Primary;
+    }
+
+    private OverlayPlacement CalculatePlacement(DisplayArea area, bool useSavedPosition)
+    {
         RectInt32 work = area.WorkArea;
-        int width = Math.Clamp((int)(work.Width * settings.WidthFraction), (int)(280 * dpiScale), work.Width);
-        int height = (int)(150 * dpiScale);
-        int x = useSavedPosition
-            ? work.X + (int)(work.Width * settings.NormalizedX) - width / 2
-            : work.X + (work.Width - width) / 2;
-        int y = work.Y + work.Height - height - (int)(work.Height * settings.NormalizedBottom);
-        AppWindow.MoveAndResize(new RectInt32(Math.Clamp(x, work.X, work.X + work.Width - width),
-            Math.Clamp(y, work.Y, work.Y + work.Height - height), width, height), area);
+        return DesktopSubtitleOverlayPlacement.Calculate(work.X, work.Y, work.Width, work.Height, dpiScale,
+            settings.WidthFraction, useSavedPosition ? settings.NormalizedX : .5, settings.NormalizedBottom);
+    }
+
+    private void AppWindow_Changed(AppWindow sender, AppWindowChangedEventArgs args)
+    {
+        if (isClosed || reflowingForDisplayChange || (!args.DidPositionChange && !args.DidSizeChange)) return;
+
+        DisplayArea area = CurrentDisplayArea();
+        ulong nextDisplayId = area.DisplayId.Value;
+        double nextDpiScale = Math.Max(1, GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this)) / 96.0);
+        if (nextDisplayId == activeDisplayId && Math.Abs(nextDpiScale - dpiScale) < .01) return;
+
+        // Preserve the normalized position on the display the user moved to, then
+        // recompute physical dimensions for that display's DPI and work area.
+        PersistPlacement();
+        settings.DisplayId = nextDisplayId;
+        dpiScale = nextDpiScale;
+        PlaceOnCurrentDisplay(useSavedPosition: true);
+        ResetPointerDragBaseline();
+    }
+
+    private void DisplayAreaWatcher_Changed(DisplayAreaWatcher sender, DisplayArea displayArea)
+    {
+        _ = DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () =>
+        {
+            if (isClosed || reflowingForDisplayChange) return;
+            DisplayArea current = CurrentDisplayArea();
+            ulong nextDisplayId = current.DisplayId.Value;
+            if (nextDisplayId == activeDisplayId)
+            {
+                double nextDpiScale = Math.Max(1, GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this)) / 96.0);
+                if (Math.Abs(nextDpiScale - dpiScale) < .01 && displayArea.DisplayId.Value != activeDisplayId) return;
+                dpiScale = nextDpiScale;
+            }
+            else
+            {
+                settings.DisplayId = nextDisplayId;
+                dpiScale = Math.Max(1, GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this)) / 96.0);
+            }
+
+            PlaceOnCurrentDisplay(useSavedPosition: true);
+            ResetPointerDragBaseline();
+            settingsChanged(settings);
+        });
+    }
+
+    private void ResetPointerDragBaseline()
+    {
+        if (!dragging && !resizing) return;
+        if (!GetCursorPos(out pointerOrigin)) return;
+        if (dragging) startPosition = AppWindow.Position;
+        if (resizing) startSize = AppWindow.Size;
     }
 
     private void Feed_PropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -210,7 +297,7 @@ public sealed partial class DesktopSubtitleOverlayWindow : Window
     private void OverlayRoot_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
         if (!adjusting || resizing) return;
-        dragOrigin = e.GetCurrentPoint(OverlayRoot).Position;
+        if (!GetCursorPos(out pointerOrigin)) return;
         startPosition = AppWindow.Position;
         dragging = true;
         OverlayRoot.CapturePointer(e.Pointer);
@@ -220,9 +307,9 @@ public sealed partial class DesktopSubtitleOverlayWindow : Window
     private void OverlayRoot_PointerMoved(object sender, PointerRoutedEventArgs e)
     {
         if (!adjusting || resizing || !dragging) return;
-        Point point = e.GetCurrentPoint(OverlayRoot).Position;
-        AppWindow.Move(new PointInt32(startPosition.X + (int)((point.X - dragOrigin.X) * dpiScale),
-            startPosition.Y + (int)((point.Y - dragOrigin.Y) * dpiScale)));
+        if (!GetCursorPos(out PointInt32 pointer)) return;
+        AppWindow.Move(new PointInt32(startPosition.X + pointer.X - pointerOrigin.X,
+            startPosition.Y + pointer.Y - pointerOrigin.Y));
         PersistPlacement();
     }
 
@@ -237,7 +324,7 @@ public sealed partial class DesktopSubtitleOverlayWindow : Window
     {
         if (!adjusting) return;
         resizing = true;
-        dragOrigin = e.GetCurrentPoint(OverlayRoot).Position;
+        if (!GetCursorPos(out pointerOrigin)) return;
         startSize = AppWindow.Size;
         ResizeHandle.CapturePointer(e.Pointer);
         e.Handled = true;
@@ -246,10 +333,11 @@ public sealed partial class DesktopSubtitleOverlayWindow : Window
     private void ResizeHandle_PointerMoved(object sender, PointerRoutedEventArgs e)
     {
         if (!resizing) return;
-        Point point = e.GetCurrentPoint(OverlayRoot).Position;
+        if (!GetCursorPos(out PointInt32 pointer)) return;
         DisplayArea area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Nearest);
-        int maxWidth = (int)(area.WorkArea.Width * .95);
-        int width = Math.Clamp(startSize.Width + (int)((point.X - dragOrigin.X) * dpiScale), (int)(280 * dpiScale), maxWidth);
+        int maxWidth = Math.Max(1, (int)(area.WorkArea.Width * .95));
+        int minWidth = Math.Min(maxWidth, (int)Math.Ceiling(280 * dpiScale));
+        int width = Math.Clamp(startSize.Width + pointer.X - pointerOrigin.X, minWidth, maxWidth);
         AppWindow.Resize(new SizeInt32(width, startSize.Height));
         settings.WidthFraction = Math.Clamp((double)width / area.WorkArea.Width, .35, .95);
         PersistPlacement();
@@ -268,6 +356,7 @@ public sealed partial class DesktopSubtitleOverlayWindow : Window
         RectInt32 work = area.WorkArea;
         settings.NormalizedX = Math.Clamp((double)(AppWindow.Position.X - work.X + AppWindow.Size.Width / 2) / work.Width, 0, 1);
         settings.NormalizedBottom = Math.Clamp((double)(work.Y + work.Height - (AppWindow.Position.Y + AppWindow.Size.Height)) / work.Height, 0, 1);
+        settings.DisplayId = area.DisplayId.Value;
         if (save) settingsChanged(settings);
     }
 
@@ -277,4 +366,5 @@ public sealed partial class DesktopSubtitleOverlayWindow : Window
     [DllImport("user32.dll", SetLastError = true)] private static extern bool SetLayeredWindowAttributes(nint hwnd, uint colorKey, byte alpha, uint flags);
     [DllImport("dwmapi.dll", SetLastError = true)] private static extern int DwmExtendFrameIntoClientArea(nint hwnd, ref Margins margins);
     [DllImport("user32.dll")] private static extern uint GetDpiForWindow(nint hwnd);
+    [DllImport("user32.dll", SetLastError = true)] private static extern bool GetCursorPos(out PointInt32 point);
 }

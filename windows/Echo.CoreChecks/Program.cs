@@ -45,6 +45,17 @@ Check(ThemePreference.IndexFor("Light") == 0 && ThemePreference.IndexFor("Dark")
 var overlaySettings = new DesktopSubtitleOverlaySettings();
 Check(overlaySettings.OriginalFontSize == 26 && overlaySettings.TranslationFontSize == 24 && overlaySettings.WidthFraction == .75 && overlaySettings.RetentionSeconds == 5,
     "desktop subtitle overlay defaults match the Mac visual baseline");
+var overlayAt100 = DesktopSubtitleOverlayPlacement.Calculate(0, 0, 1920, 1080, 1, .75, .5, .09);
+var overlayAt150 = DesktopSubtitleOverlayPlacement.Calculate(-2560, 0, 2560, 1440, 1.5, .75, .5, .09);
+var overlayAt200 = DesktopSubtitleOverlayPlacement.Calculate(1920, -200, 1280, 1024, 2, .75, 1, 1);
+Check(overlayAt100 == new OverlayPlacement(240, 833, 1440, 150)
+    && overlayAt150 == new OverlayPlacement(-2240, 1086, 1920, 225)
+    && overlayAt200 == new OverlayPlacement(2240, -200, 960, 300),
+    "overlay placement scales with DPI, supports negative multi-monitor origins, and clamps to short work areas");
+var savedDisplaySettings = JsonSerializer.Deserialize<DesktopSubtitleOverlaySettings>(JsonSerializer.Serialize(new DesktopSubtitleOverlaySettings { DisplayId = 42 }, TranscriptFiles.Json), TranscriptFiles.Json);
+var legacyOverlaySettings = JsonSerializer.Deserialize<DesktopSubtitleOverlaySettings>("{}", TranscriptFiles.Json);
+Check(savedDisplaySettings?.DisplayId == 42 && legacyOverlaySettings?.DisplayId is null,
+    "overlay display preference round-trips while older settings remain compatible");
 overlaySettings.ShowOriginal = false; overlaySettings.ShowTranslation = false; overlaySettings.Opacity = double.NaN; overlaySettings.Validate();
 Check(overlaySettings.ShowOriginal && overlaySettings.Opacity == 1, "overlay settings retain a visible language and repair invalid persisted values");
 var overlayFeed = new DesktopSubtitleOverlayFeed();

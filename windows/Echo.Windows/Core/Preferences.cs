@@ -94,6 +94,7 @@ public sealed class DesktopSubtitleOverlaySettings
     public bool PositionLocked { get; set; } = true;
     public double NormalizedX { get; set; } = .5;
     public double NormalizedBottom { get; set; } = .09;
+    public ulong? DisplayId { get; set; }
 
     public DesktopSubtitleOverlaySettings Validate()
     {

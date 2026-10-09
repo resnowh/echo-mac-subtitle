@@ -428,7 +428,7 @@ public sealed partial class MainPage : Page
         AutomationProperties.SetAutomationId(resetPosition, "ResetSubtitleOverlayPosition");
         resetPosition.Click += (_, _) =>
         {
-            current.NormalizedX = .5; current.NormalizedBottom = .09;
+            current.DisplayId = null; current.NormalizedX = .5; current.NormalizedBottom = .09;
             SaveOverlaySettings(current);
             subtitleOverlayWindow?.ApplySettings(current, reposition: true);
         };
@@ -444,7 +444,7 @@ public sealed partial class MainPage : Page
         if (result == ContentDialogResult.Secondary)
         {
             SaveOverlaySettings(new DesktopSubtitleOverlaySettings { Enabled = current.Enabled,
-                NormalizedX = current.NormalizedX, NormalizedBottom = current.NormalizedBottom });
+                DisplayId = current.DisplayId, NormalizedX = current.NormalizedX, NormalizedBottom = current.NormalizedBottom });
             return;
         }
         if (result != ContentDialogResult.Primary) return;
