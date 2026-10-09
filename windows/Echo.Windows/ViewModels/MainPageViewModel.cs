@@ -91,8 +91,15 @@ public partial class MainPageViewModel : ObservableObject
         OnPropertyChanged(nameof(HasEntries));
         if (e.NewItems is null) return;
         foreach (Subtitle entry in e.NewItems)
+        {
             entry.PropertyChanged += (_, args) =>
             {
+                if (args.PropertyName == nameof(Subtitle.RecordedAt))
+                {
+                    int dateIndex = Entries.IndexOf(entry);
+                    UpdateDateSeparatorAt(dateIndex);
+                    UpdateDateSeparatorAt(dateIndex + 1);
+                }
                 if (session is null || args.PropertyName is not (nameof(Subtitle.English) or nameof(Subtitle.Chinese))) return;
                 int index = Entries.IndexOf(entry);
                 int currentIndex = SubtitleOverlayFeed.Current is { } current
@@ -103,6 +110,16 @@ public partial class MainPageViewModel : ObservableObject
                     SubtitleOverlayFeed.Update(entry, activeTranslationEnabled);
                 }
             };
+            int index = Entries.IndexOf(entry);
+            UpdateDateSeparatorAt(index);
+            UpdateDateSeparatorAt(index + 1);
+        }
+    }
+    private void UpdateDateSeparatorAt(int index)
+    {
+        if (index < 0 || index >= Entries.Count) return;
+        double? previous = index > 0 ? Entries[index - 1].RecordedAt : null;
+        Entries[index].SetDateSeparatorLabel(TranscriptPresentation.DaySeparatorLabel(previous, Entries[index].RecordedAt, TimeZoneInfo.Local));
     }
     private void SubtitleFinalized(Subtitle entry)
     {

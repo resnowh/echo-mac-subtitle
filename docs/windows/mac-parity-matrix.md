@@ -20,7 +20,7 @@ Windows 来源：`feature/windows-preview` 本地 `d500bbb`（远端为 `64f2b89
 | Mac 行为 | Windows 当前实现 | 状态 | 证据与下一步 |
 |---|---|---|---|
 | 简洁主窗口：品牌、主题、置顶、字幕优先、底部录音与存档工具 | 单页 WinUI，双语列表、主题、置顶、录音、归档、导出等均存在；设置是独立页面 | 功能存在但行为不同 | `macOS/EchoMacApp.swift`；`windows/Echo.Windows/MainPage.xaml`。压缩布局和视觉尺寸需实机对照 |
-| 双语字幕列表；支持选择、纠正、说话人、时间 | 双列字幕，带时间、说话人、检测语言、纠正入口 | 部分实现 | `macOS/Views/TranscriptViews.swift`；`windows/Echo.Windows/MainPage.xaml`。日分隔、字体与紧凑行距未对齐 |
+| 双语字幕列表；支持选择、纠正、说话人、时间和跨天日期分隔 | 双列字幕，带时间、说话人、检测语言、纠正入口；相邻字幕跨本地日历日期时显示日期分隔行 | 功能存在但行为不同 | `macOS/Views/TranscriptViews.swift`；`windows/Echo.Windows/MainPage.xaml`、`MainPageViewModel.cs`、`Core/Transcript.cs`。字体与紧凑行距未 GUI 对照 |
 | 用户滚离底部后停止跟随，并显示“有新内容”按钮 | 新内容追加时保留用户历史位置，显示回到底部按钮；加载时滚至最新条目 | 功能存在但行为不同 | Mac `SynchronizedTranscriptView`；Windows `MainPage.xaml`、`MainPage.xaml.cs`。应通过 UI smoke 检查滚动事件与虚拟化列表交互 |
 | 主字幕区可选识别语言及翻译目标，录音中提示下次录音生效 | 主界面提供 Mac 同款 12 种语言、自动识别、不翻译选项；更改配置写入本地并提示下次录音生效 | 功能存在但行为不同 | Mac `macOS/Views/TranscriptViews.swift`、`macOS/Models/TranscriptModels.swift`；Windows `MainPage.xaml`、`MainPage.xaml.cs`、`Core/Preferences.cs`。Windows 仍保留“翻译”设置开关，菜单项会同步开关状态 |
 | 四个设置分类：常规、识别、分段、AI 服务 | WinUI SelectorBar 切换四类设置，参数修改后保存到本地 | 功能存在但行为不同 | Mac `macOS/EchoMacApp.swift`；Windows `windows/Echo.Windows/MainPage.xaml`、`MainPage.xaml.cs`。控件平台原生，实际键盘和 Narrator 行为未验 |

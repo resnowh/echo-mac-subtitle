@@ -64,6 +64,12 @@ Check(segmentation.SonioxMaxEndpointDelayMilliseconds == 3000 && segmentation.So
     "segmentation defaults match the Mac settings baseline");
 var segmentationRoundTrip = JsonSerializer.Deserialize<Preferences>(JsonSerializer.Serialize(new Preferences { Segmentation = new() { LocalSilenceThresholdSeconds = 7.5 } }, TranscriptFiles.Json), TranscriptFiles.Json);
 Check(segmentationRoundTrip?.Segmentation.LocalSilenceThresholdSeconds == 7.5, "segmentation settings persist in the existing Windows preferences file");
+double dateBeforeMidnight = (new DateTimeOffset(2026, 1, 1, 23, 59, 0, TimeSpan.Zero) - Archive.AppleEpoch).TotalSeconds;
+double dateAfterMidnight = (new DateTimeOffset(2026, 1, 2, 0, 1, 0, TimeSpan.Zero) - Archive.AppleEpoch).TotalSeconds;
+Check(TranscriptPresentation.DaySeparatorLabel(dateBeforeMidnight, dateAfterMidnight, TimeZoneInfo.Utc) == "2026年1月2日"
+    && TranscriptPresentation.DaySeparatorLabel(dateBeforeMidnight, dateBeforeMidnight + 30, TimeZoneInfo.Utc) is null
+    && TranscriptPresentation.DaySeparatorLabel(null, dateAfterMidnight, TimeZoneInfo.Utc) is null,
+    "transcript day headers match the Mac cross-day rule and require adjacent wall-clock dates");
 segmentation.SonioxMaxEndpointDelayMilliseconds = 4000; segmentation.SonioxEndpointSensitivity = double.NaN;
 segmentation.LocalSilenceThresholdSeconds = -1; segmentation.Validate();
 Check(segmentation.SonioxMaxEndpointDelayMilliseconds == 3000 && segmentation.SonioxEndpointSensitivity == -.3

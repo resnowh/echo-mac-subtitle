@@ -16,6 +16,17 @@ public partial class Subtitle : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(TimeLabel))]
     public partial double? RecordedAt { get; set; }
+    private string? dateSeparatorLabel;
+    [JsonIgnore] public string? DateSeparatorLabel
+    {
+        get => dateSeparatorLabel;
+        private set
+        {
+            if (SetProperty(ref dateSeparatorLabel, value)) OnPropertyChanged(nameof(HasDateSeparator));
+        }
+    }
+    [JsonIgnore] public bool HasDateSeparator => !string.IsNullOrEmpty(DateSeparatorLabel);
+    public void SetDateSeparatorLabel(string? value) => DateSeparatorLabel = value;
     [ObservableProperty] public partial string English { get; set; } = "";
     [ObservableProperty] public partial string Chinese { get; set; } = "";
     [ObservableProperty] public partial string? Speaker { get; set; }
@@ -57,6 +68,18 @@ public partial class Subtitle : ObservableObject
     }
     [JsonIgnore] public string TimeLabel => RecordedAt is double t
         ? Archive.AppleEpoch.AddSeconds(t).ToLocalTime().ToString("HH:mm:ss") : TimeSpan.FromSeconds(Start).ToString(@"hh\:mm\:ss");
+}
+
+public static class TranscriptPresentation
+{
+    public static string? DaySeparatorLabel(double? previousAppleSeconds, double? currentAppleSeconds, TimeZoneInfo timeZone)
+    {
+        if (previousAppleSeconds is not double previous || currentAppleSeconds is not double current) return null;
+        var previousDate = TimeZoneInfo.ConvertTime(Archive.AppleEpoch.AddSeconds(previous), timeZone);
+        var currentDate = TimeZoneInfo.ConvertTime(Archive.AppleEpoch.AddSeconds(current), timeZone);
+        if (previousDate.Date == currentDate.Date) return null;
+        return currentDate.ToString("yyyy年M月d日", CultureInfo.GetCultureInfo("zh-CN"));
+    }
 }
 
 public sealed class SubtitleCorrection
