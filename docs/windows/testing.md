@@ -75,3 +75,7 @@ CoreChecks 合成 `UnauthorizedAccessException`、包装后的 COM `E_ACCESSDENI
 ## A62 丢弃过期的 AI 校对建议（2026-10-10）
 
 CoreChecks 单独改变源语言、目标语言、翻译开关、严格限制与说话人选项，验证每一项都会使 `CorrectionRecognitionSnapshot` 失效；源码接线检查确认 `MainPageViewModel` 在请求前捕获快照、响应后比较配置并报告旧建议已忽略。144 项 CoreChecks 与 Release x64 构建（0 警告、0 错误）通过。未调用 DeepSeek；GUI 异步请求交互仍待隔离验收。结果原件和源文件哈希见 [A62 底稿](../sources/windows-a62-stale-correction-suggestions-2026-10-10.md)。
+
+## A63 新内容总结的会话边界（2026-10-10）
+
+CoreChecks 构造历史段与当前会话段，验证增量总结只返回起始 Segment 之后的候选，整个存档总结仍包含两段；源码接线检查确认开始录音前保存边界并传入生产选择逻辑。146 项 CoreChecks 与 Release x64 构建（0 警告、0 错误）通过。未调用 DeepSeek；多 Segment 断线恢复及 UI 工作流未实机验收。原始结果和哈希见 [A63 底稿](../sources/windows-a63-summary-session-scope-2026-10-10.md)。

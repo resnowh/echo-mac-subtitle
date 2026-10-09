@@ -42,6 +42,7 @@ public partial class MainPageViewModel : ObservableObject
     private bool correctionBusy;
     private readonly HashSet<Guid> correctionScheduled = [];
     private Guid correctionGeneration = Guid.NewGuid();
+    private int newContentStartSegmentIndex;
     private readonly Dictionary<Guid, string> correctionStatuses = [];
     private Guid? completedArchiveId, completedSegmentId;
     private Exception? failure;
@@ -89,6 +90,7 @@ public partial class MainPageViewModel : ObservableObject
         OnPropertyChanged(nameof(CanDeleteSelectedArchive));
         correctionGeneration = Guid.NewGuid(); correctionScheduled.Clear(); CancelPendingCorrectionJobs();
         Entries.Clear(); correctionSuggestions.Clear(); correctionStatuses.Clear();
+        newContentStartSegmentIndex = value?.Segments.Count ?? 0;
         if (value is not null) foreach (var entry in value.Segments.OrderBy(s => s.StartedAt).SelectMany(s => s.Entries)) Entries.Add(entry);
         Summary = value?.Summary ?? "可总结新增内容、当前录音段或整个存档。";
         HasGeneratedSummary = !string.IsNullOrWhiteSpace(value?.Summary);
@@ -504,6 +506,7 @@ public partial class MainPageViewModel : ObservableObject
             sessionStartedTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
             SubtitleOverlayFeed.Clear();
             if (SelectedArchive is null) { var a = new Archive(); Archives.Insert(0, a); SelectedArchive = a; }
+            newContentStartSegmentIndex = SelectedArchive.Segments.Count;
             segment = new Segment(); SelectedArchive.Segments.Add(segment);
             assembler = CreateAssembler(segment);
             current = CreateSpeechSession(); session = current;
@@ -874,7 +877,7 @@ public partial class MainPageViewModel : ObservableObject
         {
             string key = Preferences.Unprotect(Config.DeepSeekSecret);
             if (key.Length == 0) throw new InvalidOperationException("请先在设置中填写 DeepSeek API Key。");
-            var source = TranscriptSummarySelection.Select(requestedArchive, scope);
+            var source = TranscriptSummarySelection.Select(requestedArchive, scope, newContentStartSegmentIndex);
             if (source.Count == 0)
             {
                 SummaryStatus = scope == 0 ? "没有新的文字可以总结。" : "本次没有可总结的文字。";

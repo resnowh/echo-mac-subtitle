@@ -70,6 +70,9 @@ Check(mainPageViewModelSource.Contains("CorrectionRecognitionSnapshot.Capture(Co
     && mainPageViewModelSource.Contains("!recognitionSnapshot.Matches(Config)", StringComparison.Ordinal)
     && mainPageViewModelSource.Contains("旧建议已忽略", StringComparison.Ordinal),
     "AI correction results are discarded when recognition settings change while the request is in flight");
+Check(mainPageViewModelSource.Contains("newContentStartSegmentIndex = SelectedArchive.Segments.Count", StringComparison.Ordinal)
+    && mainPageViewModelSource.Contains("Select(requestedArchive, scope, newContentStartSegmentIndex)", StringComparison.Ordinal),
+    "new-content summaries are limited to segments created since the current recording session began");
 var computerOnlySelection = AudioInputModeSelection.ForSwitch(0, "speaker-id", "mic-id");
 var microphoneOnlySelection = AudioInputModeSelection.ForSwitch(1, "speaker-id", "mic-id");
 var mixedSelection = AudioInputModeSelection.ForSwitch(2, "speaker-id", "mic-id");
@@ -531,6 +534,16 @@ Check(incrementalSummary.Select(e => e.English).SequenceEqual(["edited", "new"])
     && currentSegmentSummary.Select(e => e.English).SequenceEqual(["last segment"])
     && completeSummary.Count == 4,
     "summary selection excludes unchanged entries incrementally while current-segment and whole-archive scopes stay distinct");
+var historicalUnsubmitted = new Subtitle { English = "old unsummarized session" };
+var currentUnsubmitted = new Subtitle { English = "new session content" };
+var sessionScopedArchive = new Archive { Segments = [
+    new Segment { Entries = [historicalUnsubmitted] },
+    new Segment { Entries = [currentUnsubmitted] }
+] };
+var sessionIncrementalSummary = TranscriptSummarySelection.Select(sessionScopedArchive, 0, newContentStartSegmentIndex: 1);
+Check(sessionIncrementalSummary.Count == 1 && sessionIncrementalSummary[0].Id == currentUnsubmitted.Id
+    && TranscriptSummarySelection.Select(sessionScopedArchive, 2, newContentStartSegmentIndex: 1).Count == 2,
+    "new-content summaries exclude unsummarized historical segments while whole-archive summaries retain them");
 var legacyId = Guid.NewGuid(); var legacySegmentId = Guid.NewGuid(); var legacyEntryId = Guid.NewGuid();
 double legacyCreated = (DateTimeOffset.Parse("2024-01-01T00:00:00Z") - Archive.AppleEpoch).TotalSeconds;
 double legacySegmentStart = (DateTimeOffset.Parse("2024-01-01T23:59:59Z") - Archive.AppleEpoch).TotalSeconds;

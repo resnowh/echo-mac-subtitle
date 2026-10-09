@@ -4,7 +4,7 @@
 
 ## 当前开发基线
 
-- Windows 分支：`feature/windows-mac-parity`；PR [#5](https://github.com/resnowh/echo-mac-subtitle/pull/5) 尚未合并；A62 当前本机验证记录在来源底稿中。分支起点和迁移历史见 PR 及对照矩阵。
+- Windows 分支：`feature/windows-mac-parity`；PR [#5](https://github.com/resnowh/echo-mac-subtitle/pull/5) 尚未合并；A63 当前本机验证记录在来源底稿中。分支起点和迁移历史见 PR 及对照矩阵。
 - Mac 产品基线：`origin/main` `ae0359dc90da0ccb5e526a275da1747954a49a4f`。
 - 2026-10-10：A45 后本地 CoreChecks 120 项通过；A46/A47 设置页布局契约和 A48 窗口布局后为 123 项通过，Release x64 构建 0 警告、0 错误。A45 对齐 Mac Archive 默认标题，Mac/Windows/Archive 检查和 unsigned package preflight 通过，证据见 [A45](../docs/sources/windows-a45-archive-title-parity-2026-10-10.md)。A46 保留 Mac 520×560 DIP 设置面板目标并允许收缩；A47 修复长设置页滚动，见 [A47](../docs/sources/windows-a47-responsive-settings-scroll-2026-10-10.md)。A48 对齐主窗口 820×650 DIP 理想尺寸及 680×520 DIP 最小尺寸，移除空字幕时常驻的回底按钮；144 DPI 隔离 UIA 实测通过，见 [A48](../docs/sources/windows-a48-main-window-size-2026-10-10.md)。A44 对齐 Soniox 控制帧，见 [A44](../docs/sources/windows-a44-soniox-control-frames-2026-10-10.md)。截图并排、其他 DPI、无障碍及真实设备验收仍待进行。
 - A50 将字幕层改为原生 Win32 layered HWND，并用 Win2D/Direct2D 透明像素通过 `UpdateLayeredWindow` 呈现；隔离 GUI 10 项通过，1920×225 缓冲区确认透明像素和预乘 Alpha。多屏/DPI、全屏及虚拟桌面仍待验收；记录见 [A50](../docs/sources/windows-a50-native-overlay-2026-10-10.md)。
@@ -14,6 +14,7 @@
 - A60 追加默认话筒变化的合成会话验收：模拟端点事件后采集器重启、活动端点更新，并在同一 WebSocket 上继续发送 PCM；连同 A59 失败回滚，本机 141 项 CoreChecks 和 Release x64（0 警告/错误）通过，Actions run `37991017788` 通过。测试没有打开音频设备；真实设备拔插与授权仍待验收，原始日志和源码基线见 [A60](../docs/sources/windows-a60-default-device-change-2026-10-10.md)。
 - A61 在访问被拒绝时提示 Windows 麦克风隐私设置路径，覆盖开始录音、会话失败和音源切换；142 项 CoreChecks 与 Release x64 构建（0 警告/错误）通过。真实隐私开关行为未实测，见 [A61](../docs/sources/windows-a61-microphone-permission-2026-10-10.md)。
 - A62 使 AI 校对响应在源/目标语言、翻译、严格限制、说话人或术语在请求期间变化时失效；144 项 CoreChecks 与 Release x64 构建（0 警告/错误）通过。未调用 DeepSeek，见 [A62](../docs/sources/windows-a62-stale-correction-suggestions-2026-10-10.md)。
+- A63 将“总结新增内容”限定为本次录音开始后的 Segment，旧存档中未总结的历史字幕不会混入；当前段/全存档总结范围保持独立。146 项 CoreChecks 与 Release x64 构建（0 警告/错误）通过，见 [A63](../docs/sources/windows-a63-summary-session-scope-2026-10-10.md)。
 - Soniox 实时模型为 `stt-rt-v5`。Windows 在 WebSocket 握手发送 Bearer API Key，配置 JSON 不重复包含密钥；Mac 当前代码仍把密钥放在起始配置中。按项目约束不改 Mac，Windows 保持官方推荐的握手鉴权。官方迁移时间与测试证据见 [A37 Soniox protocol baseline](../docs/sources/windows-a37-soniox-auth-protocol-2026-10-10.md)。
 - 正式发行尚未就绪：真实浮层/多屏/音频验收、受信任发布者签名、干净机器安装升级和隐私政策仍待完成。Soniox 官方建议客户端使用临时 Key；当前项目没有签发临时 Key 的后端，Windows 采用个人自行填写的 Key 与本机 DPAPI 存储。Android/iOS 不在当前交付范围。
 

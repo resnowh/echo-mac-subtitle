@@ -221,11 +221,12 @@ public static class TranscriptTextChunks
 
 public static class TranscriptSummarySelection
 {
-    public static List<Subtitle> Select(Archive archive, int scope)
+    public static List<Subtitle> Select(Archive archive, int scope, int newContentStartSegmentIndex = 0)
     {
         IEnumerable<Subtitle> entries = scope switch
         {
-            0 or 2 => archive.Segments.SelectMany(s => s.Entries),
+            0 => archive.Segments.Skip(Math.Clamp(newContentStartSegmentIndex, 0, archive.Segments.Count)).SelectMany(s => s.Entries),
+            2 => archive.Segments.SelectMany(s => s.Entries),
             1 => archive.Segments.LastOrDefault()?.Entries ?? [],
             _ => throw new ArgumentOutOfRangeException(nameof(scope))
         };
