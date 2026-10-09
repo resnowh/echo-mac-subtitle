@@ -9,13 +9,30 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
 using Microsoft.Windows.Storage.Pickers;
 using System.Diagnostics;
+using System.Collections.Specialized;
 using System.Text.Json;
 
 namespace Echo_Windows;
 
+public sealed record LanguageChoice(string? Code, string Title);
+
 public sealed partial class MainPage : Page
 {
     private readonly List<Border> waveform = [];
+    private static readonly LanguageChoice[] SourceLanguages =
+    [
+        new(null, "自动识别"), new("en", "English"), new("zh", "简体中文"), new("ja", "日本語"),
+        new("ko", "한국어"), new("es", "Español"), new("fr", "Français"), new("de", "Deutsch"),
+        new("it", "Italiano"), new("pt", "Português"), new("ru", "Русский"), new("ar", "العربية"), new("hi", "हिन्दी")
+    ];
+    private static readonly LanguageChoice[] TargetLanguages =
+    [
+        new(null, "不翻译"), new("en", "English"), new("zh", "简体中文"), new("ja", "日本語"),
+        new("ko", "한국어"), new("es", "Español"), new("fr", "Français"), new("de", "Deutsch"),
+        new("it", "Italiano"), new("pt", "Português"), new("ru", "Русский"), new("ar", "العربية"), new("hi", "हिन्दी")
+    ];
+    private bool isAtTranscriptEnd = true;
+    private readonly HashSet<Guid> observedSubtitleIds = [];
     private int waveformFrame;
     private bool initialized;
     public MainPageViewModel ViewModel { get; } = new();
@@ -23,10 +40,11 @@ public sealed partial class MainPage : Page
     {
         InitializeComponent();
         var c = ViewModel.Config;
+        SourceLanguageChoice.ItemsSource = SourceLanguages;
+        TargetLanguageChoice.ItemsSource = TargetLanguages;
         SonioxModel.Text = c.SonioxModel; DeepSeekModel.Text = c.DeepSeekModel;
         CorrectionTerms.Text = c.CorrectionTerms;
         AutoCorrection.IsOn = c.AutoCorrectionEnabled;
-        SourceLanguage.Text = c.SourceLanguage; TargetLanguage.Text = c.TargetLanguage;
         Translate.IsOn = c.Translate; Speakers.IsOn = c.Speakers; Strict.IsOn = c.Strict;
         try { SonioxKey.Password = Preferences.Unprotect(c.SonioxSecret); DeepSeekKey.Password = Preferences.Unprotect(c.DeepSeekSecret); }
         catch { ViewModel.Status = "密钥无法解密，请重新输入并保存。"; }
@@ -39,8 +57,24 @@ public sealed partial class MainPage : Page
             initialized = true;
             await ViewModel.LoadArchivesAsync();
         };
-        ViewModel.Entries.CollectionChanged += (_, _) => EmptyHint.Visibility = ViewModel.Entries.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        ViewModel.Entries.CollectionChanged += Entries_CollectionChanged;
         EmptyHint.Visibility = ViewModel.Entries.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        TranscriptList.Loaded += (_, _) =>
+        {
+            var scrollViewer = FindDescendant<ScrollViewer>(TranscriptList);
+            if (scrollViewer is not null)
+                scrollViewer.ViewChanged += (_, _) =>
+                {
+                    bool atEnd = scrollViewer.ScrollableHeight - scrollViewer.VerticalOffset <= 32;
+                    if (atEnd)
+                    {
+                        isAtTranscriptEnd = true;
+                        NewContentButton.Visibility = Visibility.Collapsed;
+                    }
+                    else isAtTranscriptEnd = false;
+                };
+            if (ViewModel.Entries.Count > 0) TranscriptList.ScrollIntoView(ViewModel.Entries[^1]);
+        };
         for (int i = 0; i < 64; i++)
         {
             var bar = new Border { Width = 3, Height = 2, CornerRadius = new CornerRadius(2) };
@@ -50,6 +84,7 @@ public sealed partial class MainPage : Page
         ViewModel.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName is nameof(ViewModel.Level) or nameof(ViewModel.IsRecording) or nameof(ViewModel.Status)) UpdateAudioDisplay();
+            if (e.PropertyName == nameof(ViewModel.IsRecording)) UpdateRecordingLanguageHint();
         };
         UpdateAudioDisplay();
         UpdateLanguageHeaders();
@@ -70,9 +105,63 @@ public sealed partial class MainPage : Page
     public static string SubtitleEditAutomationId(Guid subtitleId) => $"EditSubtitle_{subtitleId:N}";
     private void UpdateLanguageHeaders()
     {
-        SourceHeading.Text = ViewModel.Config.SourceLanguage switch { "en" => "English", "zh" => "简体中文", "ja" => "日本語", "" => "原文", var code => code };
-        TargetHeading.Text = ViewModel.Config.TargetLanguage switch { "zh" => "简体中文", "en" => "English", "ja" => "日本語", var code => code };
-        TargetHeading.Visibility = ViewModel.Config.Translate ? Visibility.Visible : Visibility.Collapsed;
+        SourceLanguageChoice.SelectedItem = SourceLanguages.FirstOrDefault(item => item.Code == (string.IsNullOrWhiteSpace(ViewModel.Config.SourceLanguage) ? null : ViewModel.Config.SourceLanguage)) ?? SourceLanguages[0];
+        TargetLanguageChoice.SelectedItem = TargetLanguages.FirstOrDefault(item => item.Code == (ViewModel.Config.Translate ? ViewModel.Config.TargetLanguage : null)) ?? TargetLanguages[0];
+        TargetLanguageChoice.Visibility = ViewModel.Config.Translate ? Visibility.Visible : Visibility.Collapsed;
+        Strict.IsEnabled = !string.IsNullOrWhiteSpace(ViewModel.Config.SourceLanguage);
+        UpdateRecordingLanguageHint();
+    }
+    private void UpdateRecordingLanguageHint() => LanguageNextSessionHint.Visibility = ViewModel.IsRecording ? Visibility.Visible : Visibility.Collapsed;
+    private void Entries_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.NewItems is not null)
+            foreach (Subtitle entry in e.NewItems)
+                if (observedSubtitleIds.Add(entry.Id))
+                    entry.PropertyChanged += (_, args) =>
+                    {
+                        if (ReferenceEquals(ViewModel.Entries.LastOrDefault(), entry)
+                            && args.PropertyName is nameof(Subtitle.English) or nameof(Subtitle.Chinese))
+                            TranscriptContentChanged();
+                    };
+        EmptyHint.Visibility = ViewModel.Entries.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (ViewModel.Entries.Count > 0) TranscriptContentChanged();
+    }
+    private void TranscriptContentChanged()
+    {
+        if (isAtTranscriptEnd)
+        {
+            if (ViewModel.Entries.Count > 0) TranscriptList.ScrollIntoView(ViewModel.Entries[^1]);
+            NewContentButton.Visibility = Visibility.Collapsed;
+        }
+        else NewContentButton.Visibility = Visibility.Visible;
+    }
+    private static T? FindDescendant<T>(DependencyObject parent) where T : DependencyObject
+    {
+        int count = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(parent);
+        for (int index = 0; index < count; index++)
+        {
+            var child = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(parent, index);
+            if (child is T match) return match;
+            if (FindDescendant<T>(child) is { } nested) return nested;
+        }
+        return null;
+    }
+    private void SourceLanguage_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (SourceLanguageChoice.SelectedItem is not LanguageChoice selected) return;
+        ViewModel.Config.SourceLanguage = selected.Code ?? string.Empty;
+        Strict.IsEnabled = selected.Code is not null;
+        ViewModel.Config.Save();
+        UpdateRecordingLanguageHint();
+    }
+    private void TargetLanguage_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (TargetLanguageChoice.SelectedItem is not LanguageChoice selected) return;
+        ViewModel.Config.Translate = selected.Code is not null;
+        if (selected.Code is not null) ViewModel.Config.TargetLanguage = selected.Code;
+        Translate.IsOn = ViewModel.Config.Translate;
+        TargetLanguageChoice.Visibility = ViewModel.Config.Translate ? Visibility.Visible : Visibility.Collapsed;
+        ViewModel.Config.Save();
     }
     private void UpdateAudioDisplay()
     {
@@ -197,7 +286,12 @@ public sealed partial class MainPage : Page
                 (input?.SelectedItem as AudioDevice)?.Id is { Length: > 0 } inId ? inId : null);
     }
     private void Refresh_Click(object sender, RoutedEventArgs e) => ViewModel.RefreshDevices();
-    private void Latest_Click(object sender, RoutedEventArgs e) { if (ViewModel.Entries.Count > 0) TranscriptList.ScrollIntoView(ViewModel.Entries.Last()); }
+    private void Latest_Click(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.Entries.Count > 0) TranscriptList.ScrollIntoView(ViewModel.Entries.Last());
+        isAtTranscriptEnd = true;
+        NewContentButton.Visibility = Visibility.Collapsed;
+    }
     private async void Summary_Click(object sender, RoutedEventArgs e) => await ViewModel.SummarizeAsync(SummaryScope.SelectedIndex);
     private async void Correction_Click(object sender, RoutedEventArgs e)
     {
@@ -274,12 +368,11 @@ public sealed partial class MainPage : Page
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(SonioxModel.Text) || (Translate.IsOn && string.IsNullOrWhiteSpace(TargetLanguage.Text))) throw new InvalidOperationException("请填写模型和翻译目标语言。");
+            if (string.IsNullOrWhiteSpace(SonioxModel.Text) || (Translate.IsOn && string.IsNullOrWhiteSpace(ViewModel.Config.TargetLanguage))) throw new InvalidOperationException("请填写模型和翻译目标语言。");
             var c = ViewModel.Config;
             c.SonioxSecret = Preferences.Protect(SonioxKey.Password.Trim()); c.DeepSeekSecret = Preferences.Protect(DeepSeekKey.Password.Trim());
             c.CorrectionTerms = CorrectionTerms.Text.Trim();
             c.SonioxModel = SonioxModel.Text.Trim(); c.DeepSeekModel = DeepSeekModel.Text.Trim();
-            c.SourceLanguage = SourceLanguage.Text.Trim(); c.TargetLanguage = TargetLanguage.Text.Trim();
             c.Translate = Translate.IsOn; c.Strict = Strict.IsOn; c.Speakers = Speakers.IsOn;
             c.AutoCorrectionEnabled = AutoCorrection.IsOn;
             c.Theme = ThemeChoice.SelectedIndex == 1 ? "Light" : ThemeChoice.SelectedIndex == 2 ? "Dark" : "Default";

@@ -21,8 +21,8 @@ Windows 来源：`feature/windows-preview` 本地 `d500bbb`（远端为 `64f2b89
 |---|---|---|---|
 | 简洁主窗口：品牌、主题、置顶、字幕优先、底部录音与存档工具 | 单页 WinUI，双语列表、主题、置顶、录音、归档、导出等均存在；设置是独立页面 | 功能存在但行为不同 | `macOS/EchoMacApp.swift`；`windows/Echo.Windows/MainPage.xaml`。压缩布局和视觉尺寸需实机对照 |
 | 双语字幕列表；支持选择、纠正、说话人、时间 | 双列字幕，带时间、说话人、检测语言、纠正入口 | 部分实现 | `macOS/Views/TranscriptViews.swift`；`windows/Echo.Windows/MainPage.xaml`。日分隔、字体与紧凑行距未对齐 |
-| 用户滚离底部后停止跟随，并显示“有新内容”按钮 | ListView 绑定字幕集合；未发现离底检测和新内容提示 | 缺失 | Mac `SynchronizedTranscriptView` 的 `isAtBottom`、`hasNewContent`、`contentDidChange`；Windows `TranscriptList`。应补滚动锚点状态与显式返回最新按钮 |
-| 主字幕区可选识别语言及翻译目标，录音中提示下次录音生效 | 设置页用文本框填写源/目标语言代码；没有主界面语言菜单 | 功能存在但行为不同 | `macOS/Views/TranscriptViews.swift`、`macOS/Models/TranscriptModels.swift`；Windows `MainPage.xaml`、`Preferences.cs`。应使用同一受支持语言清单及自动识别/不翻译项 |
+| 用户滚离底部后停止跟随，并显示“有新内容”按钮 | 新内容追加时保留用户历史位置，显示回到底部按钮；加载时滚至最新条目 | 功能存在但行为不同 | Mac `SynchronizedTranscriptView`；Windows `MainPage.xaml`、`MainPage.xaml.cs`。应通过 UI smoke 检查滚动事件与虚拟化列表交互 |
+| 主字幕区可选识别语言及翻译目标，录音中提示下次录音生效 | 主界面提供 Mac 同款 12 种语言、自动识别、不翻译选项；更改配置写入本地并提示下次录音生效 | 功能存在但行为不同 | Mac `macOS/Views/TranscriptViews.swift`、`macOS/Models/TranscriptModels.swift`；Windows `MainPage.xaml`、`MainPage.xaml.cs`、`Core/Preferences.cs`。Windows 仍保留“翻译”设置开关，菜单项会同步开关状态 |
 | 四个设置分类：常规、识别、分段、AI 服务 | 一个滚动页面，以卡片分组；没有 Soniox 端点/本地兜底分段设置 | 功能存在但行为不同 | `macOS/EchoMacApp.swift` `SettingsView`；`windows/Echo.Windows/MainPage.xaml`。保持 Windows 原生控件，按四类重组并补齐分段配置 |
 | 音源：电脑音频、麦克风、混合；授权状态和音频电平 | WASAPI loopback、麦克风及本地混音；设备切换、恢复策略和电平已实现 | 部分实现 | `macOS/EchoMacApp.swift`；Windows `Services/AudioCapture.cs`、`SpeechSession.cs`、`MainPageViewModel.cs`。API 权限表达、声卡和睡眠行为尚未端到端对拍 |
 | Soniox 临时字幕更新、最终字幕落定、翻译迟到、端点与说话人 | Token assembler、临时替换、最终追加、翻译延迟关联、说话人分段及回归检查存在 | 尚未验证 | Windows `Core/Transcript.cs`、`Services/SpeechSession.cs`、`Echo.CoreChecks/Program.cs`；需要基于同一合成事件序列与 Mac 结果逐项对拍 |

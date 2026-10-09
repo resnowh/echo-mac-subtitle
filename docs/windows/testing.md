@@ -15,7 +15,7 @@ Windows 仓库已有 `windows/Echo.CoreChecks/Program.cs`，覆盖转写 token �
 ## 本轮已运行
 
 1. `dotnet run --project windows/Echo.CoreChecks -c Release`：52 项通过。运行于 Windows 10.0.26200、.NET SDK 10.0.401；检查中包含本地模拟服务，不调用云端，不保存真实音频。
-2. Windows Release x64 编译：`dotnet restore ... --locked-mode -p:Platform=x64` 后执行 `dotnet build ... -c Release -p:Platform=x64 --no-restore`，成功，0 警告、0 错误；编译没有启动应用。
+2. Windows Release x64 编译：按锁文件还原依赖后执行 `dotnet build windows/Echo.Windows/Echo.Windows.csproj -c Release -p:Platform=x64 --no-restore`，最新源码成功，0 警告、0 错误；编译没有启动应用。
 3. 执行 `git diff --check`，检查提交路径确保无 `macOS/`、`tests/` 文件。
 4. UI smoke 未运行：本轮不启动应用，因此 UI、Narrator、DPI、多屏、录音硬件均未验。
 

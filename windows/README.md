@@ -4,7 +4,7 @@
 
 ## 与 macOS 的当前差异
 
-macOS 对照基线、逐项现状和优先级见 [Mac parity matrix](../docs/windows/mac-parity-matrix.md)。当前 Windows 已覆盖录音、Soniox 转写、双语字幕、存档、导出和 AI 辅助等主路径；主界面语言菜单、字幕自动滚动提示、Mac 四类设置/分段参数以及透明悬浮字幕窗仍需对齐。矩阵区分静态代码证据、自动检查和真实设备验收，不能将旧分支的历史构建或测试记录视为本分支当前验证。
+macOS 对照基线、逐项现状和优先级见 [Mac parity matrix](../docs/windows/mac-parity-matrix.md)。当前 Windows 已覆盖录音、Soniox 转写、双语字幕、存档、导出和 AI 辅助等主路径；主界面语言菜单和字幕新内容提示已补齐。Mac 四类设置/分段参数及透明悬浮字幕窗仍需对齐。矩阵区分静态代码证据、自动检查和真实设备验收，不能将旧分支的历史构建或测试记录视为本分支当前验证。
 
 UI 方案见 [ui-parity.md](../docs/windows/ui-parity.md)，功能计划见 [functional-parity.md](../docs/windows/functional-parity.md)，测试边界见 [testing.md](../docs/windows/testing.md)。
 
