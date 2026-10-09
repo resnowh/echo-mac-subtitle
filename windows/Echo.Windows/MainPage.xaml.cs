@@ -468,13 +468,19 @@ public sealed partial class MainPage : Page
     private async void Correction_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button { DataContext: Subtitle entry }) return;
-        var source = new TextBox { Header = "原文", Text = entry.English, AcceptsReturn = true, MinHeight = 88, TextWrapping = TextWrapping.Wrap };
-        var translation = new TextBox { Header = "译文", Text = entry.Chinese, AcceptsReturn = true, MinHeight = 88, TextWrapping = TextWrapping.Wrap };
+        string baselineSource = entry.English, baselineTranslation = entry.Chinese;
+        var source = new TextBox { Header = "原文", Text = baselineSource, AcceptsReturn = true, MinHeight = 88, TextWrapping = TextWrapping.Wrap };
+        var translation = new TextBox { Header = "译文", Text = baselineTranslation, AcceptsReturn = true, MinHeight = 88, TextWrapping = TextWrapping.Wrap };
         AutomationProperties.SetAutomationId(source, "CorrectionSource");
         AutomationProperties.SetAutomationId(translation, "CorrectionTranslation");
+        var updateNotice = new TextBlock { Text = "本条识别稿仍在更新；保存只覆盖你编辑过的字段。", TextWrapping = TextWrapping.Wrap,
+            Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"], Visibility = Visibility.Collapsed };
+        var reload = new Button { Content = "载入最新识别稿", HorizontalAlignment = HorizontalAlignment.Left, Visibility = Visibility.Collapsed };
         var suggestionText = new TextBlock { TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
         var body = new StackPanel { Spacing = 10, MaxWidth = 620 };
-        body.Children.Add(source); body.Children.Add(translation);
+        body.Children.Add(new TextBlock { Text = "录音会继续。只保存改动的字段；未编辑的内容继续接收识别结果。", TextWrapping = TextWrapping.Wrap,
+            Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"] });
+        body.Children.Add(updateNotice); body.Children.Add(reload); body.Children.Add(source); body.Children.Add(translation);
         if (entry.Correction is { } correction)
         {
             body.Children.Add(new TextBlock { Text = "识别稿（保留原始识别）", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
@@ -495,24 +501,84 @@ public sealed partial class MainPage : Page
         body.Children.Add(actions); body.Children.Add(suggestionText);
         suggestionText.Text = ViewModel.GetCorrectionStatus(entry) ?? "";
         body.Children.Add(new TextBlock { Text = "AI 只读取文字。点击请求会把本句和相邻上下文发送给 DeepSeek，可能产生费用；建议需手动应用。", TextWrapping = TextWrapping.Wrap, Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"] });
-        var dialog = new ContentDialog { Title = "纠正字幕", Content = body, PrimaryButtonText = "保存纠正", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot };
+        var root = new Grid();
+        var bodyHost = new ContentControl { Content = body };
+        root.Children.Add(bodyHost);
+        var discardConfirmation = new Border
+        {
+            Width = 360, Padding = new Thickness(20), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            Background = (Brush)Application.Current.Resources["EchoCanvasBrush"], BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), Visibility = Visibility.Collapsed
+        };
+        var discardActions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Spacing = 8 };
+        var discardButton = new Button { Content = "放弃修改" };
+        var continueButton = new Button { Content = "继续编辑" };
+        discardActions.Children.Add(discardButton); discardActions.Children.Add(continueButton);
+        var discardContent = new StackPanel { Spacing = 16 };
+        discardContent.Children.Add(new TextBlock { Text = "放弃尚未保存的修改？", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
+        discardContent.Children.Add(discardActions); discardConfirmation.Child = discardContent;
+        root.Children.Add(discardConfirmation);
+        AutomationProperties.SetAutomationId(discardButton, "DiscardCorrectionEdits");
+        AutomationProperties.SetAutomationId(continueButton, "ContinueCorrectionEditing");
+        string? sourceChange = null, translationChange = null;
+        var dialog = new ContentDialog { Title = "纠正字幕", Content = root, PrimaryButtonText = "保存纠正", CloseButtonText = "关闭", DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot,
+            IsPrimaryButtonEnabled = false };
+        bool IsDirty() => source.Text != baselineSource || translation.Text != baselineTranslation;
+        bool HasLiveUpdate() => entry.English != baselineSource || entry.Chinese != baselineTranslation;
+        bool requesting = false, hasSuggestion = false, allowClose = false;
+        void RefreshEditorState()
+        {
+            bool dirty = IsDirty();
+            ai.IsEnabled = !dirty && !requesting;
+            translate.IsEnabled = !dirty && !requesting && ViewModel.Config.Translate;
+            undo.IsEnabled = !dirty && !requesting && entry.CanUndoCorrection;
+            accept.IsEnabled = !dirty && !requesting && hasSuggestion;
+            dialog.IsPrimaryButtonEnabled = dirty && !string.IsNullOrWhiteSpace(source.Text);
+            updateNotice.Visibility = HasLiveUpdate() ? Visibility.Visible : Visibility.Collapsed;
+            reload.Visibility = HasLiveUpdate() ? Visibility.Visible : Visibility.Collapsed;
+            reload.IsEnabled = !dirty && !requesting;
+        }
+        source.TextChanged += (_, _) => RefreshEditorState();
+        translation.TextChanged += (_, _) => RefreshEditorState();
+        entry.PropertyChanged += Entry_PropertyChanged;
+        void Entry_PropertyChanged(object? _, System.ComponentModel.PropertyChangedEventArgs args)
+        {
+            if (args.PropertyName is nameof(Subtitle.English) or nameof(Subtitle.Chinese)) RefreshEditorState();
+        }
+        reload.Click += (_, _) =>
+        {
+            source.Text = baselineSource = entry.English;
+            translation.Text = baselineTranslation = entry.Chinese;
+            suggestionText.Text = "已载入最新识别稿。";
+            RefreshEditorState();
+        };
         dialog.PrimaryButtonClick += (_, args) =>
         {
             if (string.IsNullOrWhiteSpace(source.Text)) { args.Cancel = true; ViewModel.Status = "原文不能为空。"; }
+            else { sourceChange = source.Text != baselineSource ? source.Text : null; translationChange = translation.Text != baselineTranslation ? translation.Text : null; allowClose = true; }
         };
+        dialog.Closing += (_, args) =>
+        {
+            if (allowClose || !IsDirty()) return;
+            args.Cancel = true;
+            bodyHost.IsEnabled = false;
+            discardConfirmation.Visibility = Visibility.Visible;
+        };
+        continueButton.Click += (_, _) => { discardConfirmation.Visibility = Visibility.Collapsed; bodyHost.IsEnabled = true; };
+        discardButton.Click += (_, _) => { allowClose = true; dialog.Hide(); };
         async Task Request(bool translateOnly)
         {
-            ai.IsEnabled = translate.IsEnabled = accept.IsEnabled = false;
+            requesting = true; RefreshEditorState();
             suggestionText.Text = "正在请求建议…";
             var result = await ViewModel.RequestCorrectionAsync(entry, translateOnly);
             if (result is not null)
             {
                 suggestionText.Text = $"{(result.Uncertain ? "待确认建议（AI 无法确认原音）" : "AI 建议")}\n{result.Source}\n{result.Translation}\n{result.Reason}";
-                accept.IsEnabled = true;
                 accept.Tag = result;
+                hasSuggestion = true;
             }
             else suggestionText.Text = ViewModel.Status;
-            ai.IsEnabled = translate.IsEnabled = true;
+            requesting = false; RefreshEditorState();
         }
         ai.Click += async (_, _) => await Request(false);
         translate.Click += async (_, _) => await Request(true);
@@ -522,15 +588,18 @@ public sealed partial class MainPage : Page
         };
         undo.Click += (_, _) =>
         {
-            ViewModel.UndoCorrection(entry); source.Text = entry.English; translation.Text = entry.Chinese;
-            undo.IsEnabled = entry.CanUndoCorrection; suggestionText.Text = "已撤销上次纠正；当前字幕保留为人工选择。";
+            ViewModel.UndoCorrection(entry); source.Text = baselineSource = entry.English; translation.Text = baselineTranslation = entry.Chinese;
+            suggestionText.Text = "已撤销上次纠正；当前字幕保留为人工选择。"; RefreshEditorState();
         };
         if (ViewModel.GetSuggestion(entry) is { } prior)
         {
             suggestionText.Text = $"{(prior.Uncertain ? "待确认建议（AI 无法确认原音）" : "AI 建议")}\n{prior.Source}\n{prior.Translation}\n{prior.Reason}";
-            accept.IsEnabled = true; accept.Tag = prior;
+            hasSuggestion = true; accept.Tag = prior;
         }
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary) ViewModel.SaveCorrection(entry, source.Text, translation.Text);
+        RefreshEditorState();
+        ContentDialogResult result = await dialog.ShowAsync();
+        entry.PropertyChanged -= Entry_PropertyChanged;
+        if (result == ContentDialogResult.Primary) ViewModel.SaveCorrection(entry, sourceChange, translationChange);
     }
     private void Topmost_Toggled(object sender, RoutedEventArgs e)
     {

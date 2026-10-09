@@ -253,8 +253,10 @@ public partial class MainPageViewModel : ObservableObject
         try { await saves.FlushAsync(); return true; }
         catch (Exception e) { Status = TranscriptFiles.SaveFailureMessage(e); return false; }
     }
-    public void SaveCorrection(Subtitle entry, string source, string translation)
+    public void SaveCorrection(Subtitle entry, string? source, string? translation)
     {
+        if (source is null && translation is null) return;
+        if (string.IsNullOrWhiteSpace(source ?? entry.English)) { Status = "原文不能为空。"; return; }
         entry.Edit(source, translation);
         if (entry.Correction is null) return;
         correctionSuggestions.Remove(entry.Id);

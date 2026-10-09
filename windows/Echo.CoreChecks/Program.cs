@@ -99,6 +99,16 @@ Check(segment.Entries[0].English == "Hello world", "provisional replacement with
 Apply("""{"tokens":[{"text":" there.","is_final":true,"start_ms":400,"end_ms":800},{"text":"<end>","is_final":true,"translation_status":"original"},{"text":"Next.","is_final":true,"start_ms":1500,"end_ms":2000}]}""");
 Apply("""{"tokens":[{"text":"你好。","is_final":true,"translation_status":"translation"},{"text":"<end>","is_final":true,"translation_status":"translation"}]}""");
 Check(segment.Entries[0].English == "Hello there." && segment.Entries[0].Chinese == "你好。" && segment.Entries[1].Chinese == "", "delayed translation remains with previous source endpoint");
+var fieldEdit = new Subtitle { English = "Initial source", Chinese = "初始译文" };
+fieldEdit.ApplyRecognition("最新识别原文", "最新识别译文");
+fieldEdit.Edit("人工编辑原文", null);
+fieldEdit.ApplyRecognition("更晚识别原文", "更晚识别译文");
+Check(fieldEdit.English == "人工编辑原文" && fieldEdit.Chinese == "更晚识别译文"
+    && fieldEdit.Correction is { SourceLocked: true, TranslationLocked: false, RawSource: "更晚识别原文", RawTranslation: "更晚识别译文" },
+    "saving only the edited field preserves the current translation and leaves it open to live updates");
+Check(fieldEdit.UndoCorrection() && fieldEdit.English == "最新识别原文" && fieldEdit.Chinese == "最新识别译文"
+    && fieldEdit.Correction is { SourceLocked: true, TranslationLocked: true },
+    "field-level undo restores the exact pre-edit pair and locks both restored values");
 var editedSegment = new Segment(); var editedAssembler = new TokenAssembler(editedSegment, _ => { });
 void ApplyEdited(string text) { using var doc = JsonDocument.Parse(text); editedAssembler.Apply(doc.RootElement); }
 ApplyEdited("""{"tokens":[{"text":"Recognized","is_final":false}]}""");

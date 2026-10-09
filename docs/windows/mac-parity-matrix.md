@@ -2,7 +2,7 @@
 
 核验日期：2026-10-09
 macOS 基线：`origin/main`，`ae0359dc90da0ccb5e526a275da1747954a49a4f`
-Windows 来源：`feature/windows-preview` 本地 `d500bbb`（远端为 `64f2b89`）；本分支只迁移 `windows/` 和 `docs/sources/windows-*`，未迁移 Mac 文件。
+Windows 来源：当前 PR 分支 `feature/windows-mac-parity`；其历史迁移基线为 `feature/windows-preview` 本地 `d500bbb`（远端为 `64f2b89`）。本分支只迁移 `windows/` 和 `docs/sources/windows-*`，未迁移 Mac 文件。
 状态：`完全一致`、`功能存在但行为不同`、`部分实现`、`缺失`、`平台客观限制`、`尚未验证`。
 
 ## 数据底稿与来源清单
@@ -10,7 +10,7 @@ Windows 来源：`feature/windows-preview` 本地 `d500bbb`（远端为 `64f2b89
 | 数据 | 来源及范围 | 本次记录 | 限制 |
 |---|---|---|---|
 | 当前 Mac 行为 | GitHub `origin/main`，以上 SHA；PR #1–#4 均已合并 | 本表逐项记录 UI、配置、字幕和浮层的源码位置 | 只代表该提交，不代表之后尚未拉取的远端更新 |
-| Windows 实现 | 本机旧 Windows 分支的 `windows/` | 文件清单、现有能力、待对齐行为 | 没有运行 UI 或真实音频硬件 |
+| Windows 实现 | 当前 PR 分支 `windows/`；历史迁移来源见上文 | 文件清单、现有能力、待对齐行为 | 没有运行 UI 或真实音频硬件 |
 | Windows 检查底稿 | `docs/sources/windows-*` | 保留原有构建、核心检查和签名包记录 | 历史测试结论只适用于底稿注明的代码版本 |
 
 本次核验前已执行 fetch 并以最新 `origin/main` 建立独立分支；没有把旧混合分支合并进来。旧分支曾含 Mac 源码提交，因此不得整体 cherry-pick 或合并。详细测试证据见 [testing.md](testing.md) 与 `docs/sources/windows-*`。
@@ -21,6 +21,7 @@ Windows 来源：`feature/windows-preview` 本地 `d500bbb`（远端为 `64f2b89
 |---|---|---|---|
 | 简洁主窗口：品牌、主题、置顶、字幕优先、底部录音与存档工具 | 单页 WinUI，双语列表、主题、置顶、录音、归档、导出等均存在；设置是独立页面 | 功能存在但行为不同 | `macOS/EchoMacApp.swift`；`windows/Echo.Windows/MainPage.xaml`。压缩布局和视觉尺寸需实机对照 |
 | 双语字幕列表；支持选择、纠正、说话人、时间和跨天日期分隔 | 双列字幕，带时间、说话人、检测语言、纠正入口；相邻字幕跨本地日历日期时显示日期分隔行 | 功能存在但行为不同 | `macOS/Views/TranscriptViews.swift`；`windows/Echo.Windows/MainPage.xaml`、`MainPageViewModel.cs`、`Core/Transcript.cs`。字体与紧凑行距未 GUI 对照 |
+| 字幕编辑：只保存改动字段；录音继续时其余字段继续更新；确认丢弃、载入最新识别稿、撤销和 AI 建议确认 | 编辑器按 baseline 只提交修改字段；识别稿变化时显示提示，可在未编辑时载入最新文本；关闭有未保存修改时要求确认；人工恢复值仍锁定防止迟到识别覆盖 | 功能存在但行为不同 | Mac `macOS/Views/TranscriptViews.swift`、`SpeechViewModel.swift`、`TranscriptModels.swift`；Windows `MainPage.xaml.cs`、`MainPageViewModel.cs`、`Core/Transcript.cs`。字段锁定/原稿/撤销有核心检查；UI 对话框与正在录音时的交互未实测 |
 | 用户滚离底部后停止跟随，并显示“有新内容”按钮 | 新内容追加时保留用户历史位置，显示回到底部按钮；加载时滚至最新条目 | 功能存在但行为不同 | Mac `SynchronizedTranscriptView`；Windows `MainPage.xaml`、`MainPage.xaml.cs`。应通过 UI smoke 检查滚动事件与虚拟化列表交互 |
 | 主字幕区可选识别语言及翻译目标，录音中提示下次录音生效 | 主界面提供 Mac 同款 12 种语言、自动识别、不翻译选项；更改配置写入本地并提示下次录音生效 | 功能存在但行为不同 | Mac `macOS/Views/TranscriptViews.swift`、`macOS/Models/TranscriptModels.swift`；Windows `MainPage.xaml`、`MainPage.xaml.cs`、`Core/Preferences.cs`。Windows 仍保留“翻译”设置开关，菜单项会同步开关状态 |
 | 四个设置分类：常规、识别、分段、AI 服务 | WinUI SelectorBar 切换四类设置，参数修改后保存到本地 | 功能存在但行为不同 | Mac `macOS/EchoMacApp.swift`；Windows `windows/Echo.Windows/MainPage.xaml`、`MainPage.xaml.cs`。控件平台原生，实际键盘和 Narrator 行为未验 |

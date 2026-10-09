@@ -48,14 +48,16 @@ public partial class Subtitle : ObservableObject
         }
         else { English = source; Chinese = translation; }
     }
-    public void Edit(string source, string translation)
+    public void Edit(string? source, string? translation)
     {
-        if (source == English && translation == Chinese) return;
+        string updatedSource = source ?? English;
+        string updatedTranslation = translation ?? Chinese;
+        if (updatedSource == English && updatedTranslation == Chinese) return;
         Correction ??= new SubtitleCorrection { RawSource = English, RawTranslation = Chinese };
         Correction.History.Add(new SubtitleRevision { Source = English, Translation = Chinese, Date = DateTimeOffset.UtcNow });
-        if (source != English) Correction.SourceLocked = true;
-        if (translation != Chinese) Correction.TranslationLocked = true;
-        Correction.Revision = Guid.NewGuid(); English = source; Chinese = translation;
+        if (updatedSource != English) Correction.SourceLocked = true;
+        if (updatedTranslation != Chinese) Correction.TranslationLocked = true;
+        Correction.Revision = Guid.NewGuid(); English = updatedSource; Chinese = updatedTranslation;
         OnPropertyChanged(nameof(CorrectionLabel)); OnPropertyChanged(nameof(HasCorrection)); OnPropertyChanged(nameof(CanUndoCorrection));
     }
     public bool UndoCorrection()
