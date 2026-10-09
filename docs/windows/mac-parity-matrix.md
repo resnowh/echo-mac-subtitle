@@ -15,6 +15,7 @@ Windows 来源：当前 PR 分支 `feature/windows-mac-parity`；其历史迁移
 | AI 总结呈现 | Mac `EchoMacApp.swift`、`TranscriptViews.swift` | A29 记录 Markdown 分块、默认展开、收起/复制与 Windows 合成验证 | 尚无 GUI 视觉或剪贴板实测 |
 | Soniox 多响应处理 | Mac `SpeechViewModel.handleSonioxMessage` 等生产路径 | A35 七响应 production differential 已通过，覆盖同响应 speaker 合并与跨响应 speaker 切分 | 固定合成输入与真实云响应仍有差别；其他 token 序列仍待覆盖 |
 | 双路 PCM 混音欠载行为 | Mac `PCM16TimelineMixer` 与 Windows `AudioCapture.ReadFrame` / `AudioFrameMixer` | A36 对照发现并修正 Windows 欠载时固定双路除数导致的音量衰减；97 项 CoreChecks 与 Windows Release 构建通过 | 确定性样本检查不替代真实 WASAPI 设备、时钟漂移及长时间采集验收；Mac 源码基线和 Windows 代码版本见 A36 |
+| Soniox WebSocket 鉴权 | Mac `SpeechViewModel.openSonioxSocket` 仍把 `api_key` 放在起始配置 JSON；Windows 在握手发送 Bearer header，并从配置 JSON 排除密钥 | Windows 按 Soniox 当前推荐方式实现；保留 Mac 当前行为，不反向降级 Windows | 功能存在但行为不同 | 本地模拟 WebSocket 检查验证 Bearer header、配置不含密钥、握手后 401/402/403/429/503/413 错误分类；官方旧方式迁移时间及源码证据见 [A37](../sources/windows-a37-soniox-auth-protocol-2026-10-10.md) |
 | 默认主题与切换顺序 | Mac 默认深色，`AppThemeMode.allCases` 为浅色、深色、系统 | Windows 新配置/缺省字段默认深色，设置项和循环顺序与 Mac 一致；显式保存值保留 | 静态源码及 CoreChecks 通过；系统外观 GUI 尚未实测，见 A31 |
 | 跨显示器悬浮字幕布局与 DPI 变化 | Mac 监听显示器配置变化，按目标屏幕重新计算透明字幕窗位置和宽度，并恢复已保存的屏幕位置 | Windows 按显示器 ID 记住上次屏幕；`AppWindow.Changed` 与 `DisplayAreaWatcher` 更新后重新计算物理像素矩形；拖动/缩放使用屏幕坐标 | A34 的 100/150/200% 合成布局检查通过；真实异 DPI 显示器、拔插、工作区变化仍待 GUI 验收 |
 

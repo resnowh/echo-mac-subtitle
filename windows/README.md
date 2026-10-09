@@ -2,6 +2,14 @@
 
 原生 WinUI 3 / C# 实现，与 `macOS/` 并列维护。当前交付目标是 Windows 11 x64；Mac 实现未修改。Android/iOS 暂未实现。
 
+## 当前开发基线
+
+- Windows 分支：`feature/windows-mac-parity`；本轮核验起始快照为 `76356a978226619f4653e2bd8344bfb9815cb040`。PR [#5](https://github.com/resnowh/echo-mac-subtitle/pull/5) 尚未合并。
+- Mac 产品基线：`origin/main` `ae0359dc90da0ccb5e526a275da1747954a49a4f`。
+- 2026-10-10：97 项本地 CoreChecks、Release x64 构建和 PR 必需 CI 检查通过。源码检查和 CI 不代表真实音频设备或完整 GUI 验收。
+- Soniox 实时模型为 `stt-rt-v5`。Windows 在 WebSocket 握手发送 Bearer API Key，配置 JSON 不重复包含密钥；Mac 当前代码仍把密钥放在起始配置中。按项目约束不改 Mac，Windows 保持官方推荐的握手鉴权。官方迁移时间与测试证据见 [A37 Soniox protocol baseline](../docs/sources/windows-a37-soniox-auth-protocol-2026-10-10.md)。
+- 正式发行尚未就绪：真实浮层/多屏/音频验收、受信任发布者签名、干净机器安装升级和隐私政策仍待完成。Soniox 官方建议客户端使用临时 Key；当前项目没有签发临时 Key 的后端，Windows 采用个人自行填写的 Key 与本机 DPAPI 存储。Android/iOS 不在当前交付范围。
+
 ## 与 macOS 的当前差异
 
 macOS 对照基线、逐项现状和优先级见 [Mac parity matrix](../docs/windows/mac-parity-matrix.md)。当前 Windows 已覆盖录音、Soniox 转写、双语字幕、存档、导出和 AI 辅助等主路径；主界面语言菜单、字幕新内容提示、透明悬浮字幕窗、四类设置和 Soniox/local 分段参数已接入。悬浮窗口的透明渲染、点击穿透、多屏/DPI 和全屏行为尚未 GUI 验收。矩阵区分源码、自动检查和真实设备验收，不能将旧分支历史记录当成本分支验证。
@@ -61,9 +69,9 @@ NuGet 版本记录在 `packages.lock.json`。GitHub Actions 在 Windows runner �
 
 ## 测试签名安装包
 
-最新本机候选：`windows/artifacts/Echo-Windows-x64-a26-20261009.msix`（版本 1.0.3.0，108,214,565 bytes），包含运行时；SHA-256 和逐版信息见 [A18 打包底稿](../docs/sources/windows-a18-msix-preview-2026-09-30.md)。附带 `Echo-preview.cer` 公钥证书。**这是自签名测试包，不是公众发行证书，也不是商店上架版本。**
+历史测试候选：A26 `Echo-Windows-x64-a26-20261009.msix`（版本 1.0.3.0，108,214,565 bytes）曾在本机生成；该文件当前不在工作区，且不是当前 PR 源码的构建产物。历史 SHA-256 和签名信息见 [A18 打包底稿](../docs/sources/windows-a18-msix-preview-2026-09-30.md)。它是自签名测试包，不是公众发行证书，也不是商店上架版本。
 
-其他测试机器需要先审查并信任该测试发布者证书，再安装 MSIX；普通用户直接双击可能被不受信任证书拦截。此前候选包曾通过开发注册启动；当前 A26 预览包没有安装或启动，`Get-AuthenticodeSignature` 显示证书链终止于未受信任根。尚未用另一台干净机器验证安装。不要把本机的 `.pfx` 私钥发给测试用户或提交到 Git。安装包和私钥均被 Git 忽略。
+其他测试机器需要先审查并信任该测试发布者证书，再安装 MSIX；普通用户直接双击可能被不受信任证书拦截。历史记录显示 A26 证书链终止于未受信任根，且没有在另一台干净机器验证安装。不要把本机的 `.pfx` 私钥发给测试用户或提交到 Git。安装包和私钥均被 Git 忽略。
 
 在当前 Release 构建输出、Windows SDK Build Tools 与测试签名证书已就绪后，可用打包脚本生成新包。输出路径必须唯一；脚本会校验清单、签名者和包内 exe/dll 与当前构建一致，且不会启动或安装应用：
 
@@ -80,7 +88,7 @@ NuGet 版本记录在 `packages.lock.json`。GitHub Actions 在 Windows runner �
 
 2026-09-30：A15 无障碍语义修正后的 Windows Release x64 输出生成签名候选 A24 `windows/artifacts/Echo-Windows-x64-a24-20260930.msix`（108,211,492 bytes）。打包脚本已在签名前后核对清单和 exe/dll 哈希；包 SHA-256、签名状态与安装限制见 `docs/sources/windows-a18-msix-preview-2026-09-30.md`。自签名链仍不受信任，未安装、导入证书或启动 Echo。
 
-2026-10-09：为包含 NAudio `WasapiRecorder` 迁移的当前源码，将包版本递增至 1.0.3.0，并生成 A26 `windows/artifacts/Echo-Windows-x64-a26-20261009.msix`（108,214,565 bytes）。WinUI analyzer 启用时 Release x64 构建成功，打包脚本完成签名后解包，exe/dll 哈希均与 Release 输出相同。测试证书根仍不受信任；未安装、信任证书或启动 Echo。包哈希和二进制哈希见 `docs/sources/windows-a18-msix-preview-2026-09-30.md`。
+2026-10-09：为包含 NAudio `WasapiRecorder` 迁移的源码，将包版本递增至 1.0.3.0，并曾生成 A26 测试 MSIX（108,214,565 bytes）。WinUI analyzer 启用时 Release x64 构建成功，打包脚本完成签名后解包，exe/dll 哈希与当时 Release 输出相同。测试证书根不受信任；历史记录显示未安装、信任证书或启动 Echo。包哈希和二进制哈希见 `docs/sources/windows-a18-msix-preview-2026-09-30.md`。该旧包文件目前不在工作区，不能用作当前源码安装包。
 
 2026-09-17：Release 构建成功；14 项本地核心/采集/模拟协议检查通过；9 项 UI 冒烟检查通过；另通过实际文件选择器完成示例 JSON 导入及 SRT 导出，核对三段原文、译文与时间戳。已实际打开窗口并检查主界面、设置界面截图，修复高 DPI 下字幕区域高度问题。按用户选定的 Mac 风格重做双栏字幕、底部控制、薄荷绿主题和居中设置面板；原界面已备份。窗口中的“示例”存档为人工测试文字，不是真实语音识别结果。
 
@@ -94,7 +102,7 @@ NuGet 版本记录在 `packages.lock.json`。GitHub Actions 在 Windows runner �
 - 启动读取/解析、自动存档序列化与写盘、导出序列化均在后台；保存前仍会在 UI 线程复制一致性快照，超长存档的复制可能短暂占用 UI 线程，尚未压力测试。
 - 界面当前以简体中文为主，尚未完成完整本地化。高对比度颜色映射、设置面板键盘焦点进出、标题层级与状态播报已补齐静态支持，但仍未用真实对比主题、键盘、Narrator/读屏工具实测；多 DPI 验收也待完成。
 
-代码维护在 `feature/windows-preview` 分支；先前方案文档已在主分支发布。
+代码维护在隔离分支 `feature/windows-mac-parity`，PR #5 当前保持未合并；PR 差异不包含 `macOS/` 文件。提交和验证状态以 GitHub 当前 PR 为准。
 
 
 2026-09-29：进一步参照 macOS/EchoMacApp.swift 和 TranscriptViews.swift，完成双栏字幕表头、逐行分隔、底部录音/存档/波形三行操作、顶部主题切换及设置覆盖面板。Release 构建与 9 项 UI 冒烟检查通过；截图保留在工作区 docs/sources/windows-mac-ui-*.png。
