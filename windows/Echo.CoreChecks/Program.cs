@@ -56,6 +56,20 @@ var audioModeRoundTrip = JsonSerializer.Deserialize<Preferences>(JsonSerializer.
 Check(new Preferences().AudioInputMode == 1 && legacyAudioPreferences?.AudioInputMode == 1
     && audioModeRoundTrip?.AudioInputMode == 2 && new Preferences { AudioInputMode = 9 }.Validate().AudioInputMode == 1,
     "audio input mode defaults to Mac microphone, persists, and repairs unsupported values");
+var correctionPreferences = new Preferences { SourceLanguage = "en", TargetLanguage = "zh", Translate = true, Strict = false, Speakers = true };
+var correctionRecognitionSnapshot = CorrectionRecognitionSnapshot.Capture(correctionPreferences);
+Check(correctionRecognitionSnapshot.Matches(correctionPreferences)
+    && !correctionRecognitionSnapshot.Matches(new Preferences { SourceLanguage = "", TargetLanguage = "zh", Translate = true, Strict = false, Speakers = true })
+    && !correctionRecognitionSnapshot.Matches(new Preferences { SourceLanguage = "en", TargetLanguage = "ja", Translate = true, Strict = false, Speakers = true })
+    && !correctionRecognitionSnapshot.Matches(new Preferences { SourceLanguage = "en", TargetLanguage = "zh", Translate = false, Strict = false, Speakers = true })
+    && !correctionRecognitionSnapshot.Matches(new Preferences { SourceLanguage = "en", TargetLanguage = "zh", Translate = true, Strict = true, Speakers = true })
+    && !correctionRecognitionSnapshot.Matches(new Preferences { SourceLanguage = "en", TargetLanguage = "zh", Translate = true, Strict = false, Speakers = false }),
+    "AI correction recognition snapshots become stale when any Mac-equivalent language or speaker option changes");
+var mainPageViewModelSource = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "MainPageViewModel.cs"));
+Check(mainPageViewModelSource.Contains("CorrectionRecognitionSnapshot.Capture(Config)", StringComparison.Ordinal)
+    && mainPageViewModelSource.Contains("!recognitionSnapshot.Matches(Config)", StringComparison.Ordinal)
+    && mainPageViewModelSource.Contains("旧建议已忽略", StringComparison.Ordinal),
+    "AI correction results are discarded when recognition settings change while the request is in flight");
 var computerOnlySelection = AudioInputModeSelection.ForSwitch(0, "speaker-id", "mic-id");
 var microphoneOnlySelection = AudioInputModeSelection.ForSwitch(1, "speaker-id", "mic-id");
 var mixedSelection = AudioInputModeSelection.ForSwitch(2, "speaker-id", "mic-id");

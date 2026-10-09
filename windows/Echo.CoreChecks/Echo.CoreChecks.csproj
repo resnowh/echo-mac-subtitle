@@ -13,6 +13,7 @@
  </ItemGroup>
  <ItemGroup>
   <None Update="Fixtures/*.json" CopyToOutputDirectory="PreserveNewest" />
+  <None Include="../Echo.Windows/ViewModels/MainPageViewModel.cs" Link="Fixtures/MainPageViewModel.cs" CopyToOutputDirectory="PreserveNewest" />
   <None Include="../Echo.Windows/DesktopSubtitleOverlayWindow.xaml" Link="Fixtures/DesktopSubtitleOverlayWindow.xaml" CopyToOutputDirectory="PreserveNewest" />
   <None Include="../Echo.Windows/MainPage.xaml" Link="Fixtures/MainPage.xaml" CopyToOutputDirectory="PreserveNewest" />
   <None Include="../Echo.Windows/MainPage.xaml.cs" Link="Fixtures/MainPage.xaml.cs" CopyToOutputDirectory="PreserveNewest" />

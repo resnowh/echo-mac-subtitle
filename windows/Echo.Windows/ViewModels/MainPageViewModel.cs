@@ -411,6 +411,7 @@ public partial class MainPageViewModel : ObservableObject
             string source = entry.English, translation = entry.Chinese;
             Guid revision = entry.Correction?.Revision ?? Guid.Empty;
             Guid archiveId = SelectedArchive?.Id ?? Guid.Empty;
+            CorrectionRecognitionSnapshot recognitionSnapshot = CorrectionRecognitionSnapshot.Capture(Config);
             int index = Entries.IndexOf(entry);
             string context = string.Join("\n", Entries.Skip(Math.Max(0, index - 2)).Take(5).Select(e => e.English));
             string key = Preferences.Unprotect(Config.DeepSeekSecret).Trim();
@@ -421,10 +422,17 @@ public partial class MainPageViewModel : ObservableObject
             var suggestion = await corrections.SuggestAsync(key, source, translation, context,
                 terms, targetLanguage, job.TranslateOnly, CancellationToken.None);
             if (job.Generation != correctionGeneration || (job.Automatic && !Config.AutoCorrectionEnabled)
-                || SelectedArchive?.Id != archiveId || Config.CorrectionTerms != terms
+                || SelectedArchive?.Id != archiveId
                 || !Entries.Contains(entry) || entry.English != source || entry.Chinese != translation
                 || (entry.Correction?.Revision ?? Guid.Empty) != revision)
                 return null;
+            if (!recognitionSnapshot.Matches(Config) || Config.CorrectionTerms != terms)
+            {
+                const string staleMessage = "识别设置或校对术语已变化，旧建议已忽略。";
+                Status = staleMessage;
+                correctionStatuses[entry.Id] = staleMessage;
+                return null;
+            }
             if (job.TranslateOnly && suggestion.Source != source) throw new InvalidDataException("重新翻译返回了不同原文，已忽略。");
             correctionSuggestions[entry.Id] = (source, translation, revision, suggestion);
             Status = suggestion.Uncertain ? "AI 无法确认，请人工核对建议。" : "AI 建议已就绪，确认后才会应用。";
