@@ -16,13 +16,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Compile the parity harness with production Mac Archive and SRT sources
-        run: >-
-          xcrun swiftc -parse-as-library -O
-          -o "$RUNNER_TEMP/archive-parity-checks"
-          macOS/Models/TranscriptModels.swift
-          macOS/Storage/TranscriptArchiveStore.swift
-          macOS/Services/SRTExporter.swift
-          windows/MacParityChecks/ArchiveParityChecks.swift
+        run: xcrun swiftc -parse-as-library -O -o "$RUNNER_TEMP/archive-parity-checks" macOS/Models/TranscriptModels.swift macOS/Storage/TranscriptArchiveStore.swift macOS/Services/SRTExporter.swift windows/MacParityChecks/ArchiveParityChecks.swift
 
       - name: Generate a Mac-encoded two-segment fixture
         run: '"$RUNNER_TEMP/archive-parity-checks" generate "$RUNNER_TEMP/echo-mac-archive-fixture"'
@@ -92,13 +86,7 @@ jobs:
           merge-multiple: true
 
       - name: Compile the parity harness with production Mac Archive and SRT sources
-        run: |
-          xcrun swiftc -parse-as-library -O
-          -o "$RUNNER_TEMP/archive-parity-checks"
-          macOS/Models/TranscriptModels.swift
-          macOS/Storage/TranscriptArchiveStore.swift
-          macOS/Services/SRTExporter.swift
-          windows/MacParityChecks/ArchiveParityChecks.swift
+        run: xcrun swiftc -parse-as-library -O -o "$RUNNER_TEMP/archive-parity-checks" macOS/Models/TranscriptModels.swift macOS/Storage/TranscriptArchiveStore.swift macOS/Services/SRTExporter.swift windows/MacParityChecks/ArchiveParityChecks.swift
 
       - name: Verify Windows JSON with the production Mac decoder and SRT exporter
         run: '"$RUNNER_TEMP/archive-parity-checks" verify "$RUNNER_TEMP/echo-archive-parity"'
