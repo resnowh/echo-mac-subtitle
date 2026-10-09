@@ -1,0 +1,6 @@
+HEAD 8b2416ab6f276501112b67dc0eceb1b941a6e7d0
+origin/main ae0359dc90da0ccb5e526a275da1747954a49a4f
+origin/feature/windows-mac-parity 8b2416ab6f276501112b67dc0eceb1b941a6e7d0
+origin/feature/windows-mac-parity...HEAD 0	0
+origin/main...HEAD 0	78
+PR https://github.com/resnowh/echo-mac-subtitle/pull/5 state=OPEN head=8b2416ab6f276501112b67dc0eceb1b941a6e7d0 mergeState=CLEAN

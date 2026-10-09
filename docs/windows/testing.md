@@ -80,6 +80,10 @@ Windows 现在先启动候选 WASAPI 来源并暂存它们；新源成功后才�
 
 Windows 设置页以双项 SelectorBar 将“自动识别”和“优先语言”分开呈现；自动模式隐藏优先语言与严格限制，自动切换保留上次优先语言。旧配置从 `SourceLanguage` 迁移该值；语言菜单切换和设置页保存共用该偏好。CoreChecks 覆盖旧值迁移、自动模式保存、XAML 控件结构和事件接线；159 项通过。Release x64 构建 0 警告、0 错误，`git diff --check` 通过。没有启动 Echo 或执行 GUI smoke，因此实机布局、键盘、Narrator 与主题验收仍未完成。原始日志、源码哈希和 Git 基线见 [A71 底稿](../sources/windows-a71-source-language-mode-2026-10-10/README.md)。
 
+## A72 原生透明浮层路线确认（2026-10-10）
+
+用户选择 WinUI 主界面搭配原生 Win32/Direct2D 透明字幕浮层；该实现已存在于当前分支。本轮重新运行 159 项 CoreChecks、Release x64 构建和 PR #5 检查：全部通过，构建 0 警告、0 错误。没有重做 GUI smoke，也没有触碰当前 Echo 进程。实机异 DPI、多屏拔插、全屏/虚拟桌面、主窗口最小化和 Mac 并排视觉对照仍待隔离验收。原始日志、SHA-256 与 Git 基线见 [A72 底稿](../sources/windows-a72-native-overlay-verification-2026-10-10/README.md)。
+
 ## A62 丢弃过期的 AI 校对建议（2026-10-10）
 
 CoreChecks 单独改变源语言、目标语言、翻译开关、严格限制与说话人选项，验证每一项都会使 `CorrectionRecognitionSnapshot` 失效；源码接线检查确认 `MainPageViewModel` 在请求前捕获快照、响应后比较配置并报告旧建议已忽略。144 项 CoreChecks 与 Release x64 构建（0 警告、0 错误）通过。未调用 DeepSeek；GUI 异步请求交互仍待隔离验收。结果原件和源文件哈希见 [A62 底稿](../sources/windows-a62-stale-correction-suggestions-2026-10-10.md)。
