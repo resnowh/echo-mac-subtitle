@@ -16,6 +16,7 @@ public sealed class Preferences
     public string SonioxModel { get; set; } = EchoServiceModels.SonioxRealtime;
     public string DeepSeekModel { get; set; } = EchoServiceModels.DeepSeek;
     public string SourceLanguage { get; set; } = "en";
+    public string? PreferredSourceLanguage { get; set; }
     public string TargetLanguage { get; set; } = "zh";
     public bool Translate { get; set; } = true;
     public bool Strict { get; set; }
@@ -44,6 +45,10 @@ public sealed class Preferences
     }
     public Preferences Validate()
     {
+        SourceLanguage = string.IsNullOrWhiteSpace(SourceLanguage) ? string.Empty : SourceLanguage;
+        PreferredSourceLanguage = string.IsNullOrWhiteSpace(PreferredSourceLanguage)
+            ? (SourceLanguage.Length > 0 ? SourceLanguage : "en")
+            : PreferredSourceLanguage;
         SubtitleOverlay ??= new();
         SubtitleOverlay.Validate();
         Segmentation ??= new();

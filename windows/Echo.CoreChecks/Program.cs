@@ -51,6 +51,11 @@ Check(mainWindowMinimum == new MainWindowPixelSize(680, 520)
     "main-window minimum and ideal sizes match Mac in DIPs, scale with DPI, and fit a smaller work area");
 Check(new Preferences().Theme == "Dark" && JsonSerializer.Deserialize<Preferences>("{}", TranscriptFiles.Json)?.Theme == "Dark",
     "new and legacy preferences default to the Mac dark theme when no explicit theme is stored");
+var migratedPreferredLanguage = new Preferences { SourceLanguage = "ja" }.Validate();
+var retainedPreferredLanguage = new Preferences { SourceLanguage = "", PreferredSourceLanguage = "fr" }.Validate();
+Check(migratedPreferredLanguage.PreferredSourceLanguage == "ja"
+    && retainedPreferredLanguage.SourceLanguage == "" && retainedPreferredLanguage.PreferredSourceLanguage == "fr",
+    "recognition mode keeps the last preferred language when switching to automatic and migrates legacy settings");
 var legacyAudioPreferences = JsonSerializer.Deserialize<Preferences>("{}", TranscriptFiles.Json);
 var audioModeRoundTrip = JsonSerializer.Deserialize<Preferences>(JsonSerializer.Serialize(new Preferences { AudioInputMode = 2 }, TranscriptFiles.Json), TranscriptFiles.Json);
 Check(new Preferences().AudioInputMode == 1 && legacyAudioPreferences?.AudioInputMode == 1
@@ -165,11 +170,25 @@ Check(overlaySubtitleTexts.Length == 4 && overlaySubtitleTexts.All(element =>
         element.Attribute("MaxLines")?.Value == "2" && element.Attribute("TextTrimming")?.Value == "CharacterEllipsis"),
     "overlay original, translation and shadow text all follow Mac two-line tail truncation");
 var mainPageXaml = XDocument.Load(Path.Combine(AppContext.BaseDirectory, "Fixtures", "MainPage.xaml"));
+var recognitionModeSelector = mainPageXaml.Descendants(presentationNamespace + "SelectorBar")
+    .FirstOrDefault(element => element.Attribute(xamlNamespace + "Name")?.Value == "SettingsSourceMode");
+var preferredSourceGroup = mainPageXaml.Descendants(presentationNamespace + "StackPanel")
+    .FirstOrDefault(element => element.Attribute(xamlNamespace + "Name")?.Value == "PreferredSourceSettings");
+var recognitionModeLabels = recognitionModeSelector?.Elements(presentationNamespace + "SelectorBarItem")
+    .Select(element => element.Attribute("Text")?.Value).ToArray() ?? [];
+Check(recognitionModeLabels.SequenceEqual(new[] { "自动识别", "优先语言" })
+    && preferredSourceGroup?.Elements(presentationNamespace + "ComboBox").Any(element => element.Attribute(xamlNamespace + "Name")?.Value == "SettingsSourceLanguage") == true
+    && preferredSourceGroup.Elements(presentationNamespace + "ToggleSwitch").Any(element => element.Attribute(xamlNamespace + "Name")?.Value == "Strict") == true,
+    "recognition settings expose Mac-equivalent automatic/preferred modes and group preferred-language controls");
 var alwaysVisibleReturnButton = mainPageXaml.Descendants(presentationNamespace + "Button")
     .Any(element => element.Attribute("AutomationProperties.AutomationId")?.Value == "ReturnToLatest");
 Check(!alwaysVisibleReturnButton,
     "the main toolbar does not show a permanent return-to-latest button when Mac only shows it for unread content");
 var mainPageCode = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "MainPage.xaml.cs"));
+Check(mainPageCode.Contains("PreferredSourceLanguage = source.Code", StringComparison.Ordinal)
+    && mainPageCode.Contains("UpdatePreferredSourceSettingsVisibility", StringComparison.Ordinal)
+    && mainPageCode.Contains("c.SourceLanguage = SettingsSourceMode.SelectedItem == AutomaticSourceMode ? string.Empty", StringComparison.Ordinal),
+    "recognition mode persists the preferred language while automatic mode omits hints and hides strict-language controls");
 var overlayLockMenuItem = mainPageXaml.Descendants(presentationNamespace + "MenuFlyoutItem")
     .FirstOrDefault(element => element.Attribute(xamlNamespace + "Name")?.Value == "LockOverlayMenuItem");
 int saveOverlayStart = mainPageCode.IndexOf("private void SaveOverlaySettings", StringComparison.Ordinal);

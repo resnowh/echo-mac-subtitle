@@ -38,6 +38,7 @@ public sealed partial class MainPage : Page
         new("ko", "한국어"), new("es", "Español"), new("fr", "Français"), new("de", "Deutsch"),
         new("it", "Italiano"), new("pt", "Português"), new("ru", "Русский"), new("ar", "العربية"), new("hi", "हिन्दी")
     ];
+    private static readonly LanguageChoice[] PreferredLanguages = SourceLanguages.Where(language => language.Code is not null).ToArray();
     private readonly TranscriptFollowState transcriptFollowState = new();
     private ScrollViewer? transcriptScrollViewer;
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? transcriptScrollIdleTimer;
@@ -58,7 +59,7 @@ public sealed partial class MainPage : Page
         Mode.SelectedIndex = c.AudioInputMode;
         SourceLanguageChoice.ItemsSource = SourceLanguages;
         TargetLanguageChoice.ItemsSource = TargetLanguages;
-        SettingsSourceLanguage.ItemsSource = SourceLanguages;
+        SettingsSourceLanguage.ItemsSource = PreferredLanguages;
         SettingsTargetLanguage.ItemsSource = TargetLanguages;
         CorrectionTerms.Text = c.CorrectionTerms;
         AutoSummary.IsOn = c.AutoSummaryEnabled;
@@ -87,7 +88,9 @@ public sealed partial class MainPage : Page
             slider.ValueChanged += SegmentationValueChanged;
         SilenceFallback.Toggled += (_, _) => UpdateSegmentationReadouts();
         LongFallback.Toggled += (_, _) => UpdateSegmentationReadouts();
-        SettingsSourceLanguage.SelectedItem = SourceLanguages.FirstOrDefault(item => item.Code == (string.IsNullOrWhiteSpace(c.SourceLanguage) ? null : c.SourceLanguage)) ?? SourceLanguages[0];
+        SettingsSourceMode.SelectedItem = string.IsNullOrWhiteSpace(c.SourceLanguage) ? AutomaticSourceMode : PreferredSourceMode;
+        SettingsSourceLanguage.SelectedItem = PreferredLanguages.FirstOrDefault(item => item.Code == c.PreferredSourceLanguage) ?? PreferredLanguages[0];
+        UpdatePreferredSourceSettingsVisibility();
         SettingsTargetLanguage.SelectedItem = TargetLanguages.FirstOrDefault(item => item.Code == (c.Translate ? c.TargetLanguage : null)) ?? TargetLanguages[0];
         SettingsTargetLanguage.IsEnabled = c.Translate;
         Translate.Toggled += (_, _) => SettingsTargetLanguage.IsEnabled = Translate.IsOn;
@@ -193,8 +196,9 @@ public sealed partial class MainPage : Page
         SourceLanguageChoice.SelectedItem = SourceLanguages.FirstOrDefault(item => item.Code == (string.IsNullOrWhiteSpace(ViewModel.Config.SourceLanguage) ? null : ViewModel.Config.SourceLanguage)) ?? SourceLanguages[0];
         TargetLanguageChoice.SelectedItem = TargetLanguages.FirstOrDefault(item => item.Code == (ViewModel.Config.Translate ? ViewModel.Config.TargetLanguage : null)) ?? TargetLanguages[0];
         TargetLanguageChoice.Visibility = ViewModel.Config.Translate ? Visibility.Visible : Visibility.Collapsed;
-        Strict.IsEnabled = !string.IsNullOrWhiteSpace(ViewModel.Config.SourceLanguage);
-        SettingsSourceLanguage.SelectedItem = SourceLanguages.FirstOrDefault(item => item.Code == (string.IsNullOrWhiteSpace(ViewModel.Config.SourceLanguage) ? null : ViewModel.Config.SourceLanguage)) ?? SourceLanguages[0];
+        SettingsSourceMode.SelectedItem = string.IsNullOrWhiteSpace(ViewModel.Config.SourceLanguage) ? AutomaticSourceMode : PreferredSourceMode;
+        SettingsSourceLanguage.SelectedItem = PreferredLanguages.FirstOrDefault(item => item.Code == ViewModel.Config.PreferredSourceLanguage) ?? PreferredLanguages[0];
+        UpdatePreferredSourceSettingsVisibility();
         SettingsTargetLanguage.SelectedItem = TargetLanguages.FirstOrDefault(item => item.Code == (ViewModel.Config.Translate ? ViewModel.Config.TargetLanguage : null)) ?? TargetLanguages[0];
         UpdateRecordingLanguageHint();
     }
@@ -204,6 +208,14 @@ public sealed partial class MainPage : Page
         RecognitionSettingsPage.Visibility = sender.SelectedItem == SettingsRecognition ? Visibility.Visible : Visibility.Collapsed;
         SegmentationSettingsPage.Visibility = sender.SelectedItem == SettingsSegmentation ? Visibility.Visible : Visibility.Collapsed;
         ServiceSettingsPage.Visibility = sender.SelectedItem == SettingsServices ? Visibility.Visible : Visibility.Collapsed;
+    }
+    private void SettingsSourceMode_SelectionChanged(SelectorBar sender, SelectorBarSelectionChangedEventArgs e) => UpdatePreferredSourceSettingsVisibility();
+    private void UpdatePreferredSourceSettingsVisibility()
+    {
+        if (SettingsSourceMode is null || PreferredSourceSettings is null) return;
+        bool preferredMode = SettingsSourceMode.SelectedItem == PreferredSourceMode;
+        PreferredSourceSettings.Visibility = preferredMode ? Visibility.Visible : Visibility.Collapsed;
+        Strict.IsEnabled = preferredMode;
     }
     private void LoadSegmentationSettings(TranscriptSegmentationSettings config)
     {
@@ -289,8 +301,9 @@ public sealed partial class MainPage : Page
     {
         if (SourceLanguageChoice.SelectedItem is not LanguageChoice selected) return;
         ViewModel.Config.SourceLanguage = selected.Code ?? string.Empty;
-        Strict.IsEnabled = selected.Code is not null;
+        if (selected.Code is not null) ViewModel.Config.PreferredSourceLanguage = selected.Code;
         ViewModel.Config.Save();
+        UpdateLanguageHeaders();
         UpdateRecordingLanguageHint();
     }
     private void TargetLanguage_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -830,7 +843,8 @@ public sealed partial class MainPage : Page
             c.DeepSeekSecret = Preferences.UpdateProtectedSecret(c.DeepSeekSecret, DeepSeekKey.Password, deepSeekSecretUnreadable);
             c.CorrectionTerms = CorrectionTerms.Text.Trim();
             c.Translate = Translate.IsOn; c.Strict = Strict.IsOn; c.Speakers = Speakers.IsOn;
-            if (SettingsSourceLanguage.SelectedItem is LanguageChoice source) c.SourceLanguage = source.Code ?? string.Empty;
+            if (SettingsSourceLanguage.SelectedItem is LanguageChoice source && source.Code is not null) c.PreferredSourceLanguage = source.Code;
+            c.SourceLanguage = SettingsSourceMode.SelectedItem == AutomaticSourceMode ? string.Empty : c.PreferredSourceLanguage ?? "en";
             if (SettingsTargetLanguage.SelectedItem is LanguageChoice target && target.Code is not null) c.TargetLanguage = target.Code;
             c.Segmentation = new TranscriptSegmentationSettings
             {
