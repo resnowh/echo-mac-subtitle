@@ -25,7 +25,7 @@ jobs:
           windows/MacParityChecks/ArchiveParityChecks.swift
 
       - name: Generate a Mac-encoded two-segment fixture
-        run: "$RUNNER_TEMP/archive-parity-checks" generate "$RUNNER_TEMP/echo-mac-archive-fixture"
+        run: '"$RUNNER_TEMP/archive-parity-checks" generate "$RUNNER_TEMP/echo-mac-archive-fixture"'
 
       - name: Upload Mac production fixture
         uses: actions/upload-artifact@v4
@@ -62,7 +62,7 @@ jobs:
           path: windows/Echo.CoreChecks/Fixtures/Runtime
 
       - name: Run core checks including Mac Archive import and SRT comparison
-        run: |
+        run: >-
           $env:ECHO_MAC_ARCHIVE_FIXTURE = "windows/Echo.CoreChecks/Fixtures/Runtime/mac-archive.json"
           dotnet run --project windows/Echo.CoreChecks -c Release --no-restore
 
@@ -92,7 +92,7 @@ jobs:
           merge-multiple: true
 
       - name: Compile the parity harness with production Mac Archive and SRT sources
-        run: >-
+        run: |
           xcrun swiftc -parse-as-library -O
           -o "$RUNNER_TEMP/archive-parity-checks"
           macOS/Models/TranscriptModels.swift
@@ -101,4 +101,4 @@ jobs:
           windows/MacParityChecks/ArchiveParityChecks.swift
 
       - name: Verify Windows JSON with the production Mac decoder and SRT exporter
-        run: "$RUNNER_TEMP/archive-parity-checks" verify "$RUNNER_TEMP/echo-archive-parity"
+        run: '"$RUNNER_TEMP/archive-parity-checks" verify "$RUNNER_TEMP/echo-archive-parity"'
