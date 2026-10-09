@@ -78,6 +78,17 @@ var overlaySubtitleTexts = overlayXaml.Descendants(presentationNamespace + "Text
 Check(overlaySubtitleTexts.Length == 4 && overlaySubtitleTexts.All(element =>
         element.Attribute("MaxLines")?.Value == "2" && element.Attribute("TextTrimming")?.Value == "CharacterEllipsis"),
     "overlay original, translation and shadow text all follow Mac two-line tail truncation");
+var mainPageXaml = XDocument.Load(Path.Combine(AppContext.BaseDirectory, "Fixtures", "MainPage.xaml"));
+var settingsOverlay = mainPageXaml.Descendants(presentationNamespace + "Grid")
+    .Single(element => element.Attribute(xamlNamespace + "Name")?.Value == "SettingsOverlay");
+var settingsPanelBorder = settingsOverlay.Element(presentationNamespace + "Border");
+var settingsScrollViewer = settingsPanelBorder?.Descendants(presentationNamespace + "ScrollViewer").SingleOrDefault();
+Check(settingsPanelBorder?.Attribute("Width") is null && settingsPanelBorder?.Attribute("Height") is null
+    && settingsPanelBorder?.Attribute("MaxWidth")?.Value == "520" && settingsPanelBorder?.Attribute("MaxHeight")?.Value == "560"
+    && settingsPanelBorder.Attribute("HorizontalAlignment")?.Value == "Stretch"
+    && settingsPanelBorder.Attribute("VerticalAlignment")?.Value == "Stretch"
+    && settingsScrollViewer is not null,
+    "settings panel keeps the Mac 520x560 DIP target while fitting the window and scrolling on short or narrow work areas");
 var overlayFeed = new DesktopSubtitleOverlayFeed();
 var overlayEntry = new Subtitle { English = "Live caption", Chinese = "实时字幕" };
 var overlayAt = DateTimeOffset.Parse("2026-10-09T00:00:00Z");

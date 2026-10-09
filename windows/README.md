@@ -6,7 +6,7 @@
 
 - Windows 分支：`feature/windows-mac-parity`；本轮核验起始快照为 `6f40d48a85d5029dfb0dd4e7ac16168e1b25194d`。PR [#5](https://github.com/resnowh/echo-mac-subtitle/pull/5) 尚未合并。
 - Mac 产品基线：`origin/main` `ae0359dc90da0ccb5e526a275da1747954a49a4f`。
-- 2026-10-10：A45 后本地 CoreChecks 共 120 项通过，Release x64 构建 0 警告、0 错误。A45 将新 Archive 默认标题从“录音”改为与 Mac 一致的“课程 MM-dd HH:mm”。初次验证及当前 HEAD `b4cdc61` 的 Windows/Mac/Archive 检查和 unsigned package preflight 均通过，run 编号及底稿见 [A45](../docs/sources/windows-a45-archive-title-parity-2026-10-10.md)。A44 对齐 Soniox 字符串错误和布尔结束控制帧，证据见 [A44](../docs/sources/windows-a44-soniox-control-frames-2026-10-10.md)。真实设备或完整 GUI 验收仍待进行。
+- 2026-10-10：A45 后本地 CoreChecks 120 项通过；A46 增加受限工作区设置面板布局契约后为 121 项通过，Release x64 构建 0 警告、0 错误。A45 对齐 Mac Archive 默认标题，Mac/Windows/Archive 检查和 unsigned package preflight 通过，证据见 [A45](../docs/sources/windows-a45-archive-title-parity-2026-10-10.md)。A46 保留 Mac 520×560 DIP 常规目标，同时让 Windows 设置面板在小窗口内收缩并滚动；该布局尚未 GUI 实测，见 [A46](../docs/sources/windows-a46-responsive-settings-2026-10-10.md)。A44 对齐 Soniox 字符串错误和布尔结束控制帧，证据见 [A44](../docs/sources/windows-a44-soniox-control-frames-2026-10-10.md)。真实设备或完整 GUI 验收仍待进行。
 - Soniox 实时模型为 `stt-rt-v5`。Windows 在 WebSocket 握手发送 Bearer API Key，配置 JSON 不重复包含密钥；Mac 当前代码仍把密钥放在起始配置中。按项目约束不改 Mac，Windows 保持官方推荐的握手鉴权。官方迁移时间与测试证据见 [A37 Soniox protocol baseline](../docs/sources/windows-a37-soniox-auth-protocol-2026-10-10.md)。
 - 正式发行尚未就绪：真实浮层/多屏/音频验收、受信任发布者签名、干净机器安装升级和隐私政策仍待完成。Soniox 官方建议客户端使用临时 Key；当前项目没有签发临时 Key 的后端，Windows 采用个人自行填写的 Key 与本机 DPAPI 存储。Android/iOS 不在当前交付范围。
 
