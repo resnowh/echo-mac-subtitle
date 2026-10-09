@@ -19,5 +19,6 @@ Windows 现通过 `Archive.NewTitle(DateTime localTime)` 生成相同的“课�
 
 - 固定输入 `2026-10-10 09:05`，期望标题为 `课程 10-10 09:05`。
 - 本机 `dotnet run --project windows/Echo.CoreChecks/Echo.CoreChecks.csproj -c Release --no-restore`：120 项通过。
-- Release x64 构建在本机成功输出 `Echo.Windows.dll`；完整构建诊断将随本轮 CI 复核。
-- Mac 源文件只读，未触碰 Echo 或真实存档；Actions 结果待本轮推送后核对。
+- Release x64 本机构建：0 警告、0 错误。
+- GitHub Actions runs [`37969232352`](https://github.com/resnowh/echo-mac-subtitle/actions/runs/37969232352) 和 [`37969238022`](https://github.com/resnowh/echo-mac-subtitle/actions/runs/37969238022) 的 Mac fixture、Windows CoreChecks/Release 构建与 Mac Archive 回读均通过；Mac CI build `37969237990` 和 unsigned package preflight `37969238091` 通过。
+- Mac 源文件只读，未触碰 Echo 或真实存档。PR #5 检查通过，Windows 分支未合并。
