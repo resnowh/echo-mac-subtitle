@@ -13,13 +13,13 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Check PCM and loopback WebSocket transport
         run: python3 tests/run_stream_checks.py "${RUNNER_TEMP}/echo-mac-archive-fixture"
 
       - name: Upload production Mac Archive fixture
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mac-archive-contract-fixture
           path: ${{ runner.temp }}/echo-mac-archive-fixture/
@@ -51,16 +51,16 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download production Mac Archive fixture
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: mac-archive-contract-fixture
           path: tests/fixtures/mac-archive
 
       - name: Set up .NET 10
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
 
@@ -73,7 +73,7 @@ jobs:
           ECHO_MAC_ARCHIVE_FIXTURE: tests/fixtures/mac-archive/mac-archive.json
 
       - name: Upload Windows Archive round-trip
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-archive-roundtrip
           path: tests/fixtures/mac-archive/windows-roundtrip.json
@@ -91,10 +91,10 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download Windows-written Archive
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: windows-archive-roundtrip
           path: ${{ runner.temp }}/windows-roundtrip
