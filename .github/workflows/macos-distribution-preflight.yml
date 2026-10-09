@@ -1,0 +1,45 @@
+name: macOS Distribution Preflight
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unsigned-package-check:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate packaging script and entitlements
+        run: |
+          bash -n scripts/macos-package.sh
+          plutil -lint macOS/Entitlements/EchoRelease.entitlements
+
+      - name: Build isolated universal Release app (unsigned)
+        run: |
+          xcodebuild -project macOS/EchoMac.xcodeproj -scheme Echo \
+            -configuration Release -sdk macosx \
+            -derivedDataPath "$RUNNER_TEMP/echo-distribution-preflight" \
+            CODE_SIGNING_ALLOWED=NO 'ARCHS=arm64 x86_64' ONLY_ACTIVE_ARCH=NO build
+
+      - name: Set disposable preflight version metadata
+        run: |
+          plist="$RUNNER_TEMP/echo-distribution-preflight/Build/Products/Release/Echo.app/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString 0.1.0" "$plist" || /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string 0.1.0" "$plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion 1" "$plist" || /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string 1" "$plist"
+          lipo -archs "$RUNNER_TEMP/echo-distribution-preflight/Build/Products/Release/Echo.app/Contents/MacOS/Echo" | grep -q arm64
+          lipo -archs "$RUNNER_TEMP/echo-distribution-preflight/Build/Products/Release/Echo.app/Contents/MacOS/Echo" | grep -q x86_64
+
+      - name: Verify DMG creation without launching app
+        run: |
+          bash scripts/macos-package.sh preflight \
+            "$RUNNER_TEMP/echo-distribution-preflight/Build/Products/Release/Echo.app" \
+            "$RUNNER_TEMP/echo-distribution-check-output"
+          (cd "$RUNNER_TEMP/echo-distribution-check-output" && shasum -a 256 -c ./*.sha256)
+
+      # Deliberately do not upload an unsigned package as a distributable download.
