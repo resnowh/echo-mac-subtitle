@@ -2,8 +2,10 @@
 
 `CorrectionChecks.swift` additionally tests field locks, late recognition,
 undo/stale revisions, old/new Archive JSON, cross-segment UUID matching,
-corrected SRT and structured DeepSeek responses. No DeepSeek calls are made;
-these checks do not establish real AI correction quality.
+corrected SRT, structured DeepSeek responses, configurable transcript
+segmentation, UserDefaults persistence, and Soniox endpoint request settings.
+No DeepSeek calls are made; these checks do not establish real AI correction
+quality.
 
 Run `python3 tests/run_stream_checks.py` on macOS with Xcode selected.
 If local Command Line Tools and Xcode disagree, set `DEVELOPER_DIR` to the

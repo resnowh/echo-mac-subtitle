@@ -52,7 +52,7 @@ struct SubtitleCorrectionEditor: View {
                         Button("AI 校对") { model.requestCorrection(entry.id) }
                             .disabled(isDirty || current == nil)
                         Button("重新翻译") { model.requestCorrection(entry.id, translate: true) }
-                            .disabled(isDirty || current == nil || !model.recognitionConfig.translationEnabled)
+                            .disabled(isDirty || current == nil || !model.effectiveRecognitionConfig.translationEnabled)
                         Button("撤销上次纠正") {
                             model.undoCorrection(entry.id)
                             reloadDraft()
@@ -74,7 +74,7 @@ struct SubtitleCorrectionEditor: View {
                             Text(suggestion.reason).font(.caption).foregroundStyle(.secondary)
                             Button("采用建议到编辑框") {
                                 source = suggestion.source
-                                if model.recognitionConfig.translationEnabled { translation = suggestion.translation }
+                                if model.effectiveRecognitionConfig.translationEnabled { translation = suggestion.translation }
                             }
                             .disabled(isDirty)
                             Text("采用后仍需点击保存；请先核对专业词、数字和否定词。")
@@ -242,6 +242,10 @@ struct MarkdownSummaryView: View {
 struct SynchronizedTranscriptView: View {
     let entries: [SubtitleEntry]
     let recognitionConfig: RecognitionConfig
+    let activeRecognitionConfig: RecognitionConfig
+    let isRecording: Bool
+    var onSelectSourceLanguage: (String?) -> Void = { _ in }
+    var onSelectTranslationLanguage: (String?) -> Void = { _ in }
     var suggestedIDs: Set<UUID> = []
     var onEdit: (SubtitleEntry) -> Void = { _ in }
     @State private var isAtBottom = true
@@ -254,16 +258,22 @@ struct SynchronizedTranscriptView: View {
                 ZStack(alignment: .bottomTrailing) {
                     VStack(spacing: 0) {
                         HStack(alignment: .center, spacing: 14) {
-                            Text(sourceHeader)
+                            sourceLanguageMenu
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                            if recognitionConfig.translationEnabled {
-                                Text(targetHeader)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
+                            targetLanguageMenu
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.secondary)
                         .padding(.bottom, 8)
+
+                        if isRecording {
+                            Text("录音中更改语言：下次录音生效")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.bottom, 5)
+                        }
 
                         Divider().opacity(0.55)
 
@@ -304,7 +314,7 @@ struct SynchronizedTranscriptView: View {
                                                     Text(entry.english.isEmpty ? "…" : entry.english)
                                                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                                                    if recognitionConfig.translationEnabled {
+                                                    if displayedConfig.translationEnabled {
                                                         Text(entry.chinese.isEmpty ? " " : entry.chinese)
                                                             .frame(maxWidth: .infinity, alignment: .leading)
                                                     }
@@ -359,13 +369,89 @@ struct SynchronizedTranscriptView: View {
         .frame(minHeight: 220, maxHeight: .infinity)
     }
 
-    private var sourceHeader: String {
-        guard recognitionConfig.sourceLanguageMode == .specified else { return "原文" }
+    private var displayedConfig: RecognitionConfig {
+        isRecording ? activeRecognitionConfig : recognitionConfig
+    }
+
+    private var sourceLanguageTitle: String {
+        guard recognitionConfig.sourceLanguageMode == .specified else { return "自动识别" }
         return languageTitle(for: recognitionConfig.specifiedSourceLanguage)
     }
 
-    private var targetHeader: String {
-        languageTitle(for: recognitionConfig.targetTranslationLanguage)
+    private var targetLanguageTitle: String {
+        guard recognitionConfig.translationEnabled else { return "不翻译" }
+        return languageTitle(for: recognitionConfig.targetTranslationLanguage)
+    }
+
+    private var sourceLanguageMenu: some View {
+        Menu {
+            languageMenuItem("自动识别", selected: recognitionConfig.sourceLanguageMode == .automatic) {
+                onSelectSourceLanguage(nil)
+            }
+            Divider()
+            ForEach(LanguageOption.supported) { language in
+                languageMenuItem(language.title,
+                                 selected: recognitionConfig.sourceLanguageMode == .specified
+                                    && recognitionConfig.specifiedSourceLanguage == language.code) {
+                    onSelectSourceLanguage(language.code)
+                }
+            }
+            if isRecording {
+                Divider()
+                Text("下次录音生效").disabled(true)
+            }
+        } label: {
+            menuTitle(sourceLanguageTitle)
+        }
+        .menuStyle(.borderlessButton)
+        .help("识别语言")
+    }
+
+    private var targetLanguageMenu: some View {
+        Menu {
+            languageMenuItem("不翻译", selected: !recognitionConfig.translationEnabled) {
+                onSelectTranslationLanguage(nil)
+            }
+            Divider()
+            ForEach(LanguageOption.supported) { language in
+                languageMenuItem(language.title,
+                                 selected: recognitionConfig.translationEnabled
+                                    && recognitionConfig.targetTranslationLanguage == language.code) {
+                    onSelectTranslationLanguage(language.code)
+                }
+            }
+            if isRecording {
+                Divider()
+                Text("下次录音生效").disabled(true)
+            }
+        } label: {
+            menuTitle(targetLanguageTitle)
+        }
+        .menuStyle(.borderlessButton)
+        .help("翻译目标语言")
+    }
+
+    private func menuTitle(_ title: String) -> some View {
+        HStack(spacing: 4) {
+            Text(title)
+            Image(systemName: "chevron.down")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.tertiary)
+        }
+        .font(.subheadline.weight(.semibold))
+        .foregroundStyle(.secondary)
+        .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private func languageMenuItem(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            if selected {
+                Label(title, systemImage: "checkmark")
+            } else {
+                Text(title)
+            }
+        }
     }
 
     private func languageTitle(for code: String) -> String {
@@ -374,7 +460,7 @@ struct SynchronizedTranscriptView: View {
 
     private func metadata(for entry: SubtitleEntry) -> String {
         var values: [String] = []
-        if recognitionConfig.speakerDiarizationEnabled,
+        if displayedConfig.speakerDiarizationEnabled,
            let speaker = entry.speaker,
            !speaker.isEmpty {
             values.append(speaker)
