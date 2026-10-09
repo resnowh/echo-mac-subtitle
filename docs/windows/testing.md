@@ -62,4 +62,4 @@ Windows 仓库已有 `windows/Echo.CoreChecks/Program.cs`，覆盖转写 token �
 
 ## A59 音源切换失败回滚（2026-10-10）
 
-CoreChecks 使用合成采集器与本地 WebSocket：开始话筒模式后模拟切换至电脑音频失败，检查旧输入恢复、`SpeechSession` 未发失败事件、恢复后继续发送 PCM，且全程只建立一个连接。本机 140 项 CoreChecks 与 Release x64 构建通过。没有访问真实音频设备或 Soniox；真实切换连续性、权限拒绝与拔插仍待验收。CI 结果和源码基线见 [A59 底稿](../sources/windows-a59-audio-switch-rollback-2026-10-10.md)。
+CoreChecks 使用合成采集器与本地 WebSocket：开始话筒模式后模拟切换至电脑音频失败，检查旧输入恢复、`SpeechSession` 未发失败事件、恢复后继续发送 PCM，且全程只建立一个连接。本机 140 项 CoreChecks、Release x64 和 Actions run `37989494186` 的 Mac fixture、Windows 构建/检查与 Mac Archive 往返均通过。没有访问真实音频设备或 Soniox；真实切换连续性、权限拒绝与拔插仍待验收。源码基线见 [A59 底稿](../sources/windows-a59-audio-switch-rollback-2026-10-10.md)。

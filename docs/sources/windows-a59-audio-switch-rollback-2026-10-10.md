@@ -22,7 +22,7 @@ Windows 现将 `SpeechSession` 的采集依赖表示为 `ISpeechSessionCapture`�
 
 - 本机 140 项 CoreChecks 通过；Windows Release x64 构建成功，0 警告、0 错误；`git diff --check` 通过。
 - 没有打开真实麦克风/扬声器、保存音频或调用 Soniox；WebSocket 仅绑定本机 loopback。
-- A59 代码提交后的 Windows CI、Mac CI 与 unsigned package preflight 待运行。
+- GitHub Actions Windows CI run `37989494186` 全部成功：Mac production Archive fixture、Mac Soniox fixture、Windows 140 项 CoreChecks/Release x64，以及 Mac production Archive decoder/SRT 往返。
 - 合成回滚不证明真实 WASAPI 声学连续、系统授权、独占设备占用或拔插行为；仍需隔离硬件验收。
 
 ## 文件
