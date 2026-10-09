@@ -2,7 +2,7 @@
 
 核验日期：2026-10-10
 macOS 基线：`origin/main`，`ae0359dc90da0ccb5e526a275da1747954a49a4f`
-Windows 来源：当前 PR 分支 `feature/windows-mac-parity`；其历史迁移基线为 `feature/windows-preview` 本地 `d500bbb`（远端为 `64f2b89`）。本分支只迁移 `windows/` 和 `docs/sources/windows-*`，未迁移 Mac 文件。
+Windows 来源：当前 PR 分支 `feature/windows-mac-parity`；其历史迁移基线 `feature/windows-preview` 当前远端为 `d500bbb21bc9bfa4d811c614576f38c0476efc50`。该旧分支含 Mac 文件变更，本分支只迁移经检查的 Windows 内容与 Windows 专属证据，未迁移 Mac 文件。
 状态：`完全一致`、`功能存在但行为不同`、`部分实现`、`缺失`、`平台客观限制`、`尚未验证`。
 
 ## 数据底稿与来源清单
@@ -21,6 +21,7 @@ Windows 来源：当前 PR 分支 `feature/windows-mac-parity`；其历史迁移
 | Soniox WebSocket 鉴权 | Mac `SpeechViewModel.openSonioxSocket` 仍把 `api_key` 放在起始配置 JSON；Windows 在握手发送 Bearer header，并从配置 JSON 排除密钥 | Windows 按 Soniox 当前推荐方式实现；保留 Mac 当前行为，不反向降级 Windows | 功能存在但行为不同 | 本地模拟 WebSocket 检查验证 Bearer header、配置不含密钥、握手后 401/402/403/429/503/413 错误分类；官方旧方式迁移时间及源码证据见 [A37](../sources/windows-a37-soniox-auth-protocol-2026-10-10.md) |
 | 默认主题与切换顺序 | Mac 默认深色，`AppThemeMode.allCases` 为浅色、深色、系统 | Windows 新配置/缺省字段默认深色，设置项和循环顺序与 Mac 一致；显式保存值保留 | 静态源码及 CoreChecks 通过；系统外观 GUI 尚未实测，见 A31 |
 | 跨显示器悬浮字幕布局与 DPI 变化 | Mac 监听显示器配置变化，按目标屏幕重新计算透明字幕窗位置和宽度，并恢复已保存的屏幕位置 | Windows 按显示器 ID 记住上次屏幕；`AppWindow.Changed` 与 `DisplayAreaWatcher` 更新后重新计算物理像素矩形；拖动/缩放使用屏幕坐标 | A34 的 100/150/200% 合成布局检查通过；真实异 DPI 显示器、拔插、工作区变化仍待 GUI 验收 |
+| 音源模式：电脑音频、话筒、混合；录音中热切换 | Mac 默认话筒并保存模式；录音中按需启动新来源，成功后再移除不需要的来源；授权/启动失败时保留旧模式和会话 | Windows 默认并持久化话筒；录音中模式菜单可用，当前 `SpeechSession` 暂停发送、排空采集尾部并重启 WASAPI 来源，不重建 Soniox WebSocket 或当前字幕段；失败回滚，无法恢复时保存并停止 | 126 项 CoreChecks 检查默认值、旧配置、路由选择和菜单可操作性；源码确认切换不创建第二个 session。真实设备、权限拒绝和连续性仍待验收，见 A51 |
 
 本次核验前已执行 fetch 并以最新 `origin/main` 建立独立分支；没有把旧混合分支合并进来。旧分支曾含 Mac 源码提交，因此不得整体 cherry-pick 或合并。详细测试证据见 [testing.md](testing.md) 与 `docs/sources/windows-*`。
 
@@ -34,9 +35,10 @@ Windows 来源：当前 PR 分支 `feature/windows-mac-parity`；其历史迁移
 | 用户滚离底部后停止跟随，并显示“有新内容”按钮 | 新内容追加时保留用户历史位置，显示回到底部按钮；加载时滚至最新条目 | 功能存在但行为不同 | Mac `SynchronizedTranscriptView`；Windows `MainPage.xaml`、`MainPage.xaml.cs`。应通过 UI smoke 检查滚动事件与虚拟化列表交互 |
 | 主字幕区可选识别语言及翻译目标，录音中提示下次录音生效 | 主界面提供 Mac 同款语言、自动识别、不翻译选项；ComboBox 显示 `Title` 标签而非对象调试文本；更改配置写入本地并提示下次录音生效 | 功能存在但行为不同 | Mac `macOS/Views/TranscriptViews.swift`、`macOS/Models/TranscriptModels.swift`；Windows `MainPage.xaml`、`MainPage.xaml.cs`、`Core/Preferences.cs`。A33 UIA 检查语言选择显示值；Windows 仍保留“翻译”设置开关，菜单项会同步开关状态 |
 | 四个设置分类：常规、识别、分段、AI 服务 | Mac 设置 sheet 常规尺寸 520×560 DIP，四类设置在滚动内容区内 | Windows 用 WinUI SelectorBar 切换四类设置；面板保留 520×560 DIP 最大尺寸，受限工作区下收缩；有限星号行承载 ScrollViewer | 功能存在但行为不同 | Mac `macOS/EchoMacApp.swift`；Windows `windows/Echo.Windows/MainPage.xaml`、`MainWindow.xaml.cs`。A47 在 144 DPI、430×360 DIP 隔离窗口 UIA 实测滚动和按钮可见；125%/200% DPI、键盘和 Narrator 未验，见 A47 底稿 |
-| 音源：电脑音频、麦克风、混合；授权状态和音频电平 | WASAPI loopback、麦克风及本地混音；只平均当前帧实际可用来源，缺帧补静音但不压低另一路；电平按来源 RMS 计算并平滑 | 功能存在但行为不同 | Mac `Audio/PCM16AudioPipeline.swift`、`SpeechViewModel.swift`；Windows `Services/AudioCapture.cs`、`SpeechSession.cs`、`Core/AudioLevelHistory.cs`。欠载混音见 A36，meter/波形见 A40；真实声卡、授权表达、睡眠和长时间双路验收仍待完成 |
+| 音源：电脑音频、话筒、混合；授权状态和音频电平 | WASAPI loopback、话筒及本地混音；只平均当前帧实际可用来源，缺帧补静音但不压低另一路；电平按来源 RMS 计算并平滑 | 功能存在但行为不同 | Mac `Audio/PCM16AudioPipeline.swift`、`SpeechViewModel.swift`；Windows `Services/AudioCapture.cs`、`SpeechSession.cs`、`Core/AudioLevelHistory.cs`。欠载混音见 A36，meter/波形见 A40；录音中模式切换见 A51；真实声卡、授权表达、睡眠和长时间双路验收仍待完成 |
 | Soniox 临时字幕更新、最终字幕落定、翻译迟到、双语端点、说话人/语言元数据、强语境经济学/微积分词汇纠正及请求上下文 | Mac 每条响应整体替换 provisional 双语快照、累加 final；endpoint 在整条响应完成后最多定稿一次。同响应新建 row 时多个 speaker 合并并采用末尾元数据；已有 row 在下一响应遇到 final speaker 变化时分行。JSON 字段类型不符时以 Swift 可选转换回退/忽略 | A35 七条、A42 十三条和 A43 十八条生产对拍通过；云端真实负载待验 | A43 Actions run `37966271007` 的 Mac handler、Windows 对比和 Archive 回读均通过。A42 对齐畸形字段安全回退；A43 覆盖经济学上下文纠正、微积分词汇与中文联动、保守负例和 han/hand 上下文修正。来源与 artifact 见 A42/A43 底稿 |
 | 设置识别模式、优先语言、严格限制、翻译、目标语言、说话人 | 设置页语言选项、自动识别、不翻译、严格语言和说话人开关；开始会话时冻结翻译行为 | 功能存在但行为不同 | Mac `TranscriptModels.swift`、`EchoMacApp.swift`；Windows `Core/Preferences.cs`、`MainPage.xaml(.cs)`、`MainPageViewModel.cs`。UI smoke 和当前会话不变行为仍需验 |
+| 录音中切换电脑音频/话筒/混合模式并保持当前识别连接 | Mac 在当前录音会话内启动新增采集源；成功后再停止旧源；必要授权或启动失败时保留原模式与会话 | Windows 模式菜单仍可操作；暂停音频发送、排空采集尾部、重启 WASAPI 源，继续用同一 Soniox WebSocket 和当前字幕段；设备失败先回滚原模式，无法恢复时保存并停止 | 功能存在但行为不同 | Mac `macOS/Models/TranscriptModels.swift`、`ViewModels/SpeechViewModel.swift`；Windows `Core/AudioInputModeSelection.cs`、`Services/SpeechSession.cs`、`ViewModels/MainPageViewModel.cs`、`MainPage.xaml(.cs)`。CoreChecks 126 项涵盖默认值、路由和 UI 契约；实际设备声音连续性与授权/失败恢复仍待验收，见 A51 |
 | Soniox 端点最大延迟、灵敏度、延迟级别、本地静音兜底、超长段兜底 | 按 Mac 默认值和范围保存；Soniox 请求发送三项端点参数；500ms 本地策略以相同词数/时长双阈值兜底，翻译开启时等待译文，语义端点优先 | 功能存在但行为不同 | Mac `macOS/Models/TranscriptModels.swift`、`SpeechViewModel.swift`、`SonioxRequestBuilder.swift`；Windows `Core/Preferences.cs`、`TranscriptSegmentationPolicy.cs`、`SonioxRequestBuilder.cs`、`MainPageViewModel.cs`。核心契约自动检查；见 A24 数据底稿，真实云端行为未验 |
 | 归档选择、新建、续录、导出、清空、拆分已完成段 | Mac 载入列表按 `updatedAt` 降序；新存档名为“课程 MM-dd HH:mm”；多段 archive 按段开始日期导出 | Windows 按 `updatedAt` 降序载入并在保存后移动更新项；A45 将默认新存档名对齐为“课程 MM-dd HH:mm”；A32 Mac→Windows→Mac 生产归档往返已成功 | 部分实现 | Mac `Storage/TranscriptArchiveStore.swift`、`SpeechViewModel.swift`、archive models；Windows `Core/Transcript.cs`、`MainPageViewModel.cs`、`Echo.CoreChecks/Program.cs`；A32 runtime、A45 固定标题与 CI 通过。当前 HEAD `b4cdc61` 的 Mac/Windows/Archive CI 复验通过；仍缺用户历史归档广泛互操作验证；见 A17/A27/A32/A45 |
 | 停止后生成 SRT；不默认保存原始音频 | Windows 停止后写 SRT，不保存原始音频 | 完全一致 | Windows `MainPageViewModel.cs`、`Core/Transcript.cs`、`Services/AudioCapture.cs`；格式细节见 A17 底稿 |
@@ -49,7 +51,7 @@ Windows 来源：当前 PR 分支 `feature/windows-mac-parity`；其历史迁移
 
 ## 最高优先级缺口
 
-1. P0：A35 七条、A42 十三条、A43 十八条 Mac production handler 对拍均通过。A39 对齐空响应静默计时，A42 对齐畸形字段的安全回退，A43 对齐纠正规则，A44 对齐 error/finished 控制帧。下一步核实真实用户历史 Archive 的脱敏互操作和断线收尾；真实云响应仍未覆盖。
+1. P0：A35 七条、A42 十三条、A43 十八条 Mac production handler 对拍均通过。A39 对齐空响应静默计时，A42 对齐畸形字段安全回退，A43 对齐纠正规则，A44 对齐 error/finished 控制帧；A51 允许录音中切换音源模式并保持当前识别 session。下一步核验真实音频设备热切换、设备拔插恢复和用户历史 Archive 脱敏互操作；真实云响应仍未覆盖。
 2. P1：主界面语言菜单、滚动跟随行为、四类设置和分段配置已接入；A33 完成 12 项启动/控件 UIA smoke，但窄窗口、视觉布局、字幕滚动手感、键盘和 Narrator 仍未实测。
 3. P1：原生 Win32/Direct2D 浮层已替换活动 XAML 浮层，主界面继续使用 WinUI；透明像素、置顶、点击穿透与调整模式已隔离实测。下一步验收真实异 DPI 多屏、拔插、全屏应用，并做 Mac/Windows 视觉对照。浮层继续复用同一识别会话和当前字幕状态。
 4. P2：总结面板已补齐 Mac 风格 Markdown 分块、折叠/展开、复制、状态反馈和显示条件；继续核验主题与窄窗口布局。

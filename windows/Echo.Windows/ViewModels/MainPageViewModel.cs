@@ -56,7 +56,7 @@ public partial class MainPageViewModel : ObservableObject
     public ObservableCollection<Subtitle> Entries { get; } = [];
     public DesktopSubtitleOverlayFeed SubtitleOverlayFeed { get; } = new();
     public bool HasEntries => Entries.Count > 0;
-    public int ActiveAudioMode { get; private set; }
+    public int ActiveAudioMode { get; private set; } = 1;
     public string? ActiveOutputId { get; private set; }
     public string? ActiveInputId { get; private set; }
     public ObservableCollection<AudioDevice> Outputs { get; } = [];
@@ -74,10 +74,11 @@ public partial class MainPageViewModel : ObservableObject
     public bool IsSummaryPanelVisible => SummaryPanelPresentation.ShouldShow(Config.AutoSummaryEnabled, HasGeneratedSummary, SummaryStatus.Length > 0);
     public bool CanEdit => !IsBusy && !IsRecording;
     public bool CanSwitchAudioDevices => IsRecording && !IsBusy;
+    public bool CanChangeAudioMode => !IsBusy;
     public bool CanStopRecording => IsRecording && (!IsBusy || recoveryCancellation is not null);
     public bool CanSplitCompletedSegment => !IsBusy && !IsRecording && completedArchiveId is not null && completedSegmentId is not null;
     public bool CanDeleteSelectedArchive => CanEdit && !IsSummarizing && SelectedArchive is not null;
-    partial void OnIsBusyChanged(bool value) { OnPropertyChanged(nameof(CanEdit)); OnPropertyChanged(nameof(CanSwitchAudioDevices)); OnPropertyChanged(nameof(CanStopRecording)); OnPropertyChanged(nameof(CanSplitCompletedSegment)); OnPropertyChanged(nameof(CanDeleteSelectedArchive)); }
+    partial void OnIsBusyChanged(bool value) { OnPropertyChanged(nameof(CanEdit)); OnPropertyChanged(nameof(CanSwitchAudioDevices)); OnPropertyChanged(nameof(CanChangeAudioMode)); OnPropertyChanged(nameof(CanStopRecording)); OnPropertyChanged(nameof(CanSplitCompletedSegment)); OnPropertyChanged(nameof(CanDeleteSelectedArchive)); }
     partial void OnIsRecordingChanged(bool value) { OnPropertyChanged(nameof(CanEdit)); OnPropertyChanged(nameof(CanSwitchAudioDevices)); OnPropertyChanged(nameof(CanStopRecording)); OnPropertyChanged(nameof(CanSplitCompletedSegment)); OnPropertyChanged(nameof(CanDeleteSelectedArchive)); }
     partial void OnIsSummarizingChanged(bool value) => OnPropertyChanged(nameof(CanDeleteSelectedArchive));
     partial void OnSummaryStatusChanged(string value) => OnPropertyChanged(nameof(IsSummaryPanelVisible));
@@ -103,6 +104,7 @@ public partial class MainPageViewModel : ObservableObject
         try
         {
             Config = Preferences.Load();
+            ActiveAudioMode = Config.AudioInputMode;
             if (!string.IsNullOrWhiteSpace(Config.SonioxSecret)) Status = "准备就绪";
         }
         catch (Exception e) { Status = "设置读取失败，可重新填写：" + e.Message; }
@@ -193,6 +195,20 @@ public partial class MainPageViewModel : ObservableObject
             foreach (var d in AudioCapture.Devices(DataFlow.Capture)) Inputs.Add(d);
         }
         catch (Exception e) { Status = "设备枚举失败：" + e.Message; }
+    }
+    public void SetPreferredAudioMode(int mode)
+    {
+        if (mode is < 0 or > 2 || IsRecording || IsBusy) return;
+        Config.AudioInputMode = mode;
+        SetActiveAudioMode(mode);
+        try { Config.Save(); }
+        catch (Exception e) { Status = "音频来源已更改，但默认选择未能保存：" + e.Message; }
+    }
+    private void SetActiveAudioMode(int mode)
+    {
+        if (ActiveAudioMode == mode) return;
+        ActiveAudioMode = mode;
+        OnPropertyChanged(nameof(ActiveAudioMode));
     }
     public void NewArchive()
     {
@@ -469,7 +485,7 @@ public partial class MainPageViewModel : ObservableObject
             Status = "正在采集音频并连接 Soniox…";
             await current.StartAsync(Config, activeSegmentation, key, mode, output, input, starting.Token);
             if (failure is not null) throw failure;
-            ActiveAudioMode = mode; ActiveOutputId = output; ActiveInputId = input;
+            SetActiveAudioMode(mode); ActiveOutputId = output; ActiveInputId = input;
             IsRecording = true; checkpoint.Start(); segmentationTimer.Start();
             Status = "正在录音 · 音频发送至 Soniox · 原始音频不落盘";
         }
@@ -608,6 +624,35 @@ public partial class MainPageViewModel : ObservableObject
             if (!e.CaptureRestored) { failure = e; stopAfterFailure = true; }
         }
         catch (Exception e) { Status = "切换失败，录音仍使用原设备：" + e.Message; }
+        finally { IsBusy = false; }
+        if (stopAfterFailure) await StopAsync();
+    }
+    public async Task SwitchAudioModeAsync(int mode)
+    {
+        if (mode is < 0 or > 2 || !CanSwitchAudioDevices || session is null) return;
+        if (mode == ActiveAudioMode) return;
+        AudioInputModeSelection selection = AudioInputModeSelection.ForSwitch(mode, ActiveOutputId, ActiveInputId);
+        string? output = selection.OutputId;
+        string? input = selection.InputId;
+        IsBusy = true; Status = "正在切换音频来源…";
+        bool stopAfterFailure = false;
+        bool preferenceSaveFailed = false;
+        try
+        {
+            await session.SwitchDevicesAsync(output, input, newMode: selection.Mode);
+            ActiveOutputId = output; ActiveInputId = input;
+            Config.AudioInputMode = mode;
+            SetActiveAudioMode(mode);
+            try { Config.Save(); }
+            catch (Exception e) { preferenceSaveFailed = true; Status = "音频来源已切换，但默认选择未能保存：" + e.Message; }
+            if (!preferenceSaveFailed) Status = "音频来源已切换 · 转写会话保持连接";
+        }
+        catch (AudioDeviceSwitchException e)
+        {
+            Status = e.Message;
+            if (!e.CaptureRestored) { failure = e; stopAfterFailure = true; }
+        }
+        catch (Exception e) { Status = "切换失败，录音仍使用原音频来源：" + e.Message; }
         finally { IsBusy = false; }
         if (stopAfterFailure) await StopAsync();
     }

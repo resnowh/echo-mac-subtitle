@@ -39,6 +39,7 @@ public sealed partial class MainPage : Page
     private bool isAtTranscriptEnd = true;
     private readonly HashSet<Guid> observedSubtitleIds = [];
     private bool initialized;
+    private bool syncingAudioMode;
     private bool isSummaryExpanded = true;
     private bool loadingSettings = true;
     public MainPageViewModel ViewModel { get; } = new();
@@ -46,6 +47,7 @@ public sealed partial class MainPage : Page
     {
         InitializeComponent();
         var c = ViewModel.Config;
+        Mode.SelectedIndex = c.AudioInputMode;
         SourceLanguageChoice.ItemsSource = SourceLanguages;
         TargetLanguageChoice.ItemsSource = TargetLanguages;
         SettingsSourceLanguage.ItemsSource = SourceLanguages;
@@ -104,6 +106,12 @@ public sealed partial class MainPage : Page
         }
         ViewModel.PropertyChanged += (_, e) =>
         {
+            if (e.PropertyName == nameof(ViewModel.ActiveAudioMode) && Mode.SelectedIndex != ViewModel.ActiveAudioMode)
+            {
+                syncingAudioMode = true;
+                Mode.SelectedIndex = ViewModel.ActiveAudioMode;
+                syncingAudioMode = false;
+            }
             if (e.PropertyName is nameof(ViewModel.Level) or nameof(ViewModel.IsRecording) or nameof(ViewModel.Status) or nameof(ViewModel.AudioWaveformSamples)) UpdateAudioDisplay();
             if (e.PropertyName == nameof(ViewModel.IsRecording)) UpdateRecordingLanguageHint();
             if (e.PropertyName == nameof(ViewModel.Summary)) RenderSummary();
@@ -320,6 +328,18 @@ public sealed partial class MainPage : Page
             ArchiveTitle.Text = ViewModel.SelectedArchive?.Title ?? "新的录音";
     }
     private async void Start_Click(object sender, RoutedEventArgs e) => await ViewModel.StartAsync(Mode.SelectedIndex, (OutputDevice.SelectedItem as AudioDevice)?.Id, (InputDevice.SelectedItem as AudioDevice)?.Id);
+    private async void AudioMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!initialized || syncingAudioMode || Mode.SelectedIndex is < 0 or > 2) return;
+        if (ViewModel.IsRecording) await ViewModel.SwitchAudioModeAsync(Mode.SelectedIndex);
+        else ViewModel.SetPreferredAudioMode(Mode.SelectedIndex);
+        if (Mode.SelectedIndex != ViewModel.ActiveAudioMode)
+        {
+            syncingAudioMode = true;
+            Mode.SelectedIndex = ViewModel.ActiveAudioMode;
+            syncingAudioMode = false;
+        }
+    }
     private async void Stop_Click(object sender, RoutedEventArgs e) => await ViewModel.StopAsync();
     private async void SwitchAudio_Click(object sender, RoutedEventArgs e)
     {

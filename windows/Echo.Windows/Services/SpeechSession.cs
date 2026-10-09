@@ -94,25 +94,30 @@ public sealed class SpeechSession : IAsyncDisposable
         var match = Regex.Match(error.Message, @"status code\s+'(?<status>[1-5]\d{2})'", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         return match.Success && int.TryParse(match.Groups["status"].Value, out int messageStatus) ? messageStatus : null;
     }
-    public async Task SwitchDevicesAsync(string? newOutputId, string? newInputId, bool forceRestart = false)
+    public async Task SwitchDevicesAsync(string? newOutputId, string? newInputId, bool forceRestart = false, int? newMode = null)
     {
         if (stopping) throw new InvalidOperationException("录音正在停止，暂时不能切换设备。");
-        if (!forceRestart && newOutputId == outputId && newInputId == inputId) return;
-        string? oldOutputId = capture.ActiveOutputId ?? outputId, oldInputId = capture.ActiveInputId ?? inputId;
+        if (newMode is < 0 or > 2) throw new ArgumentOutOfRangeException(nameof(newMode));
         await audioGate.WaitAsync(audioStop.Token);
         try
         {
+            if (stopping) throw new InvalidOperationException("录音正在停止，暂时不能切换设备。");
+            int targetMode = newMode ?? mode;
+            if (!forceRestart && targetMode == mode && newOutputId == outputId && newInputId == inputId) return;
+            int oldMode = mode;
+            string? oldOutputId = capture.ActiveOutputId ?? outputId, oldInputId = capture.ActiveInputId ?? inputId;
             capture.StopInputs();
             try { await SendCaptureTailAsync(); }
             catch (Exception e) { throw new AudioDeviceSwitchException("切换期间音频传输失败；正在保存已收到的文字并停止录音。", false, e); }
             try
             {
-                await Task.Run(() => capture.Restart(mode, newOutputId, newInputId));
+                await Task.Run(() => capture.Restart(targetMode, newOutputId, newInputId));
+                mode = targetMode;
                 outputId = newOutputId; inputId = newInputId;
             }
             catch (Exception switchError)
             {
-                try { await Task.Run(() => capture.Start(mode, oldOutputId, oldInputId)); }
+                try { await Task.Run(() => capture.Start(oldMode, oldOutputId, oldInputId)); }
                 catch (Exception restoreError)
                 {
                     throw new AudioDeviceSwitchException("新设备启动失败，原设备也无法恢复；正在保存已收到的文字并停止录音。", false,

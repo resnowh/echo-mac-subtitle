@@ -49,6 +49,25 @@ Check(mainWindowMinimum == new MainWindowPixelSize(680, 520)
     "main-window minimum and ideal sizes match Mac in DIPs, scale with DPI, and fit a smaller work area");
 Check(new Preferences().Theme == "Dark" && JsonSerializer.Deserialize<Preferences>("{}", TranscriptFiles.Json)?.Theme == "Dark",
     "new and legacy preferences default to the Mac dark theme when no explicit theme is stored");
+var legacyAudioPreferences = JsonSerializer.Deserialize<Preferences>("{}", TranscriptFiles.Json);
+var audioModeRoundTrip = JsonSerializer.Deserialize<Preferences>(JsonSerializer.Serialize(new Preferences { AudioInputMode = 2 }, TranscriptFiles.Json), TranscriptFiles.Json);
+Check(new Preferences().AudioInputMode == 1 && legacyAudioPreferences?.AudioInputMode == 1
+    && audioModeRoundTrip?.AudioInputMode == 2 && new Preferences { AudioInputMode = 9 }.Validate().AudioInputMode == 1,
+    "audio input mode defaults to Mac microphone, persists, and repairs unsupported values");
+var computerOnlySelection = AudioInputModeSelection.ForSwitch(0, "speaker-id", "mic-id");
+var microphoneOnlySelection = AudioInputModeSelection.ForSwitch(1, "speaker-id", "mic-id");
+var mixedSelection = AudioInputModeSelection.ForSwitch(2, "speaker-id", "mic-id");
+Check(computerOnlySelection == new AudioInputModeSelection(0, "speaker-id", null)
+    && microphoneOnlySelection == new AudioInputModeSelection(1, null, "mic-id")
+    && mixedSelection == new AudioInputModeSelection(2, "speaker-id", "mic-id"),
+    "live audio mode switching keeps only the capture routes required by the selected mode");
+var audioModePageXaml = XDocument.Load(Path.Combine(AppContext.BaseDirectory, "Fixtures", "MainPage.xaml"));
+XNamespace mainPageXamlNamespace = "http://schemas.microsoft.com/winfx/2006/xaml";
+var audioModeControl = audioModePageXaml.Descendants(XName.Get("ComboBox", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .FirstOrDefault(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value == "Mode");
+Check(audioModeControl?.Attribute("SelectionChanged")?.Value == "AudioMode_SelectionChanged"
+    && audioModeControl.Attribute("IsEnabled")?.Value.Contains("CanChangeAudioMode", StringComparison.Ordinal) == true,
+    "audio input mode remains available during recording and routes selections through the live switch handler");
 Check(ThemePreference.IndexFor("Light") == 0 && ThemePreference.IndexFor("Dark") == 1 && ThemePreference.IndexFor("Default") == 2
     && ThemePreference.Next("Dark") == "Default" && ThemePreference.Next("Default") == "Light" && ThemePreference.Next("Light") == "Dark",
     "theme choices and main-window cycling follow the Mac light, dark, system order");

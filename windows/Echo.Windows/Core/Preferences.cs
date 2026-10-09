@@ -22,6 +22,7 @@ public sealed class Preferences
     public bool Speakers { get; set; } = true;
     public bool AutoCorrectionEnabled { get; set; }
     public bool AutoSummaryEnabled { get; set; }
+    public int AudioInputMode { get; set; } = 1;
     public string SonioxSecret { get; set; } = "";
     public string DeepSeekSecret { get; set; } = "";
     public string CorrectionTerms { get; set; } = "";
@@ -34,18 +35,20 @@ public sealed class Preferences
     {
         string file = Path.Combine(TranscriptFiles.Root, "settings.json");
         var result = File.Exists(file) ? JsonSerializer.Deserialize<Preferences>(File.ReadAllText(file), TranscriptFiles.Json) ?? new() : new();
-        result.SubtitleOverlay ??= new();
-        result.SubtitleOverlay.Validate();
-        result.Segmentation ??= new();
-        result.Segmentation.Validate();
-        return result;
+        return result.Validate();
     }
-    public void Save()
+    public Preferences Validate()
     {
         SubtitleOverlay ??= new();
         SubtitleOverlay.Validate();
         Segmentation ??= new();
         Segmentation.Validate();
+        AudioInputMode = AudioInputMode is >= 0 and <= 2 ? AudioInputMode : 1;
+        return this;
+    }
+    public void Save()
+    {
+        Validate();
         TranscriptFiles.AtomicWrite(Path.Combine(TranscriptFiles.Root, "settings.json"), JsonSerializer.Serialize(this, TranscriptFiles.Json));
     }
 }
