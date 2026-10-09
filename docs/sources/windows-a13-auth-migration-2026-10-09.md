@@ -27,6 +27,7 @@
 - 断言每次连接都带 `Authorization: Bearer synthetic`，启动 JSON 不含 `api_key`；分类、用户提示、请求编号和重试策略均与预期一致。另验证握手阶段 HTTP 401/503 分类以及连接取消行为。
 - `dotnet run --project windows/Echo.CoreChecks/Echo.CoreChecks.csproj -c Release --no-restore`：49 项通过，无云端调用、无真实 API Key 使用、无音频保存。
 - `dotnet build windows/Echo.Windows/Echo.Windows.csproj -c Release --no-restore /p:Platform=x64 /p:RuntimeIdentifier=win-x64`：成功，0 错误，10 条既有 NAudio 弃用警告。
+- 提交 `b2c807ef1ddbd5d3064fd9e2cb15754f5c839371` 的 [GitHub Actions 运行 37901351866](https://github.com/resnowh/echo-mac-subtitle/actions/runs/37901351866) 中 Windows 与 Mac jobs 均通过；Windows 锁定还原、49 项 CoreChecks 和 Release x64 构建通过，Mac transport 与 Debug/Release 检查通过。
 
 ## 未覆盖
 
