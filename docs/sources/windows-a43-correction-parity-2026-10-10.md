@@ -11,6 +11,7 @@
 | Windows `windows/Echo.Windows/Core/Transcript.cs` | 本轮未修改 | `65E6C42B36C1659652CAD1DCFA2CADEC16D02A48ABDCD904EBFC7A8E18CD7B51` | Windows `TokenAssembler` 和纠正规则 |
 | Windows `windows/Echo.CoreChecks/Program.cs` | 本轮未修改 | `DB94D7E50A9E1075DE235AB1A09664669897F0322D62D3F4CDCB204D47EDB7FB` | 逐响应比较字幕字段、时间戳及定稿数 |
 | 新 Soniox fixture：`windows/Echo.CoreChecks/Fixtures/soniox-mac-parity-sequence.json` | 18 响应，25,116 bytes | `A200086383B3FFD711F8AB20C06DEF9473E44108D18E0400C3C4A07C596D38AB` | Windows 静态期望和 macOS CI 输入 |
+| Mac production runtime output：`mac-soniox-runtime.json` | Actions run `37966271007`，18 响应，24,845 bytes | `5E5D888167AE79C24FAD3245CCCBD14A2D64D5B358F12B40DBD1C1C7524EC38C` | 未修改的 Mac 生产 handler 逐条输出，原件保留于本目录 |
 
 输入 fixture 由虚构的英文与中文字幕组成，不包含用户内容、录音、Key 或服务端响应。追加的五种场景是：
 
@@ -24,6 +25,6 @@
 
 - 本机 `dotnet run --project windows/Echo.CoreChecks/Echo.CoreChecks.csproj -c Release --no-restore`：116 项通过；18 条固定响应逐项比较字幕、speaker、language、时间戳和定稿次数。
 - `dotnet build windows/Echo.Windows/Echo.Windows.csproj -c Release -p:Platform=x64 -p:PublishReadyToRun=false --no-restore`：0 警告、0 错误。
-- A43 Mac production handler 对拍需要本轮提交后由 GitHub Actions macOS runner 执行。运行结果与其原始 JSON artifact 会在本文件和数据清单中补记。
+- GitHub Actions run [`37966271007`](https://github.com/resnowh/echo-mac-subtitle/actions/runs/37966271007) 全部成功：Mac 生产 handler 生成 fixture、Windows 116 项 CoreChecks 使用 Mac artifact 对拍、Release x64 构建、Mac Archive 回读。Mac runtime 原始 JSON 已保留在 [`mac-soniox-runtime.json`](windows-a43-correction-parity-2026-10-10/mac-soniox-runtime.json)。本机另以同一 artifact 设置 `ECHO_MAC_SONIOX_FIXTURE` 重跑，116 项通过。
 
 本轮未编辑 `macOS/`，未执行云端请求或真实音频验收。合成 fixture 检查只证明所列确定性输入的处理结果一致。
