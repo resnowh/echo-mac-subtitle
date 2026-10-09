@@ -21,4 +21,5 @@ Windows 现通过 `Archive.NewTitle(DateTime localTime)` 生成相同的“课�
 - 本机 `dotnet run --project windows/Echo.CoreChecks/Echo.CoreChecks.csproj -c Release --no-restore`：120 项通过。
 - Release x64 本机构建：0 警告、0 错误。
 - GitHub Actions runs [`37969232352`](https://github.com/resnowh/echo-mac-subtitle/actions/runs/37969232352) 和 [`37969238022`](https://github.com/resnowh/echo-mac-subtitle/actions/runs/37969238022) 的 Mac fixture、Windows CoreChecks/Release 构建与 Mac Archive 回读均通过；Mac CI build `37969237990` 和 unsigned package preflight `37969238091` 通过。
+- 在后续文档提交 HEAD `b4cdc61058095be1a149afa2c870882aced5cde4` 上重新运行：本机 CoreChecks 120 项和 Release x64 构建（0 警告、0 错误）通过；Actions runs [`37969777944`](https://github.com/resnowh/echo-mac-subtitle/actions/runs/37969777944)、[`37969788314`](https://github.com/resnowh/echo-mac-subtitle/actions/runs/37969788314) 的 Mac fixture、Windows 构建/检查、Mac Archive 回读通过；Mac CI build `37969788362` 与 unsigned package preflight `37969788440` 通过。
 - Mac 源文件只读，未触碰 Echo 或真实存档。PR #5 检查通过，Windows 分支未合并。
