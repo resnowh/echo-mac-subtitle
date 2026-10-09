@@ -13,7 +13,7 @@ Windows 来源：当前 PR 分支 `feature/windows-mac-parity`；其历史迁移
 | Windows 实现 | 当前 PR 分支 `windows/`；历史迁移来源见上文 | 文件清单、现有能力、待对齐行为 | 没有运行 UI 或真实音频硬件 |
 | Windows 检查底稿 | `docs/sources/windows-*` | 保留原有构建、核心检查和签名包记录 | 历史测试结论只适用于底稿注明的代码版本 |
 | AI 总结呈现 | Mac `EchoMacApp.swift`、`TranscriptViews.swift` | A29 记录 Markdown 分块、默认展开、收起/复制与 Windows 合成验证 | 尚无 GUI 视觉或剪贴板实测 |
-| Soniox 多响应处理 | Mac `SpeechViewModel.handleSonioxMessage` 等生产路径 | A35 七响应 production differential 已通过，覆盖同响应 speaker 合并与跨响应 speaker 切分 | 固定合成输入与真实云响应仍有差别；其他 token 序列仍待覆盖 |
+| Soniox 多响应处理 | Mac `SpeechViewModel.handleSonioxMessage` 等生产路径；类型错误的字段通过 Swift 可选类型转换忽略/回退 | A35 七响应 production differential；A42 扩至十三响应，加入文本、final、translation_status、speaker/language、时间戳类型错误及随后正常译文/端点 | A42 Windows 本地 fixture 已通过；Mac production differential 在本轮 CI 待验证。真实云响应与协议外畸形负载仍不代表实际服务行为 |
 | Soniox 本地静默后备计时 | Mac 在错误/finished 早退后，对每条有效转写响应更新时间，包括空 token 响应和仅端点标记响应 | Windows 现按每条非错误、非 finished 的有效响应更新时间；不要求响应含普通语音 token | 之前仅普通文本 token 会刷新 Windows 计时，空响应期间可能比 Mac 提前本地切句；A39 已修正并以四类固定 JSON 检查 | 纯逻辑与 Release 构建已验证；真实服务空响应节奏和长时间静默仍未验 |
 | 录音电平与波形 | Mac 对转换样本算 RMS 并乘 7.5，20Hz 快攻慢放平滑，保留 48 个样本并逐点绘制 | Windows 按每路有效重采样样本算 RMS，采用相同放大、20Hz 平滑系数和 48 点波形；已移除与真实声音无关的正弦条形动画 | A40 以合成样本检查 RMS、攻击/回落、历史容量和重置 | 纯逻辑与 Release 构建通过；真实设备电平响应和视觉波形仍待 GUI/设备验收 |
 | 双路 PCM 混音欠载行为 | Mac `PCM16TimelineMixer` 与 Windows `AudioCapture.ReadFrame` / `AudioFrameMixer` | A36 对照发现并修正 Windows 欠载时固定双路除数导致的音量衰减；97 项 CoreChecks 与 Windows Release 构建通过 | 确定性样本检查不替代真实 WASAPI 设备、时钟漂移及长时间采集验收；Mac 源码基线和 Windows 代码版本见 A36 |
@@ -35,7 +35,7 @@ Windows 来源：当前 PR 分支 `feature/windows-mac-parity`；其历史迁移
 | 主字幕区可选识别语言及翻译目标，录音中提示下次录音生效 | 主界面提供 Mac 同款语言、自动识别、不翻译选项；ComboBox 显示 `Title` 标签而非对象调试文本；更改配置写入本地并提示下次录音生效 | 功能存在但行为不同 | Mac `macOS/Views/TranscriptViews.swift`、`macOS/Models/TranscriptModels.swift`；Windows `MainPage.xaml`、`MainPage.xaml.cs`、`Core/Preferences.cs`。A33 UIA 检查语言选择显示值；Windows 仍保留“翻译”设置开关，菜单项会同步开关状态 |
 | 四个设置分类：常规、识别、分段、AI 服务 | WinUI SelectorBar 切换四类设置，参数修改后保存到本地 | 功能存在但行为不同 | Mac `macOS/EchoMacApp.swift`；Windows `windows/Echo.Windows/MainPage.xaml`、`MainPage.xaml.cs`。控件平台原生，实际键盘和 Narrator 行为未验 |
 | 音源：电脑音频、麦克风、混合；授权状态和音频电平 | WASAPI loopback、麦克风及本地混音；只平均当前帧实际可用来源，缺帧补静音但不压低另一路；电平按来源 RMS 计算并平滑 | 功能存在但行为不同 | Mac `Audio/PCM16AudioPipeline.swift`、`SpeechViewModel.swift`；Windows `Services/AudioCapture.cs`、`SpeechSession.cs`、`Core/AudioLevelHistory.cs`。欠载混音见 A36，meter/波形见 A40；真实声卡、授权表达、睡眠和长时间双路验收仍待完成 |
-| Soniox 临时字幕更新、最终字幕落定、翻译迟到、双语端点、说话人/语言元数据、强语境经济学/微积分词汇纠正及请求上下文 | Mac 每条响应整体替换 provisional 双语快照、累加 final；endpoint 在整条响应完成后最多定稿一次。同响应新建 row 时多个 speaker 合并并采用末尾元数据；已有 row 在下一响应遇到 final speaker 变化时分行。请求包含 Mac 的固定领域提示和用户词 | 功能存在但行为不同 | A35 七响应 production runtime 对拍已通过；云端行为和更广 token 序列仍未验证。Mac `SpeechViewModel.swift`；Windows `Core/SonioxRequestBuilder.cs`、`Core/Transcript.cs`、`Services/SpeechSession.cs`；见 A25/A26/A30/A35 |
+| Soniox 临时字幕更新、最终字幕落定、翻译迟到、双语端点、说话人/语言元数据、强语境经济学/微积分词汇纠正及请求上下文 | Mac 每条响应整体替换 provisional 双语快照、累加 final；endpoint 在整条响应完成后最多定稿一次。同响应新建 row 时多个 speaker 合并并采用末尾元数据；已有 row 在下一响应遇到 final speaker 变化时分行。JSON 字段类型不符时以 Swift 可选转换回退/忽略 | Windows 静态 fixture 覆盖 13 条合成响应；A42 Mac production 对拍待本轮 CI 完成 | A35 七响应 differential 已通过；A42 新增错误字段类型时跳过无效 token/元数据、按 Mac 默认处理 is_final/translation_status、忽略非数值时间戳，并在畸形响应后继续译文与端点。Mac `SpeechViewModel.swift`；Windows `Core/SonioxRequestBuilder.cs`、`Core/Transcript.cs`、`Services/SpeechSession.cs`；本轮 CI 结果见 A42 |
 | 设置识别模式、优先语言、严格限制、翻译、目标语言、说话人 | 设置页语言选项、自动识别、不翻译、严格语言和说话人开关；开始会话时冻结翻译行为 | 功能存在但行为不同 | Mac `TranscriptModels.swift`、`EchoMacApp.swift`；Windows `Core/Preferences.cs`、`MainPage.xaml(.cs)`、`MainPageViewModel.cs`。UI smoke 和当前会话不变行为仍需验 |
 | Soniox 端点最大延迟、灵敏度、延迟级别、本地静音兜底、超长段兜底 | 按 Mac 默认值和范围保存；Soniox 请求发送三项端点参数；500ms 本地策略以相同词数/时长双阈值兜底，翻译开启时等待译文，语义端点优先 | 功能存在但行为不同 | Mac `macOS/Models/TranscriptModels.swift`、`SpeechViewModel.swift`、`SonioxRequestBuilder.swift`；Windows `Core/Preferences.cs`、`TranscriptSegmentationPolicy.cs`、`SonioxRequestBuilder.cs`、`MainPageViewModel.cs`。核心契约自动检查；见 A24 数据底稿，真实云端行为未验 |
 | 归档选择、新建、续录、导出、清空、拆分已完成段 | Mac 载入列表按 `updatedAt` 降序；归档中的多个 segment 按各自开始日期保留 | Windows 按 `updatedAt` 降序载入并在保存后移动更新项；A32 Mac→Windows→Mac 生产归档往返已在 Actions 成功 | 部分实现 | Mac `Storage/TranscriptArchiveStore.swift`、`SpeechViewModel.swift`、archive models；Windows `Core/Transcript.cs`、`MainPageViewModel.cs`、`Echo.CoreChecks/Program.cs`；A32 run `37948130637` 通过，保留合成双段底稿见 A32 文档。仍缺用户历史归档广泛互操作验证；见 A17/A27/A32 |
@@ -49,10 +49,10 @@ Windows 来源：当前 PR 分支 `feature/windows-mac-parity`；其历史迁移
 
 ## 最高优先级缺口
 
-1. P0：A35 保存了 Mac 生产 Soniox handler 与 Windows TokenAssembler 的逐响应 fixture；A39 又对齐空响应触发的静默计时。下一步扩大合成 token 序列及边界情况；真实用户历史 Archive 与云端响应仍未覆盖。
+1. P0：A35 的七条 Mac production handler 对拍已通过；A42 把固定输入扩至 13 条，Windows 静态 fixture 已通过，本轮 Mac production artifact/differential 等待 CI。A39 对齐空响应静默计时，A42 对齐畸形字段的安全回退。下一步补纠正规则前后对拍、Finished/error 传输收尾边界和真实用户历史 Archive 的脱敏互操作测试；真实云响应仍未覆盖。
 2. P1：主界面语言菜单、滚动跟随行为、四类设置和分段配置已接入；A33 完成 12 项启动/控件 UIA smoke，但窄窗口、视觉布局、字幕滚动手感、键盘和 Narrator 仍未实测。
 3. P1：A34 补上上次使用的显示器记忆、DPI/显示器配置变化重排以及跨 DPI 拖动基线；优先完成真实透明合成、点击穿透、多屏和全屏应用验收。悬浮字幕复用同一识别会话和当前字幕状态。
-4. P2：总结面板已补齐 Mac 风格 Markdown 分块、折叠/展开和复制；继续核验自动总结状态反馈、显示条件、主题和窄窗口布局。
+4. P2：总结面板已补齐 Mac 风格 Markdown 分块、折叠/展开、复制、状态反馈和显示条件；继续核验主题与窄窗口布局。
 5. 发布：签名证书、CI 构建产物留存和干净 Windows 机器安装升级验证。
 
 当前状态结合源码比对、A33 Windows 调试实例 UIA smoke 和 CI；未做 Mac/Windows 截图视觉对照、浮层真实透明/点击穿透、多 DPI、多屏、真实设备采集或正式签名安装验收。

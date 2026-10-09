@@ -48,6 +48,71 @@
         {"english":"Third speaker.","chinese":"第三位。","speaker":"Speaker 3","language":"en","start":9.0,"end":10.0},
         {"english":"Fourth speaker.","chinese":"第四位。","speaker":"Speaker 4","language":"ja","start":10.5,"end":11.0}
       ]
+    },
+    {
+      "message": {"tokens": [{"text":42,"is_final":true,"speaker":"9","language":"fr","start_ms":12000,"end_ms":12500}]},
+      "expectedFinalizations": 4,
+      "expected": [
+        {"english":"Meeting started.","chinese":"会议开始了。","speaker":"Speaker 5","language":"ja","start":1.0,"end":2.2},
+        {"english":"First speaker.Second speaker.","chinese":"第一位。第二位。","speaker":"Speaker 2","language":"ja","start":6.0,"end":8.0},
+        {"english":"Third speaker.","chinese":"第三位。","speaker":"Speaker 3","language":"en","start":9.0,"end":10.0},
+        {"english":"Fourth speaker.","chinese":"第四位。","speaker":"Speaker 4","language":"ja","start":10.5,"end":11.0}
+      ]
+    },
+    {
+      "message": {"tokens": [{"text":"malformed metadata remains provisional","is_final":"true","translation_status":17,"speaker":3,"language":8,"start_ms":11500,"end_ms":12000}]},
+      "expectedFinalizations": 4,
+      "expected": [
+        {"english":"Meeting started.","chinese":"会议开始了。","speaker":"Speaker 5","language":"ja","start":1.0,"end":2.2},
+        {"english":"First speaker.Second speaker.","chinese":"第一位。第二位。","speaker":"Speaker 2","language":"ja","start":6.0,"end":8.0},
+        {"english":"Third speaker.","chinese":"第三位。","speaker":"Speaker 3","language":"en","start":9.0,"end":10.0},
+        {"english":"Fourth speaker.","chinese":"第四位。","speaker":"Speaker 4","language":"ja","start":10.5,"end":11.0},
+        {"english":"malformed metadata remains provisional","chinese":"","start":11.5,"end":12.0}
+      ]
+    },
+    {
+      "message": {"tokens": [{"text":"settled after malformed fields","is_final":true,"start_ms":"invalid","end_ms":false,"speaker":[],"language":4}]},
+      "expectedFinalizations": 4,
+      "expected": [
+        {"english":"Meeting started.","chinese":"会议开始了。","speaker":"Speaker 5","language":"ja","start":1.0,"end":2.2},
+        {"english":"First speaker.Second speaker.","chinese":"第一位。第二位。","speaker":"Speaker 2","language":"ja","start":6.0,"end":8.0},
+        {"english":"Third speaker.","chinese":"第三位。","speaker":"Speaker 3","language":"en","start":9.0,"end":10.0},
+        {"english":"Fourth speaker.","chinese":"第四位。","speaker":"Speaker 4","language":"ja","start":10.5,"end":11.0},
+        {"english":"settled after malformed fields","chinese":"","start":11.5,"end":12.0}
+      ]
+    },
+    {
+      "message": {"tokens": [{"text":23,"is_final":true},{"text":"畸形字段后正常到达的译文","is_final":true,"translation_status":"translation"}]},
+      "expectedFinalizations": 4,
+      "expected": [
+        {"english":"Meeting started.","chinese":"会议开始了。","speaker":"Speaker 5","language":"ja","start":1.0,"end":2.2},
+        {"english":"First speaker.Second speaker.","chinese":"第一位。第二位。","speaker":"Speaker 2","language":"ja","start":6.0,"end":8.0},
+        {"english":"Third speaker.","chinese":"第三位。","speaker":"Speaker 3","language":"en","start":9.0,"end":10.0},
+        {"english":"Fourth speaker.","chinese":"第四位。","speaker":"Speaker 4","language":"ja","start":10.5,"end":11.0},
+        {"english":"settled after malformed fields","chinese":"畸形字段后正常到达的译文","start":11.5,"end":12.0}
+      ]
+    },
+    {
+      "message": {"tokens": [{"text":"<end>","is_final":true}]},
+      "expectedFinalizations": 5,
+      "expected": [
+        {"english":"Meeting started.","chinese":"会议开始了。","speaker":"Speaker 5","language":"ja","start":1.0,"end":2.2},
+        {"english":"First speaker.Second speaker.","chinese":"第一位。第二位。","speaker":"Speaker 2","language":"ja","start":6.0,"end":8.0},
+        {"english":"Third speaker.","chinese":"第三位。","speaker":"Speaker 3","language":"en","start":9.0,"end":10.0},
+        {"english":"Fourth speaker.","chinese":"第四位。","speaker":"Speaker 4","language":"ja","start":10.5,"end":11.0},
+        {"english":"settled after malformed fields","chinese":"畸形字段后正常到达的译文","start":11.5,"end":12.0}
+      ]
+    },
+    {
+      "message": {"tokens": [{"text":"this whole token array should be ignored","is_final":true},"not-a-token-object"]},
+      "expectedFinalizations": 5,
+      "expected": [
+        {"english":"Meeting started.","chinese":"会议开始了。","speaker":"Speaker 5","language":"ja","start":1.0,"end":2.2},
+        {"english":"First speaker.Second speaker.","chinese":"第一位。第二位。","speaker":"Speaker 2","language":"ja","start":6.0,"end":8.0},
+        {"english":"Third speaker.","chinese":"第三位。","speaker":"Speaker 3","language":"en","start":9.0,"end":10.0},
+        {"english":"Fourth speaker.","chinese":"第四位。","speaker":"Speaker 4","language":"ja","start":10.5,"end":11.0},
+        {"english":"settled after malformed fields","chinese":"畸形字段后正常到达的译文","start":11.5,"end":12.0}
+      ]
     }
   ]
 }

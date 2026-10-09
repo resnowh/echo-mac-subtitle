@@ -474,6 +474,15 @@ public sealed class TokenAssembler(Segment segment, Action<Subtitle> added, Acti
     private readonly Dictionary<int, string> sourceFinal = [], translationFinal = [];
     private readonly Dictionary<int, string> sourceProvisional = [], translationProvisional = [];
     private readonly HashSet<int> sourceStartSet = [], sourceEndSet = [];
+    private static string? ReadString(JsonElement element, string property)
+        => element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+    private static bool ReadBoolean(JsonElement element, string property)
+        => element.TryGetProperty(property, out var value) && (value.ValueKind is JsonValueKind.True or JsonValueKind.False) && value.GetBoolean();
+    private static bool TryReadNumber(JsonElement element, string property, out double value)
+    {
+        value = 0;
+        return element.TryGetProperty(property, out var field) && field.ValueKind == JsonValueKind.Number && field.TryGetDouble(out value);
+    }
     public bool FinalizeCurrent()
     {
         int index = Math.Max(sourceCursor, translationCursor);
@@ -522,6 +531,15 @@ public sealed class TokenAssembler(Segment segment, Action<Subtitle> added, Acti
                 ApplyRecognition(activeRowWithoutTokenArray);
             return;
         }
+        if (tokens.EnumerateArray().Any(token => token.ValueKind != JsonValueKind.Object))
+        {
+            int activeRowWithInvalidTokenShape = Math.Max(sourceCursor, translationCursor);
+            if (activeRowWithInvalidTokenShape < segment.Entries.Count
+                && (!string.IsNullOrEmpty(sourceFinal.GetValueOrDefault(activeRowWithInvalidTokenShape))
+                    || !string.IsNullOrEmpty(translationFinal.GetValueOrDefault(activeRowWithInvalidTokenShape))))
+                ApplyRecognition(activeRowWithInvalidTokenShape);
+            return;
+        }
         int provisionalSource = sourceCursor, provisionalTranslation = translationCursor;
         bool reachedEndpoint = false;
         // Mac can split an already-open row when a final speaker change arrives,
@@ -534,9 +552,11 @@ public sealed class TokenAssembler(Segment segment, Action<Subtitle> added, Acti
         var changedRows = new HashSet<int>();
         foreach (var token in tokens.EnumerateArray())
         {
-            string text = token.TryGetProperty("text", out var tv) ? tv.GetString() ?? "" : "";
-            bool translation = token.TryGetProperty("translation_status", out var tr) && tr.GetString() == "translation";
-            bool final = token.TryGetProperty("is_final", out var f) && f.GetBoolean();
+            string? tokenText = ReadString(token, "text");
+            if (string.IsNullOrEmpty(tokenText)) continue;
+            string text = tokenText;
+            bool translation = ReadString(token, "translation_status") == "translation";
+            bool final = ReadBoolean(token, "is_final");
             if (text is "<end>" or "<fin>")
             {
                 // Mac records endpoint presence for the whole WebSocket response
@@ -569,24 +589,22 @@ public sealed class TokenAssembler(Segment segment, Action<Subtitle> added, Acti
             var row = Row(index);
             if (!translation)
             {
-                if (token.TryGetProperty("start_ms", out var start))
+                if (TryReadNumber(token, "start_ms", out double tokenStartMs))
                 {
-                    double tokenStart = start.GetDouble() / 1000;
+                    double tokenStart = tokenStartMs / 1000;
                     if (sourceStartSet.Add(index)) row.Start = tokenStart;
                     else row.Start = Math.Min(row.Start, tokenStart);
                     row.RecordedAt = segment.StartedAt + row.Start;
                 }
-                if (token.TryGetProperty("end_ms", out var end))
+                if (TryReadNumber(token, "end_ms", out double tokenEndMs))
                 {
-                    double tokenEnd = end.GetDouble() / 1000;
+                    double tokenEnd = tokenEndMs / 1000;
                     row.End = sourceEndSet.Add(index) ? Math.Max(row.Start, tokenEnd) : Math.Max(row.End, tokenEnd);
                 }
-                if (token.TryGetProperty("speaker", out var speaker)
-                    && speaker.ValueKind == JsonValueKind.String && (final || row.Speaker is null))
-                    row.Speaker = "Speaker " + speaker.GetString();
-                if (token.TryGetProperty("language", out var lang)
-                    && lang.ValueKind == JsonValueKind.String && (final || row.Language is null))
-                    row.Language = lang.GetString();
+                string? speaker = ReadString(token, "speaker");
+                if (speaker is not null && (final || row.Speaker is null)) row.Speaker = "Speaker " + speaker;
+                string? language = ReadString(token, "language");
+                if (language is not null && (final || row.Language is null)) row.Language = language;
             }
             if (final)
             {
