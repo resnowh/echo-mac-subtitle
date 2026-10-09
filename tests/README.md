@@ -7,6 +7,12 @@ segmentation, UserDefaults persistence, and Soniox endpoint request settings.
 No DeepSeek calls are made; these checks do not establish real AI correction
 quality.
 
+`LifecycleRecoveryChecks.swift` runs the production sleep/wake state machine
+through ten recovery cycles and checks that inactive wake events, duplicate
+notifications, user stops, and stale recovery results cannot restart recording.
+These checks exercise state transitions only; they do not put the Mac to sleep,
+start Echo, or access audio devices.
+
 The macOS CI run also emits a synthetic Archive through the production Mac
 encoder and its SRT exporter. The Windows job imports that exact fixture,
 re-encodes it, and compares its SRT with Mac output; a final macOS job reads the
