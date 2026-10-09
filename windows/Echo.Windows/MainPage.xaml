@@ -16,8 +16,8 @@
     </StackPanel>
    </Grid>
    <Grid Grid.Row="1" RowSpacing="4"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><Grid ColumnSpacing="14"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-    <ComboBox x:Name="SourceLanguageChoice" Header="识别语言" SelectionChanged="SourceLanguage_SelectionChanged" AutomationProperties.AutomationId="SourceLanguageChoice" HorizontalAlignment="Stretch"/>
-    <ComboBox x:Name="TargetLanguageChoice" Grid.Column="1" Header="翻译目标" SelectionChanged="TargetLanguage_SelectionChanged" AutomationProperties.AutomationId="TargetLanguageChoice" HorizontalAlignment="Stretch"/>
+    <ComboBox x:Name="SourceLanguageChoice" Header="识别语言" DisplayMemberPath="Title" SelectionChanged="SourceLanguage_SelectionChanged" AutomationProperties.AutomationId="SourceLanguageChoice" HorizontalAlignment="Stretch"/>
+    <ComboBox x:Name="TargetLanguageChoice" Grid.Column="1" Header="翻译目标" DisplayMemberPath="Title" SelectionChanged="TargetLanguage_SelectionChanged" AutomationProperties.AutomationId="TargetLanguageChoice" HorizontalAlignment="Stretch"/>
    </Grid><TextBlock Grid.Row="1" x:Name="LanguageNextSessionHint" Text="录音中更改语言：下次录音生效" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="Collapsed"/>
    </Grid>
    <Grid Grid.Row="2" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">

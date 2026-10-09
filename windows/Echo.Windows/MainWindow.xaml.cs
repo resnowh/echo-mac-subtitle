@@ -33,7 +33,11 @@ public sealed partial class MainWindow : Window
                 page.ViewModel.HandleSystemResuming);
             if (powerObserver is null) page.ViewModel.Status = "睡眠唤醒监听不可用；系统唤醒后请手动重新开始录音。";
         }
-        Closed += (_, _) => powerObserver?.Dispose();
+        Closed += (_, _) =>
+        {
+            powerObserver?.Dispose();
+            if (RootFrame.Content is MainPage page) page.CloseSubtitleOverlay();
+        };
         var scale = GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this)) / 96.0;
         var work = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(AppWindow.Id, Microsoft.UI.Windowing.DisplayAreaFallback.Primary).WorkArea;
         AppWindow.Resize(new Windows.Graphics.SizeInt32(Math.Min((int)(920 * scale), work.Width), Math.Min((int)(720 * scale), work.Height)));

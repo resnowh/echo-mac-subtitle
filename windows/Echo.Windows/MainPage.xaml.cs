@@ -78,7 +78,6 @@ public sealed partial class MainPage : Page
             initialized = true;
             await ViewModel.LoadArchivesAsync();
         };
-        App.Window.Closed += (_, _) => subtitleOverlayWindow?.CloseOverlay();
         ViewModel.Entries.CollectionChanged += Entries_CollectionChanged;
         EmptyHint.Visibility = ViewModel.Entries.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         TranscriptList.Loaded += (_, _) =>
@@ -124,6 +123,8 @@ public sealed partial class MainPage : Page
             }
         };
     }
+
+    internal void CloseSubtitleOverlay() => subtitleOverlayWindow?.CloseOverlay();
     public static Visibility VisibleWhen(bool value) => value ? Visibility.Visible : Visibility.Collapsed;
     public static Visibility HiddenWhen(bool value) => value ? Visibility.Collapsed : Visibility.Visible;
     public static bool Not(bool value) => !value;

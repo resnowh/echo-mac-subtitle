@@ -149,3 +149,5 @@ NuGet 版本记录在 `packages.lock.json`。GitHub Actions 在 Windows runner �
 2026-09-30：扩展 A16 两小时规模数据路径检查：即时合成 7,200 条双语字幕（每秒一条），执行 Archive 快照、JSON 序列化/解析和完整 SRT 导出。2,501,561-byte JSON 与 565,473-byte SRT 共保留全部 7,200 条，尾部时间码到 02:00:00；内存流水线用时 71 ms。A16 当时的全套 `Echo.CoreChecks --audio` 共 54 项通过；A17 对齐后全套升至 56 项。未进行磁盘 I/O、UI 渲染、真实录音、内存曲线或两小时运行；见 `docs/sources/windows-a16-two-hour-archive-2026-09-30.md`。
 
 2026-10-09：A15 静态复审修正字幕行重复的 AutomationId，改按字幕 UUID 生成稳定唯一标识；为运行时创建的设备切换与校对对话框控件补齐 AutomationId。Windows Release x64 后台构建 0 错误，10 条既有 NAudio 弃用警告；CoreChecks 51 项通过。未启动 Echo 或 UI smoke；键盘、Narrator、高对比度和多 DPI 仍需实机验收。见 `docs/sources/windows-a15-accessibility-static-review-2026-09-30.md`。
+
+2026-10-09：首次 WinUI 调试实例启动发现 `MainPage` 构造时读取尚未赋值的 `App.Window`，导致 `NullReferenceException`；关闭浮层的订阅已移至主窗口关闭事件。UI smoke 另发现主界面语言菜单显示 C# 对象调试文本，现绑定 `Title`。修复后 Debug x64 构建 0 警告/错误，Windows UIA smoke 12 项通过，启动与关闭正常；不含字幕内容的结果和故障依据见 `docs/sources/windows-a33-ui-smoke-2026-10-09.md`。未开始录音、保存设置或调用云端；真实视觉对照、透明浮层、多 DPI、键盘/Narrator 和音频硬件仍待验收。
