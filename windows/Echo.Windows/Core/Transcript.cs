@@ -248,8 +248,9 @@ public sealed class Archive
 {
     public static readonly DateTimeOffset AppleEpoch = new(2001, 1, 1, 0, 0, 0, TimeSpan.Zero);
     public static double Now => (DateTimeOffset.UtcNow - AppleEpoch).TotalSeconds;
+    public static string NewTitle(DateTime localTime) => $"课程 {localTime.ToString("MM-dd HH:mm", CultureInfo.InvariantCulture)}";
     public Guid Id { get; set; } = Guid.NewGuid();
-    public string Title { get; set; } = $"录音 {DateTime.Now:MM-dd HH:mm}";
+    public string Title { get; set; } = NewTitle(DateTime.Now);
     public double CreatedAt { get; set; } = Now;
     public double UpdatedAt { get; set; } = Now;
     public string? Summary { get; set; }

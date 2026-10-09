@@ -6,7 +6,7 @@
 
 - Windows 分支：`feature/windows-mac-parity`；本轮核验起始快照为 `6f40d48a85d5029dfb0dd4e7ac16168e1b25194d`。PR [#5](https://github.com/resnowh/echo-mac-subtitle/pull/5) 尚未合并。
 - Mac 产品基线：`origin/main` `ae0359dc90da0ccb5e526a275da1747954a49a4f`。
-- 2026-10-10：A44 后本地 CoreChecks 共 119 项通过，Release x64 构建 0 警告、0 错误。A44 对齐 Soniox 字符串错误和布尔结束控制帧，并通过本地模拟 WebSocket 收尾检查；Actions 的 Windows/Mac/Archive 检查和 unsigned package preflight 全部通过。A43 的 Mac 生产 handler 18 响应对拍、Windows 检查/构建与 Mac Archive 回读已全部通过，底稿见 [A43](../docs/sources/windows-a43-correction-parity-2026-10-10.md)；A44 证据见 [A44](../docs/sources/windows-a44-soniox-control-frames-2026-10-10.md)。源码检查和 CI 不代表真实音频设备或完整 GUI 验收。
+- 2026-10-10：A45 后本地 CoreChecks 共 120 项通过。A45 将新 Archive 默认标题从“录音”改为与 Mac 一致的“课程 MM-dd HH:mm”。A44 对齐 Soniox 字符串错误和布尔结束控制帧，Actions 的 Windows/Mac/Archive 检查和 unsigned package preflight 全部通过；A45 的 Release 构建与 CI 结果待本轮推送后确认。证据见 [A43](../docs/sources/windows-a43-correction-parity-2026-10-10.md)、[A44](../docs/sources/windows-a44-soniox-control-frames-2026-10-10.md) 和 [A45](../docs/sources/windows-a45-archive-title-parity-2026-10-10.md)。真实设备或完整 GUI 验收仍待进行。
 - Soniox 实时模型为 `stt-rt-v5`。Windows 在 WebSocket 握手发送 Bearer API Key，配置 JSON 不重复包含密钥；Mac 当前代码仍把密钥放在起始配置中。按项目约束不改 Mac，Windows 保持官方推荐的握手鉴权。官方迁移时间与测试证据见 [A37 Soniox protocol baseline](../docs/sources/windows-a37-soniox-auth-protocol-2026-10-10.md)。
 - 正式发行尚未就绪：真实浮层/多屏/音频验收、受信任发布者签名、干净机器安装升级和隐私政策仍待完成。Soniox 官方建议客户端使用临时 Key；当前项目没有签发临时 Key 的后端，Windows 采用个人自行填写的 Key 与本机 DPAPI 存储。Android/iOS 不在当前交付范围。
 

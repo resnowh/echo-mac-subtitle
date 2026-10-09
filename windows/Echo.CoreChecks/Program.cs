@@ -356,6 +356,8 @@ var archiveOrdering = ArchiveOrdering.NewestFirst([
 ]);
 Check(archiveOrdering.Select(item => item.Title).SequenceEqual(["newest", "middle", "older"]),
     "archive selection order follows Mac updatedAt descending semantics");
+Check(Archive.NewTitle(new DateTime(2026, 10, 10, 9, 5, 0)) == "课程 10-10 09:05",
+    "new Windows archive title follows the Mac Chinese title and local month-day time format");
 var snapshot = TranscriptFiles.Snapshot(archive);
 archive.Segments[0].Entries[0].English = "后续编辑";
 archive.Segments[0].Entries[0].Correction = new SubtitleCorrection { RawSource = "后来补充" };

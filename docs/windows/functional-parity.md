@@ -14,6 +14,7 @@
 - A40 对齐录音 meter：输入来源样本分别计算 Mac 缩放 RMS，按 20Hz 用 Mac 快攻慢放系数平滑，并使用 48 个真实 meter 样本绘制波形；静音时不再显示无关的正弦动画。104 项 CoreChecks 与 Release x64 构建通过。混合模式调度和实机输入强度仍待验，底稿见 [A40 audio meter parity](../sources/windows-a40-audio-meter-parity-2026-10-10.md)。
 - Mac 对经济学/微积分识别结果的强语境词汇纠正和 Soniox 请求上下文（领域、主题、背景文本、39 个术语、26 组中英译词及用户自定义词）已移植到 Windows；请求契约、自定义词边界（含组合字符/ZWJ emoji 截断）及纠正规则有自动检查。数据底稿见 [A26 Soniox context baseline](../sources/windows-a26-soniox-context-2026-10-09.md)；纠正前后 production handler 的 Mac/Windows runtime 对拍仍待补充。
 - A32 跨平台 CI 现为双段合成 Archive 使用 Mac 生产 encoder/SRTExporter 生成数据，经 Windows 导入回写，再用 Mac 生产 decoder/SRTExporter 检查 ID、日期、metadata、校对历史与 SRT。当前提交的三个相关 Actions job 在 run `37948130637` 均通过；真实用户历史 Archive 仍需广泛互操作验证。来源清单见 [A27 archive order baseline](../sources/windows-a27-archive-order-multisegment-2026-10-09.md) 与 [A32 runtime pipeline](../sources/windows-a32-archive-runtime-pipeline-2026-10-09.md)。
+- A45 对齐 Mac `prepareArchiveForRecording()` 的新存档标题：采用“课程 MM-dd HH:mm”和本机当地时间。固定时间标题用例通过；用户现存 Archive 的广泛历史互操作仍未验证，来源见 [A45](../sources/windows-a45-archive-title-parity-2026-10-10.md)。
 - 保持存档原子写入、备份和恢复行为；发现损坏文件时明示，不静默覆盖。
 - Soniox/API 错误按 HTTP 状态、断线、超时分类；仅对可重试错误有限重试，并显示用户可理解的错误。
 

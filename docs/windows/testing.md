@@ -14,7 +14,7 @@ Windows 仓库已有 `windows/Echo.CoreChecks/Program.cs`，覆盖转写 token �
 
 ## 本轮已运行
 
-1. 2026-10-10 本机 `dotnet run --project windows/Echo.CoreChecks/Echo.CoreChecks.csproj -c Release --no-restore`：119 项通过，含 A35/A42/A43 Soniox 18 响应 fixture、五类 Mac 词汇纠正路径、A44 本地 WebSocket error/finished 控制帧、双路 PCM 欠载混合、A38 浮层契约、A39 静默计时、A40 RMS/平滑/波形历史和 A41 总结面板显隐条件；不调用云端、不保存真实音频。A43 的 Mac production differential、Windows 比较、Release 构建和 Mac Archive 回读在 Actions run `37966271007` 全部通过；A44 同类 job 在 runs `37967804957` 与 `37967811281` 通过，Mac CI 和 unsigned package preflight 也全部通过。此前 95/97/99/100/104/105/111/116 项和历史 CI 结果仍以各自底稿为准。
+1. 2026-10-10 本机 `dotnet run --project windows/Echo.CoreChecks/Echo.CoreChecks.csproj -c Release --no-restore`：120 项通过，含 A35/A42/A43 Soniox 18 响应 fixture、五类 Mac 词汇纠正路径、A44 本地 WebSocket error/finished 控制帧、A45 新 Archive 标题、双路 PCM 欠载混合、A38 浮层契约、A39 静默计时、A40 RMS/平滑/波形历史和 A41 总结面板显隐条件；不调用云端、不保存真实音频。A43 的 Mac production differential、Windows 比较、Release 构建和 Mac Archive 回读在 Actions run `37966271007` 全部通过；A44 同类 job 在 runs `37967804957` 与 `37967811281` 通过，Mac CI 和 unsigned package preflight 也全部通过。A45 CI 待推送后核对。此前 95/97/99/100/104/105/111/116/119 项和历史 CI 结果仍以各自底稿为准。
 2. 2026-10-10 Windows Release x64 编译：执行 `dotnet build windows/Echo.Windows/Echo.Windows.csproj -c Release -p:Platform=x64 -p:PublishReadyToRun=false --no-restore`，成功，0 警告、0 错误；编译没有启动应用。
 3. 执行 `git diff --check`。本轮改动仅限 `windows/` 和 `docs/`，未改 `macOS/` 或 `tests/`。
 4. Windows 调试实例已启动并完成 `windows/ui-smoke.ps1` 的 12 项 UIA 检查：录音页、停止按钮隐藏、电脑音频默认项、源/目标语言可读标签、设置入口、AI 服务分类和 Soniox Key 控件存在、模型输入不开放、返回主界面、导出菜单及字幕列表。没有点击录音、保存设置或调用云端；应用加载了 MSIX 包隔离目录中的既有存档，因此原始截图和 UIA 全树未留存，避免把本机字幕纳入仓库。仅留检查名称/结果。A33 还记录首次启动的 NullReferenceException 及修复。UIA 通过不等于视觉、浮层透明、键盘、Narrator、DPI 或多屏验收。
@@ -28,6 +28,7 @@ Windows 仓库已有 `windows/Echo.CoreChecks/Program.cs`，覆盖转写 token �
 12. A42 对照 Mac Swift 可选类型读取语义：Windows 遇到非字符串 text、类型不符的 is_final/translation_status/speaker/language、非数值时间戳或混入非对象的 token 数组时，不因 `JsonElement.Get*` 抛错；有效译文与 endpoint 后续响应仍可处理。仓库 fixture 下 111 项 CoreChecks、Release x64 构建 0 警告/错误通过。Mac production differential、Windows build/check 和 Mac Archive 回读在 Actions runs `37964444866`、`37964454624` 通过；没有真实服务、录音或 GUI 测试。生产输出哈希见 [A42](../sources/windows-a42-soniox-malformed-field-parity-2026-10-10.md)。
 13. A43 扩展 Soniox 固定 fixture 至 18 条，把经济学、微积分和截断词规则纳入 Mac production handler 对拍；本机及 Actions 116 项 CoreChecks 通过，Windows Release x64 构建 0 警告、0 错误。Actions run `37966271007` 四个 job 全部成功。Mac 原始输出已保存并登记 SHA，见 [A43](../sources/windows-a43-correction-parity-2026-10-10.md)；未调用云端服务、未录制音频、未启动 GUI。
 14. A44 补充 WebSocket 控制帧边界：无 `error_code` 字符串错误需触发非重试服务异常；字符串 `finished` 不应中断接收，后续布尔 true 正常完成 stop。119 项 CoreChecks 和 Release x64 构建通过；Actions runs `37967804957`、`37967811281` 的 Mac/Windows/Archive job、Mac CI `37967811103` 与 unsigned package preflight `37967811206` 均通过。Mac 生产源码 SHA 与本地模拟帧见 [A44](../sources/windows-a44-soniox-control-frames-2026-10-10.md)。
+15. A45 对齐 Mac 新 Archive 的默认标题与本地日期格式。固定时间用例通过，CoreChecks 总计 120 项；Windows Release x64 构建已完成，需 CI 再确认，Mac 源码 hash 和差异记录见 [A45](../sources/windows-a45-archive-title-parity-2026-10-10.md)。
 
 ## 跨平台 Archive runtime 对拍
 
