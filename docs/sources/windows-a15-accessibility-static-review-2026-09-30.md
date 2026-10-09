@@ -13,7 +13,7 @@
 1. 字幕原文、译文和检测语言的 UI Automation 名称随绑定文本更新，例如“原文：Hello”“译文：你好”“检测语言：ja”。空译文名称保持为空，不播报一个不存在的值。
 2. 纠正按钮由 WinUI 从其动态可见内容生成名称，使“纠正”和“查看校对”能够准确表达当前动作。
 3. 元数据分隔符“·”从 UI Automation Control View 隐藏；可视外观不变。
-4. Soniox 模型设置的 AutomationId 从通用 `Control10` 改为 `SonioxModel`，相应更新既有 UI smoke 脚本定位符。
+4. 2026-09-30 将 Soniox 模型设置的 AutomationId 从通用 `Control10` 改为 `SonioxModel`，相应更新既有 UI smoke 脚本定位符。2026-10-09 将仍存在的通用控件标识统一改为语义化 ID，详见 [本轮底稿](windows-a15-automation-ids-2026-10-09.md)。
 
 ## 静态主题和构建检查
 
