@@ -14,17 +14,17 @@ Windows 仓库已有 `windows/Echo.CoreChecks/Program.cs`，覆盖转写 token �
 
 ## 本轮已运行
 
-1. `dotnet run --project windows/Echo.CoreChecks -c Release`：52 项通过。运行于 Windows 10.0.26200、.NET SDK 10.0.401；检查中包含本地模拟服务，不调用云端，不保存真实音频。
-2. Windows Release x64 编译：按锁文件还原依赖后执行 `dotnet build windows/Echo.Windows/Echo.Windows.csproj -c Release -p:Platform=x64 --no-restore`，最新源码成功，0 警告、0 错误；编译没有启动应用。
+1. `dotnet run --project windows/Echo.CoreChecks -c Release --no-restore`：65 项通过，包括覆盖层和分段默认/范围校验、请求字段、语义端点优先、翻译等待、本地最终化及下一句索引。Windows 10.0.26200、.NET SDK 10.0.401；检查不调用云端，不保存真实音频。分段设置数据底稿见 `docs/sources/windows-a24-soniox-segmentation-2026-10-09.md`。
+2. Windows Release x64 编译：执行 `dotnet build windows/Echo.Windows/Echo.Windows.csproj -c Release -p:Platform=x64 -p:PublishReadyToRun=false --no-restore`，最新源码成功，0 警告、0 错误；编译没有启动应用。
 3. 执行 `git diff --check`，检查提交路径确保无 `macOS/`、`tests/` 文件。
 4. UI smoke 未运行：本轮不启动应用，因此 UI、Narrator、DPI、多屏、录音硬件均未验。
 
 ## 尚未验证
 
-- 本次源码比对后的所有自动检查结果（运行后在此更新）。
+- 透明渲染、悬浮窗口点击穿透/失焦、窗口位置和缩放的 GUI smoke。
 - 新版矩阵覆盖每个 Mac 行为的自动化契约。
 - 真实 Soniox/DeepSeek 云响应；本地模拟服务不等于云端验收。
-- Windows GUI 的字体、窗口缩放、键盘、Narrator、高对比度与多 DPI。
+- Windows GUI 的字体、窗口缩放、键盘、Narrator、高对比度与多 DPI，包括 125%、150%、200%。
 - loopback、麦克风、设备切换、拔插、睡眠/唤醒等真实硬件行为。
 - 真实 Mac 用户存档与 Windows 双向互操作，除非对应 A17 CI fixture 明确记录。
 - 正式签名、干净机器安装升级、卸载和回滚。

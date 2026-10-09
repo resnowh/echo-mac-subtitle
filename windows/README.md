@@ -4,7 +4,7 @@
 
 ## 与 macOS 的当前差异
 
-macOS 对照基线、逐项现状和优先级见 [Mac parity matrix](../docs/windows/mac-parity-matrix.md)。当前 Windows 已覆盖录音、Soniox 转写、双语字幕、存档、导出和 AI 辅助等主路径；主界面语言菜单和字幕新内容提示已补齐。Mac 四类设置/分段参数及透明悬浮字幕窗仍需对齐。矩阵区分静态代码证据、自动检查和真实设备验收，不能将旧分支的历史构建或测试记录视为本分支当前验证。
+macOS 对照基线、逐项现状和优先级见 [Mac parity matrix](../docs/windows/mac-parity-matrix.md)。当前 Windows 已覆盖录音、Soniox 转写、双语字幕、存档、导出和 AI 辅助等主路径；主界面语言菜单、字幕新内容提示、透明悬浮字幕窗、四类设置和 Soniox/local 分段参数已接入。悬浮窗口的透明渲染、点击穿透、多屏/DPI 和全屏行为尚未 GUI 验收。矩阵区分源码、自动检查和真实设备验收，不能将旧分支历史记录当成本分支验证。
 
 UI 方案见 [ui-parity.md](../docs/windows/ui-parity.md)，功能计划见 [functional-parity.md](../docs/windows/functional-parity.md)，测试边界见 [testing.md](../docs/windows/testing.md)。
 
@@ -14,7 +14,7 @@ UI 方案见 [ui-parity.md](../docs/windows/ui-parity.md)，功能计划见 [fun
 2. 点击右上角齿轮打开“服务设置”，填写自己的 Soniox API Key，点击面板右上角“完成”。默认英语识别、中文翻译；源语言留空可自动识别。
 3. 设置面板关闭后，选择电脑音频、麦克风或双输入，点击“开始录音”。电脑音频来自所选播放设备；麦克风需要 Windows 隐私设置允许桌面应用访问。
 4. 点击“停止录音”。下次可选择原存档继续录音。总结会保存在当前存档；使用“导出 SRT”或“导出存档”保存到指定位置。
-5. 可选：填写 DeepSeek Key 后使用“AI 总结”。只有手动点击总结时才发送文字稿。
+5. 可选：填写 DeepSeek Key 后使用“AI 总结”。自动总结默认关闭；开启后会在正常停止录音时发送当前段文字稿。手动总结也会发送选定范围的文字稿。
 
 ## 已实现
 
@@ -22,6 +22,8 @@ UI 方案见 [ui-parity.md](../docs/windows/ui-parity.md)，功能计划见 [fun
 - Soniox WebSocket 转写和单向翻译；临时文本替换、最终文本追加、端点分段、Speaker 编号。
 - 本地多段存档、接续、JSON 导入/导出、整份存档 SRT、停止后自动单段 SRT。
 - DeepSeek 总结新增内容、当前段、全存档；结果可选中复制。
+- 设置中的停止后自动总结默认关闭；AI 服务说明会提示文字发送和费用影响。
+- Soniox 端点最大延迟、灵敏度、延迟等级、本地静音兜底和超长段兜底参数按 Mac 默认值/范围保存；当前会话使用冻结参数，更新在下一次连接生效。
 - 浅色/深色/系统主题、窗口置顶、录音波形、重复启动保护。
 - API Key 用 Windows DPAPI 当前用户加密；不保存原始音频。
 - 字幕逐条手动纠正、撤销及原始识别稿保留；可按需请求 DeepSeek 校对/重新翻译建议，并编辑后再应用。设置可选择开启分句后的自动语境校对；默认关闭，只生成待人工确认的建议。

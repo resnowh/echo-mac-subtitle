@@ -13,22 +13,26 @@
 
 ## 设置
 
-将当前单页设置拆为四个可切换分类：
+已按 Mac 的四个可切换分类实现：
 
-1. **常规**：主题、文字稿位置、数据文件行为。
-2. **识别**：Soniox Key；自动/指定源语言、严格限制、翻译目标、说话人。
-3. **分段**：端点最大延迟、灵敏度、延迟等级、本地静音和超长段兜底；展示默认值、有效范围和下一次建连生效说明。
-4. **AI 服务**：DeepSeek Key、总结开关、语境校对开关与术语表，并明确哪些文字会发送。
+1. **常规**：主题、音频设备选择、文字稿及音频保存说明。
+2. **识别**：自动/指定源语言、翻译目标、严格限制、说话人。
+3. **分段**：端点最大延迟、灵敏度、延迟等级、本地静音和超长段兜底；控件范围与 Mac 一致。
+4. **AI 服务**：Soniox/DeepSeek Key 和模型、校对开关与术语表，并明确哪些文字会发送。
 
-源语言和目标语言已改用选项菜单，不要求用户记忆语言代码。录音中显示“下次录音生效”提示。分段设置和四类设置重组尚未实现；设置保存、默认值和有效范围以 Mac 当前实现为对照；API Key 仍经 Windows DPAPI 加密。
+源语言和目标语言已改用选项菜单，不要求用户记忆语言代码。分段参数按 Mac 默认值/范围校验并立即存本机，每次建连冻结一份配置，当前会话不会被设置改动影响；API Key 仍经 Windows DPAPI 加密。Windows 主界面在录音时提示语言修改下次生效。各设置项视觉和辅助技术仍需 GUI 验收。
 
 ## 透明悬浮字幕
 
-作为独立顶层窗口实现，显示原文与翻译两行，可分别显示/隐藏。Mac 默认外观及关键交互：透明背景、白字和阴影、底部居中、宽度占可用屏幕约 75%、非调整状态点击穿透、可拖动调整并记忆显示器位置、可锁定；可加入桌面空间和全屏辅助空间。保留时长默认为 5 秒，范围 1–15 秒，原文默认 26 pt、译文 24 pt。
+Windows 当前分支已实现独立顶层窗口，显示原文与译文两行，可分别显示/隐藏。Mac 默认外观及关键交互：透明背景、白字和阴影、底部居中、宽度占可用屏幕约 75%、非调整状态点击穿透、可拖动调整并记忆位置、可锁定。Windows 设置默认值为 5 秒保留、原文 26 pt、译文 24 pt，字号/透明度/宽度/阴影范围与 Mac 一致；位置采用当前显示区域内的规范化坐标。
+
+窗口使用 WinUI `Window` + `AppWindow`，通过受支持的 Win32 extended styles 控制 layered、no-activate 和点击穿透，并扩展 DWM frame；XAML root 保持透明。主菜单可开关、进入/退出调整，设置面板可改两种文字显示、字号、透明度、宽度、保留时间、阴影、点击穿透和位置锁定，也可恢复默认或重置位置。
 
 窗口只订阅当前活动字幕 entry：临时识别持续更新；最终文本开始倒计时；有意义的迟到翻译或更正重置倒计时；相同文本更新不重置。禁止为浮层另建录音、音频采集器或 Soniox 连接。
 
-Windows 验收先验证透明合成、Topmost、非激活显示、鼠标穿透和拖动模式，再处理多显示器、DPI、虚拟桌面和全屏应用。若 Windows 的系统行为与 AppKit 不同，应在矩阵中如实标注平台差异，并保住相同的用户意图。
+当前只完成源码、编译和字幕状态语义检查；尚未启动应用验证实际透明像素、鼠标命中、失焦、DPI、多显示器、虚拟桌面或全屏应用行为。AppWindow 是 WinUI Window 对应的顶层 HWND 抽象，`Show(false)` 用于显示而不激活；Win32 文档规定 layered window 可做 alpha 混合，layered + `WS_EX_TRANSPARENT` 可把鼠标事件传给下层窗口。真实呈现仍必须在 GUI smoke 阶段验证，源码和编译不能证明桌面透明效果。
+
+实现参考（Microsoft 官方文档，读取日期：2026-10-09）：[WinUI Windowing overview](https://learn.microsoft.com/en-us/windows/apps/develop/ui/windowing-overview)、[AppWindow API](https://learn.microsoft.com/en-us/windows/windows-app-sdk/api/winrt/microsoft.ui.windowing.appwindow?view=windows-app-sdk-1.8)、[Win32 extended window styles](https://learn.microsoft.com/en-us/windows/win32/winmsg/extended-window-styles)、[layered window behavior](https://learn.microsoft.com/en-us/windows/win32/winmsg/window-features)、[SetLayeredWindowAttributes](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setlayeredwindowattributes)。
 
 ## 视觉与无障碍验收
 

@@ -5,6 +5,7 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
 using Microsoft.Windows.Storage.Pickers;
@@ -19,6 +20,7 @@ public sealed record LanguageChoice(string? Code, string Title);
 public sealed partial class MainPage : Page
 {
     private readonly List<Border> waveform = [];
+    private DesktopSubtitleOverlayWindow? subtitleOverlayWindow;
     private static readonly LanguageChoice[] SourceLanguages =
     [
         new(null, "自动识别"), new("en", "English"), new("zh", "简体中文"), new("ja", "日本語"),
@@ -35,6 +37,7 @@ public sealed partial class MainPage : Page
     private readonly HashSet<Guid> observedSubtitleIds = [];
     private int waveformFrame;
     private bool initialized;
+    private bool loadingSettings = true;
     public MainPageViewModel ViewModel { get; } = new();
     public MainPage()
     {
@@ -42,21 +45,38 @@ public sealed partial class MainPage : Page
         var c = ViewModel.Config;
         SourceLanguageChoice.ItemsSource = SourceLanguages;
         TargetLanguageChoice.ItemsSource = TargetLanguages;
+        SettingsSourceLanguage.ItemsSource = SourceLanguages;
+        SettingsTargetLanguage.ItemsSource = TargetLanguages;
         SonioxModel.Text = c.SonioxModel; DeepSeekModel.Text = c.DeepSeekModel;
         CorrectionTerms.Text = c.CorrectionTerms;
+        AutoSummary.IsOn = c.AutoSummaryEnabled;
         AutoCorrection.IsOn = c.AutoCorrectionEnabled;
         Translate.IsOn = c.Translate; Speakers.IsOn = c.Speakers; Strict.IsOn = c.Strict;
         try { SonioxKey.Password = Preferences.Unprotect(c.SonioxSecret); DeepSeekKey.Password = Preferences.Unprotect(c.DeepSeekSecret); }
         catch { ViewModel.Status = "密钥无法解密，请重新输入并保存。"; }
         ThemeChoice.SelectedIndex = c.Theme == "Light" ? 1 : c.Theme == "Dark" ? 2 : 0;
+        TranscriptFolderPath.Text = TranscriptFiles.Root;
+        SettingsSections.SelectedItem = SettingsGeneral;
+        LoadSegmentationSettings(c.Segmentation);
+        foreach (var slider in new[] { EndpointDelay, EndpointSensitivity, EndpointLatency, SilenceThreshold, SilenceWords, LongWords, LongDuration })
+            slider.ValueChanged += SegmentationValueChanged;
+        SilenceFallback.Toggled += (_, _) => UpdateSegmentationReadouts();
+        LongFallback.Toggled += (_, _) => UpdateSegmentationReadouts();
+        SettingsSourceLanguage.SelectedItem = SourceLanguages.FirstOrDefault(item => item.Code == (string.IsNullOrWhiteSpace(c.SourceLanguage) ? null : c.SourceLanguage)) ?? SourceLanguages[0];
+        SettingsTargetLanguage.SelectedItem = TargetLanguages.FirstOrDefault(item => item.Code == (c.Translate ? c.TargetLanguage : null)) ?? TargetLanguages[0];
+        SettingsTargetLanguage.IsEnabled = c.Translate;
+        Translate.Toggled += (_, _) => SettingsTargetLanguage.IsEnabled = Translate.IsOn;
+        loadingSettings = false;
         if (c.Theme is "Light" or "Dark") RequestedTheme = Enum.Parse<ElementTheme>(c.Theme);
         Loaded += async (_, _) =>
         {
             ApplyWindowTheme();
+            if (ViewModel.Config.SubtitleOverlay.Enabled) ShowSubtitleOverlay();
             if (initialized) return;
             initialized = true;
             await ViewModel.LoadArchivesAsync();
         };
+        App.Window.Closed += (_, _) => subtitleOverlayWindow?.CloseOverlay();
         ViewModel.Entries.CollectionChanged += Entries_CollectionChanged;
         EmptyHint.Visibility = ViewModel.Entries.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         TranscriptList.Loaded += (_, _) =>
@@ -88,6 +108,7 @@ public sealed partial class MainPage : Page
         };
         UpdateAudioDisplay();
         UpdateLanguageHeaders();
+        UpdateOverlayMenuText();
         ArchiveTitle.Text = ViewModel.SelectedArchive?.Title ?? "新的录音";
         ViewModel.PropertyChanged += (_, e) =>
         {
@@ -109,8 +130,48 @@ public sealed partial class MainPage : Page
         TargetLanguageChoice.SelectedItem = TargetLanguages.FirstOrDefault(item => item.Code == (ViewModel.Config.Translate ? ViewModel.Config.TargetLanguage : null)) ?? TargetLanguages[0];
         TargetLanguageChoice.Visibility = ViewModel.Config.Translate ? Visibility.Visible : Visibility.Collapsed;
         Strict.IsEnabled = !string.IsNullOrWhiteSpace(ViewModel.Config.SourceLanguage);
+        SettingsSourceLanguage.SelectedItem = SourceLanguages.FirstOrDefault(item => item.Code == (string.IsNullOrWhiteSpace(ViewModel.Config.SourceLanguage) ? null : ViewModel.Config.SourceLanguage)) ?? SourceLanguages[0];
+        SettingsTargetLanguage.SelectedItem = TargetLanguages.FirstOrDefault(item => item.Code == (ViewModel.Config.Translate ? ViewModel.Config.TargetLanguage : null)) ?? TargetLanguages[0];
         UpdateRecordingLanguageHint();
     }
+    private void SettingsSections_SelectionChanged(SelectorBar sender, SelectorBarSelectionChangedEventArgs e)
+    {
+        GeneralSettingsPage.Visibility = sender.SelectedItem == SettingsGeneral ? Visibility.Visible : Visibility.Collapsed;
+        RecognitionSettingsPage.Visibility = sender.SelectedItem == SettingsRecognition ? Visibility.Visible : Visibility.Collapsed;
+        SegmentationSettingsPage.Visibility = sender.SelectedItem == SettingsSegmentation ? Visibility.Visible : Visibility.Collapsed;
+        ServiceSettingsPage.Visibility = sender.SelectedItem == SettingsServices ? Visibility.Visible : Visibility.Collapsed;
+    }
+    private void LoadSegmentationSettings(TranscriptSegmentationSettings config)
+    {
+        EndpointDelay.Value = config.SonioxMaxEndpointDelayMilliseconds;
+        EndpointSensitivity.Value = config.SonioxEndpointSensitivity;
+        EndpointLatency.Value = config.SonioxEndpointLatencyAdjustmentLevel;
+        SilenceFallback.IsOn = config.LocalSilenceFallbackEnabled;
+        SilenceThreshold.Value = config.LocalSilenceThresholdSeconds;
+        SilenceWords.Value = config.LocalSilenceMinimumWordCount;
+        LongFallback.IsOn = config.LongSegmentFallbackEnabled;
+        LongWords.Value = config.LongSegmentWordThreshold;
+        LongDuration.Value = config.LongSegmentDurationThresholdSeconds;
+        UpdateSegmentationReadouts();
+    }
+    private void UpdateSegmentationReadouts()
+    {
+        EndpointDelayValue.Text = $"最大端点延迟：{EndpointDelay.Value:0} ms";
+        EndpointSensitivityValue.Text = $"端点灵敏度：{EndpointSensitivity.Value:0.0}";
+        EndpointLatencyValue.Text = $"延迟调整等级：{EndpointLatency.Value:0} 级";
+        SilenceThresholdValue.Text = $"静音阈值：{SilenceThreshold.Value:0.0} 秒";
+        SilenceWordsValue.Text = $"静音兜底最少词数：{SilenceWords.Value:0} 词";
+        LongWordsValue.Text = $"长段兜底词数门槛：{LongWords.Value:0} 词";
+        LongDurationValue.Text = $"长段兜底时长门槛：{LongDuration.Value:0} 秒";
+        SilenceThreshold.IsEnabled = SilenceWords.IsEnabled = SilenceFallback.IsOn;
+        LongWords.IsEnabled = LongDuration.IsEnabled = LongFallback.IsOn;
+    }
+    private void SegmentationValueChanged(object sender, RangeBaseValueChangedEventArgs e)
+    {
+        if (loadingSettings) return;
+        UpdateSegmentationReadouts();
+    }
+    private void ResetSegmentation_Click(object sender, RoutedEventArgs e) => LoadSegmentationSettings(new());
     private void UpdateRecordingLanguageHint() => LanguageNextSessionHint.Visibility = ViewModel.IsRecording ? Visibility.Visible : Visibility.Collapsed;
     private void Entries_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
@@ -204,8 +265,7 @@ public sealed partial class MainPage : Page
     {
         RecordingPanel.Visibility = Visibility.Collapsed;
         SettingsOverlay.Visibility = Visibility.Visible;
-        if (ViewModel.CanEdit) SonioxKey.Focus(FocusState.Programmatic);
-        else BackSettingsButton.Focus(FocusState.Programmatic);
+        SettingsSections.Focus(FocusState.Programmatic);
     }
     private void Back_Click(object sender, RoutedEventArgs e)
     {
@@ -286,6 +346,118 @@ public sealed partial class MainPage : Page
                 (input?.SelectedItem as AudioDevice)?.Id is { Length: > 0 } inId ? inId : null);
     }
     private void Refresh_Click(object sender, RoutedEventArgs e) => ViewModel.RefreshDevices();
+    private void ToggleOverlay_Click(object sender, RoutedEventArgs e)
+    {
+        var settings = ViewModel.Config.SubtitleOverlay;
+        settings.Enabled = !settings.Enabled;
+        SaveOverlaySettings(settings);
+        if (settings.Enabled) ShowSubtitleOverlay(); else subtitleOverlayWindow?.HideOverlay();
+        UpdateOverlayMenuText();
+    }
+    private void AdjustOverlay_Click(object sender, RoutedEventArgs e)
+    {
+        bool wasAdjusting = subtitleOverlayWindow?.IsAdjusting == true;
+        var settings = ViewModel.Config.SubtitleOverlay;
+        settings.Enabled = true;
+        SaveOverlaySettings(settings);
+        ShowSubtitleOverlay();
+        subtitleOverlayWindow?.SetAdjusting(!wasAdjusting);
+        UpdateOverlayMenuText();
+    }
+    private async void OverlaySettings_Click(object sender, RoutedEventArgs e) => await ShowOverlaySettingsAsync();
+    private void ShowSubtitleOverlay()
+    {
+        subtitleOverlayWindow ??= new DesktopSubtitleOverlayWindow(
+            ViewModel.SubtitleOverlayFeed, ViewModel.Config.SubtitleOverlay, PersistOverlayPlacement);
+        subtitleOverlayWindow.ApplySettings(ViewModel.Config.SubtitleOverlay, reposition: true);
+        subtitleOverlayWindow.ShowOverlay();
+    }
+    private void SaveOverlaySettings(DesktopSubtitleOverlaySettings settings)
+    {
+        ViewModel.Config.SubtitleOverlay = settings.Validate();
+        ViewModel.Config.Save();
+        subtitleOverlayWindow?.ApplySettings(ViewModel.Config.SubtitleOverlay);
+        subtitleOverlayWindow?.SetAdjusting(!ViewModel.Config.SubtitleOverlay.PositionLocked);
+        UpdateOverlayMenuText();
+    }
+    private void PersistOverlayPlacement(DesktopSubtitleOverlaySettings settings)
+    {
+        ViewModel.Config.SubtitleOverlay = settings;
+        ViewModel.Config.Save();
+        UpdateOverlayMenuText();
+    }
+    private void UpdateOverlayMenuText()
+    {
+        ToggleOverlayMenuItem.Text = ViewModel.Config.SubtitleOverlay.Enabled ? "关闭悬浮字幕" : "开启悬浮字幕";
+        AdjustOverlayMenuItem.Text = subtitleOverlayWindow?.IsAdjusting == true ? "完成调整" : "调整位置和大小";
+    }
+    private async Task ShowOverlaySettingsAsync()
+    {
+        var current = ViewModel.Config.SubtitleOverlay;
+        var enabled = new ToggleSwitch { Header = "启用悬浮字幕", IsOn = current.Enabled };
+        var original = new ToggleSwitch { Header = "显示原文", IsOn = current.ShowOriginal };
+        var translation = new ToggleSwitch { Header = "显示译文", IsOn = current.ShowTranslation };
+        var clickThrough = new ToggleSwitch { Header = "点击穿透（不调整时）", IsOn = current.ClickThrough };
+        var locked = new ToggleSwitch { Header = "锁定位置", IsOn = current.PositionLocked };
+        AutomationProperties.SetAutomationId(enabled, "OverlayEnabled");
+        AutomationProperties.SetAutomationId(original, "OverlayShowOriginal");
+        AutomationProperties.SetAutomationId(translation, "OverlayShowTranslation");
+        AutomationProperties.SetAutomationId(clickThrough, "OverlayClickThrough");
+        AutomationProperties.SetAutomationId(locked, "OverlayPositionLocked");
+        var content = new StackPanel { Spacing = 10, MaxWidth = 540 };
+        content.Children.Add(new TextBlock { Text = "透明字幕浮在其他窗口上方，只读取当前识别结果，不会重新连接 Soniox。", TextWrapping = TextWrapping.Wrap });
+        content.Children.Add(enabled); content.Children.Add(original); content.Children.Add(translation);
+        Slider originalSize = AddOverlaySlider(content, "原文字号", current.OriginalFontSize, 16, 48, " pt");
+        Slider translationSize = AddOverlaySlider(content, "译文字号", current.TranslationFontSize, 14, 44, " pt");
+        Slider opacity = AddOverlaySlider(content, "字幕透明度", current.Opacity * 100, 35, 100, "%");
+        Slider width = AddOverlaySlider(content, "最大宽度", current.WidthFraction * 100, 35, 95, "%");
+        Slider retention = AddOverlaySlider(content, "定稿保留", current.RetentionSeconds, 1, 15, " 秒");
+        Slider shadow = AddOverlaySlider(content, "文字阴影", current.ShadowStrength * 100, 0, 100, "%");
+        content.Children.Add(clickThrough); content.Children.Add(locked);
+        var resetPosition = new Button { Content = "重置字幕位置", HorizontalAlignment = HorizontalAlignment.Left };
+        AutomationProperties.SetAutomationId(resetPosition, "ResetSubtitleOverlayPosition");
+        resetPosition.Click += (_, _) =>
+        {
+            current.NormalizedX = .5; current.NormalizedBottom = .09;
+            SaveOverlaySettings(current);
+            subtitleOverlayWindow?.ApplySettings(current, reposition: true);
+        };
+        content.Children.Add(resetPosition);
+        var dialog = new ContentDialog
+        {
+            Title = "悬浮字幕设置",
+            Content = new ScrollViewer { Content = content, MaxHeight = 560, VerticalScrollBarVisibility = ScrollBarVisibility.Auto },
+            PrimaryButtonText = "完成", SecondaryButtonText = "恢复默认", CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot
+        };
+        ContentDialogResult result = await dialog.ShowAsync();
+        if (result == ContentDialogResult.Secondary)
+        {
+            SaveOverlaySettings(new DesktopSubtitleOverlaySettings { Enabled = current.Enabled,
+                NormalizedX = current.NormalizedX, NormalizedBottom = current.NormalizedBottom });
+            return;
+        }
+        if (result != ContentDialogResult.Primary) return;
+        current.Enabled = enabled.IsOn;
+        current.ShowOriginal = original.IsOn; current.ShowTranslation = translation.IsOn;
+        current.OriginalFontSize = originalSize.Value; current.TranslationFontSize = translationSize.Value;
+        current.Opacity = opacity.Value / 100; current.WidthFraction = width.Value / 100;
+        current.RetentionSeconds = retention.Value; current.ShadowStrength = shadow.Value / 100;
+        current.ClickThrough = clickThrough.IsOn; current.PositionLocked = locked.IsOn;
+        SaveOverlaySettings(current);
+        if (current.Enabled) ShowSubtitleOverlay(); else subtitleOverlayWindow?.HideOverlay();
+    }
+    private static Slider AddOverlaySlider(StackPanel content, string title, double value, double min, double max, string suffix)
+    {
+        var row = new StackPanel { Spacing = 3 };
+        var label = new TextBlock { Text = $"{title} · {value:0}{suffix}", Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"] };
+        var slider = new Slider { Minimum = min, Maximum = max, Value = value, StepFrequency = 1 };
+        AutomationProperties.SetName(slider, title);
+        AutomationProperties.SetAutomationId(slider, $"Overlay{new string(title.Where(char.IsLetterOrDigit).ToArray())}");
+        slider.ValueChanged += (_, args) => label.Text = $"{title} · {args.NewValue:0}{suffix}";
+        row.Children.Add(label); row.Children.Add(slider); content.Children.Add(row);
+        return slider;
+    }
     private void Latest_Click(object sender, RoutedEventArgs e)
     {
         if (ViewModel.Entries.Count > 0) TranscriptList.ScrollIntoView(ViewModel.Entries.Last());
@@ -374,9 +546,27 @@ public sealed partial class MainPage : Page
             c.CorrectionTerms = CorrectionTerms.Text.Trim();
             c.SonioxModel = SonioxModel.Text.Trim(); c.DeepSeekModel = DeepSeekModel.Text.Trim();
             c.Translate = Translate.IsOn; c.Strict = Strict.IsOn; c.Speakers = Speakers.IsOn;
+            if (SettingsSourceLanguage.SelectedItem is LanguageChoice source) c.SourceLanguage = source.Code ?? string.Empty;
+            if (SettingsTargetLanguage.SelectedItem is LanguageChoice target && target.Code is not null) c.TargetLanguage = target.Code;
+            c.Segmentation = new TranscriptSegmentationSettings
+            {
+                SonioxMaxEndpointDelayMilliseconds = (int)Math.Round(EndpointDelay.Value),
+                SonioxEndpointSensitivity = EndpointSensitivity.Value,
+                SonioxEndpointLatencyAdjustmentLevel = (int)Math.Round(EndpointLatency.Value),
+                LocalSilenceFallbackEnabled = SilenceFallback.IsOn,
+                LocalSilenceThresholdSeconds = SilenceThreshold.Value,
+                LocalSilenceMinimumWordCount = (int)Math.Round(SilenceWords.Value),
+                LongSegmentFallbackEnabled = LongFallback.IsOn,
+                LongSegmentWordThreshold = (int)Math.Round(LongWords.Value),
+                LongSegmentDurationThresholdSeconds = LongDuration.Value
+            }.Validate();
             c.AutoCorrectionEnabled = AutoCorrection.IsOn;
+            c.AutoSummaryEnabled = AutoSummary.IsOn;
             c.Theme = ThemeChoice.SelectedIndex == 1 ? "Light" : ThemeChoice.SelectedIndex == 2 ? "Dark" : "Default";
             c.Save();
+            loadingSettings = true;
+            LoadSegmentationSettings(c.Segmentation);
+            loadingSettings = false;
             ApplyWindowTheme();
             UpdateAudioDisplay();
             UpdateLanguageHeaders();

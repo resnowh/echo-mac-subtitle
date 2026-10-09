@@ -366,6 +366,15 @@ public sealed class TokenAssembler(Segment segment, Action<Subtitle> added, Acti
     private int sourceCursor, translationCursor;
     private readonly Dictionary<int, string> sourceFinal = [], translationFinal = [];
     private readonly Dictionary<int, string> sourceProvisional = [], translationProvisional = [];
+    public bool FinalizeCurrent()
+    {
+        int index = Math.Max(sourceCursor, translationCursor);
+        if (index >= segment.Entries.Count) return false;
+        finalized?.Invoke(segment.Entries[index]);
+        sourceCursor = translationCursor = index + 1;
+        sourceProvisional.Clear(); translationProvisional.Clear();
+        return true;
+    }
     private Subtitle Row(int index)
     {
         while (segment.Entries.Count <= index)

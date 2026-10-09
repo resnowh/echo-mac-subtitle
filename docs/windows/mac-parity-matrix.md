@@ -23,16 +23,16 @@ Windows 来源：`feature/windows-preview` 本地 `d500bbb`（远端为 `64f2b89
 | 双语字幕列表；支持选择、纠正、说话人、时间 | 双列字幕，带时间、说话人、检测语言、纠正入口 | 部分实现 | `macOS/Views/TranscriptViews.swift`；`windows/Echo.Windows/MainPage.xaml`。日分隔、字体与紧凑行距未对齐 |
 | 用户滚离底部后停止跟随，并显示“有新内容”按钮 | 新内容追加时保留用户历史位置，显示回到底部按钮；加载时滚至最新条目 | 功能存在但行为不同 | Mac `SynchronizedTranscriptView`；Windows `MainPage.xaml`、`MainPage.xaml.cs`。应通过 UI smoke 检查滚动事件与虚拟化列表交互 |
 | 主字幕区可选识别语言及翻译目标，录音中提示下次录音生效 | 主界面提供 Mac 同款 12 种语言、自动识别、不翻译选项；更改配置写入本地并提示下次录音生效 | 功能存在但行为不同 | Mac `macOS/Views/TranscriptViews.swift`、`macOS/Models/TranscriptModels.swift`；Windows `MainPage.xaml`、`MainPage.xaml.cs`、`Core/Preferences.cs`。Windows 仍保留“翻译”设置开关，菜单项会同步开关状态 |
-| 四个设置分类：常规、识别、分段、AI 服务 | 一个滚动页面，以卡片分组；没有 Soniox 端点/本地兜底分段设置 | 功能存在但行为不同 | `macOS/EchoMacApp.swift` `SettingsView`；`windows/Echo.Windows/MainPage.xaml`。保持 Windows 原生控件，按四类重组并补齐分段配置 |
+| 四个设置分类：常规、识别、分段、AI 服务 | WinUI SelectorBar 切换四类设置，参数修改后保存到本地 | 功能存在但行为不同 | Mac `macOS/EchoMacApp.swift`；Windows `windows/Echo.Windows/MainPage.xaml`、`MainPage.xaml.cs`。控件平台原生，实际键盘和 Narrator 行为未验 |
 | 音源：电脑音频、麦克风、混合；授权状态和音频电平 | WASAPI loopback、麦克风及本地混音；设备切换、恢复策略和电平已实现 | 部分实现 | `macOS/EchoMacApp.swift`；Windows `Services/AudioCapture.cs`、`SpeechSession.cs`、`MainPageViewModel.cs`。API 权限表达、声卡和睡眠行为尚未端到端对拍 |
 | Soniox 临时字幕更新、最终字幕落定、翻译迟到、端点与说话人 | Token assembler、临时替换、最终追加、翻译延迟关联、说话人分段及回归检查存在 | 尚未验证 | Windows `Core/Transcript.cs`、`Services/SpeechSession.cs`、`Echo.CoreChecks/Program.cs`；需要基于同一合成事件序列与 Mac 结果逐项对拍 |
-| 设置识别模式、优先语言、严格限制、翻译、目标语言、说话人 | 同类能力存在，但以语言代码文本框表达；当前录音配置冻结与 Mac 交互提示需复核 | 功能存在但行为不同 | Mac `TranscriptModels.swift`、`EchoMacApp.swift`；Windows `Core/Preferences.cs`、`MainPageViewModel.cs`。完成设置模型映射后补行为测试 |
-| Soniox 端点最大延迟、灵敏度、延迟级别、本地静音兜底、超长段兜底 | 未见对应 Windows 配置模型或设置项 | 缺失 | Mac `macOS/Models/TranscriptModels.swift`；Windows `Core/Preferences.cs`、`Services/SpeechSession.cs`。沿用 Mac 参数范围、默认值和“下一会话生效”规则 |
+| 设置识别模式、优先语言、严格限制、翻译、目标语言、说话人 | 设置页语言选项、自动识别、不翻译、严格语言和说话人开关；开始会话时冻结翻译行为 | 功能存在但行为不同 | Mac `TranscriptModels.swift`、`EchoMacApp.swift`；Windows `Core/Preferences.cs`、`MainPage.xaml(.cs)`、`MainPageViewModel.cs`。UI smoke 和当前会话不变行为仍需验 |
+| Soniox 端点最大延迟、灵敏度、延迟级别、本地静音兜底、超长段兜底 | 按 Mac 默认值和范围保存；Soniox 请求发送三项端点参数；500ms 本地策略以相同词数/时长双阈值兜底，翻译开启时等待译文，语义端点优先 | 功能存在但行为不同 | Mac `macOS/Models/TranscriptModels.swift`、`SpeechViewModel.swift`、`SonioxRequestBuilder.swift`；Windows `Core/Preferences.cs`、`TranscriptSegmentationPolicy.cs`、`SonioxRequestBuilder.cs`、`MainPageViewModel.cs`。核心契约自动检查；见 A24 数据底稿，真实云端行为未验 |
 | 归档选择、新建、续录、导出、清空、拆分已完成段 | Windows 有多段归档、续录、JSON/SRT、清空、段拆分与回收站 | 部分实现 | Mac `EchoMacApp.swift` 与 archive models；Windows `Core/Transcript.cs`、`MainPageViewModel.cs`。JSON 日期及字段已有合成契约测试；真实用户档案双向验证仍缺 |
 | 停止后生成 SRT；不默认保存原始音频 | Windows 停止后写 SRT，不保存原始音频 | 完全一致 | Windows `MainPageViewModel.cs`、`Core/Transcript.cs`、`Services/AudioCapture.cs`；格式细节见 A17 底稿 |
-| 总结新增内容、当前段或完整归档；AI 校对生成建议需人工采纳 | Windows 提供相同总结范围、术语、校对建议和人工编辑；总结交互与 Mac 折叠面板不同 | 功能存在但行为不同 | Mac `EchoMacApp.swift`；Windows `MainPage.xaml`、`MainPageViewModel.cs`、`SubtitleCorrectionService.cs`。核对 API 模型和网络错误体验 |
-| 全局透明悬浮双语字幕；位置/大小；锁定；点击穿透；多桌面与全屏空间 | 当前没有独立字幕窗口和对应设置 | 缺失 | Mac `macOS/Views/DesktopSubtitleOverlay.swift`、`DesktopSubtitleOverlayModels.swift`、`DesktopSubtitleOverlayFeed.swift`；Windows 需原生 WinUI/AppWindow 或 HWND 无激活透明窗口。平台行为需先做技术验证 |
-| 浮层显示临时识别；最终文本按保留时长消失；更新或更正重置倒计时 | 未实现 | 缺失 | Mac `DesktopSubtitleOverlayFeed.swift` 和 overlay models；Windows 浮层必须订阅当前活动字幕投影，不得建立第二个音频/网络会话 |
+| 总结新增内容、当前段或完整归档；可选停止后自动总结；AI 校对建议需人工采纳 | Windows 提供相同总结范围、停止后自动总结开关（默认关闭）、术语和人工确认校对；总结交互与 Mac 折叠面板不同 | 功能存在但行为不同 | Mac `EchoMacApp.swift`、`SpeechViewModel.swift`；Windows `MainPage.xaml`、`MainPageViewModel.cs`、`Core/Preferences.cs`、`SubtitleCorrectionService.cs`。自动总结代码已接入，运行 UI/云端验收未做 |
+| 全局透明悬浮双语字幕；位置/大小；锁定；点击穿透；多桌面与全屏空间 | 已实现独立 WinUI 窗口、Topmost、layered/DWM 透明窗口样式、无激活/无边框、点击穿透切换、调整时拖动和缩放、规范化位置/大小保存；显示器选择和全屏应用行为尚未运行验收 | 尚未验证 | Mac `macOS/Views/DesktopSubtitleOverlay.swift`、`macOS/Models/DesktopSubtitleOverlayModels.swift`；Windows `windows/Echo.Windows/DesktopSubtitleOverlayWindow.xaml(.cs)`、`MainPage.xaml(.cs)`、`Core/Preferences.cs`。Windows 显示合成、点击穿透和 DPI 需真实 GUI 验证 |
+| 浮层显示临时识别；最终文本按保留时长消失；更新或更正重置倒计时 | Windows feed 直接投影当前 `Subtitle`，50ms 节流；final 后按配置隐藏；迟到译文/文字更正重置计时，相同文字不延长；不创建第二条采集或 Soniox 会话 | 部分实现 | Mac `macOS/Services/DesktopSubtitleOverlayFeed.swift`、`macOS/Models/DesktopSubtitleOverlayModels.swift`；Windows `Core/DesktopSubtitleOverlay.cs`、`ViewModels/MainPageViewModel.cs`、`DesktopSubtitleOverlayWindow.xaml.cs`；核心语义有 6 项自动检查，GUI 对拍尚未运行 |
 | API Key 本机保护；录音音频不落盘 | Windows 以当前用户 DPAPI 保护密钥；音频缓冲仅用于流式发送 | 部分实现 | Windows `Core/Preferences.cs`、`Services/AudioCapture.cs`；还需对照 Mac Keychain 的错误恢复和设置更新时机 |
 | macOS 桌面音频采集受系统屏幕与系统音频权限约束 | Windows 使用 WASAPI loopback 和麦克风权限 | 平台客观限制 | 权限弹窗、设备默认值和系统环回授权由平台决定；需在 Windows 上清楚显示授权和设备状态 |
 | GitHub CI 及正式签名安装 | Windows 有 Release 构建、CoreChecks、历史自签名 MSIX 底稿；公众信任链、正式发布流水线未确认 | 尚未验证 | `windows/README.md`、`docs/sources/windows-a18-*`。签名、干净机器安装升级和回滚需要正式发布配置及设备验证 |
@@ -40,8 +40,8 @@ Windows 来源：`feature/windows-preview` 本地 `d500bbb`（远端为 `64f2b89
 ## 最高优先级缺口
 
 1. P0：Mac 行为基线回归数据、Soniox 临时/最终/翻译事件契约，以及 Mac JSON 档案双向兼容。
-2. P1：主界面语言菜单、滚动跟随行为、四类设置和分段配置。
-3. P1：透明悬浮字幕窗及点击穿透、移动/缩放/锁定、显示器与全屏行为。它必须复用同一识别会话和当前字幕状态。
+2. P1：主界面语言菜单、滚动跟随行为、四类设置和分段配置已接入；需 GUI smoke 与同一 Soniox 事件序列对拍。
+3. P1：悬浮字幕逻辑和窗口已实现；优先完成透明合成、点击穿透、DPI、多屏和全屏应用验收。它复用同一识别会话和当前字幕状态。
 4. P2：总结面板交互、主题和窗口布局细节。
 5. 发布：签名证书、CI 构建产物留存和干净 Windows 机器安装升级验证。
 

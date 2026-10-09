@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -15,8 +16,13 @@ public partial class MainPageViewModel : ObservableObject
     private readonly DispatcherQueue ui = DispatcherQueue.GetForCurrentThread();
     private SpeechSession? session;
     private Segment? segment;
+    private bool activeTranslationEnabled;
     private TokenAssembler? assembler;
     private readonly DispatcherQueueTimer checkpoint;
+    private readonly DispatcherQueueTimer segmentationTimer;
+    private TranscriptSegmentationSettings activeSegmentation = new();
+    private DateTimeOffset? lastTokenReceivedAt;
+    private long sessionStartedTimestamp;
     private readonly HttpClient http = new() { Timeout = TimeSpan.FromSeconds(90) };
     private readonly OrderedPersistenceQueue<Archive> saves = new(snapshot => Task.Run(() => TranscriptFiles.Save(snapshot)));
     private Task? reportedSaveTask;
@@ -36,6 +42,7 @@ public partial class MainPageViewModel : ObservableObject
     public Preferences Config { get; private set; } = new();
     public ObservableCollection<Archive> Archives { get; } = [];
     public ObservableCollection<Subtitle> Entries { get; } = [];
+    public DesktopSubtitleOverlayFeed SubtitleOverlayFeed { get; } = new();
     public bool HasEntries => Entries.Count > 0;
     public int ActiveAudioMode { get; private set; }
     public string? ActiveOutputId { get; private set; }
@@ -67,15 +74,61 @@ public partial class MainPageViewModel : ObservableObject
     }
     public MainPageViewModel()
     {
-        Entries.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasEntries));
+        Entries.CollectionChanged += EntriesChanged;
         checkpoint = ui.CreateTimer(); checkpoint.Interval = TimeSpan.FromSeconds(3);
         checkpoint.Tick += (_, _) => { if (IsRecording) Save(); };
+        segmentationTimer = ui.CreateTimer(); segmentationTimer.Interval = TimeSpan.FromMilliseconds(500);
+        segmentationTimer.Tick += (_, _) => AutoFinalizeIfNeeded();
         try
         {
             Config = Preferences.Load();
             if (!string.IsNullOrWhiteSpace(Config.SonioxSecret)) Status = "准备就绪";
         }
         catch (Exception e) { Status = "设置读取失败，可重新填写：" + e.Message; }
+    }
+    private void EntriesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        OnPropertyChanged(nameof(HasEntries));
+        if (e.NewItems is null) return;
+        foreach (Subtitle entry in e.NewItems)
+            entry.PropertyChanged += (_, args) =>
+            {
+                if (session is null || args.PropertyName is not (nameof(Subtitle.English) or nameof(Subtitle.Chinese))) return;
+                int index = Entries.IndexOf(entry);
+                int currentIndex = SubtitleOverlayFeed.Current is { } current
+                    ? Array.FindIndex(Entries.ToArray(), item => item.Id == current.EntryId) : -1;
+                if (index < currentIndex) return; // A delayed translation must not replace a newer utterance.
+                if (index >= 0)
+                {
+                    SubtitleOverlayFeed.Update(entry, activeTranslationEnabled);
+                }
+            };
+    }
+    private void SubtitleFinalized(Subtitle entry)
+    {
+        if (SubtitleOverlayFeed.Current?.EntryId == entry.Id)
+            SubtitleOverlayFeed.Finalize(entry, activeTranslationEnabled);
+        ScheduleAutomaticCorrection(entry);
+    }
+    private TokenAssembler CreateAssembler(Segment target) =>
+        new(target, entry => Entries.Add(entry), SubtitleFinalized);
+    private static bool HasSpeechToken(System.Text.Json.JsonElement message)
+    {
+        if (!message.TryGetProperty("tokens", out var tokens) || tokens.ValueKind != System.Text.Json.JsonValueKind.Array) return false;
+        foreach (var token in tokens.EnumerateArray())
+            if (token.TryGetProperty("text", out var value) && value.GetString() is { Length: > 0 } text
+                && text is not ("<end>" or "<fin>")) return true;
+        return false;
+    }
+    private void AutoFinalizeIfNeeded()
+    {
+        if (!IsRecording || segment?.Entries.LastOrDefault() is not { } latest || assembler is null) return;
+        double elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(sessionStartedTimestamp).TotalSeconds;
+        double quiet = lastTokenReceivedAt is { } received ? (DateTimeOffset.UtcNow - received).TotalSeconds : 0;
+        bool translationReady = !string.IsNullOrWhiteSpace(latest.Chinese);
+        if (TranscriptSegmentationPolicy.Trigger(latest.English, Math.Max(0, elapsed - latest.Start), quiet,
+            activeSegmentation, translationEnabled: activeTranslationEnabled, translationReady: translationReady) is null) return;
+        if (assembler.FinalizeCurrent()) Save();
     }
     public async Task LoadArchivesAsync()
     {
@@ -275,15 +328,20 @@ public partial class MainPageViewModel : ObservableObject
         {
             string key = Preferences.Unprotect(Config.SonioxSecret);
             if (string.IsNullOrWhiteSpace(key)) throw new InvalidOperationException("请先填写并保存 Soniox API Key。");
+            activeTranslationEnabled = Config.Translate;
+            activeSegmentation = Config.Segmentation.Copy().Validate();
+            lastTokenReceivedAt = null;
+            sessionStartedTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
+            SubtitleOverlayFeed.Clear();
             if (SelectedArchive is null) { var a = new Archive(); Archives.Insert(0, a); SelectedArchive = a; }
             segment = new Segment(); SelectedArchive.Segments.Add(segment);
-            assembler = new TokenAssembler(segment, entry => Entries.Add(entry), ScheduleAutomaticCorrection);
+            assembler = CreateAssembler(segment);
             current = CreateSpeechSession(); session = current;
             Status = "正在采集音频并连接 Soniox…";
-            await current.StartAsync(Config, key, mode, output, input, starting.Token);
+            await current.StartAsync(Config, activeSegmentation, key, mode, output, input, starting.Token);
             if (failure is not null) throw failure;
             ActiveAudioMode = mode; ActiveOutputId = output; ActiveInputId = input;
-            IsRecording = true; checkpoint.Start();
+            IsRecording = true; checkpoint.Start(); segmentationTimer.Start();
             Status = "正在录音 · 音频发送至 Soniox · 原始音频不落盘";
         }
         catch (Exception e)
@@ -300,7 +358,12 @@ public partial class MainPageViewModel : ObservableObject
     private SpeechSession CreateSpeechSession()
     {
         var current = new SpeechSession();
-        current.Message += json => ui.TryEnqueue(() => { if (ReferenceEquals(session, current)) assembler?.Apply(json); });
+        current.Message += json => ui.TryEnqueue(() =>
+        {
+            if (!ReferenceEquals(session, current)) return;
+            if (HasSpeechToken(json)) lastTokenReceivedAt = DateTimeOffset.UtcNow;
+            assembler?.Apply(json);
+        });
         current.Level += value => ui.TryEnqueue(() => { if (ReferenceEquals(session, current)) Level = Math.Min(100, value * 100); });
         current.Status += status => ui.TryEnqueue(() => { if (ReferenceEquals(session, current)) Status = status; });
         current.Failure += error => ui.TryEnqueue(() => HandleSessionFailure(current, error));
@@ -322,7 +385,7 @@ public partial class MainPageViewModel : ObservableObject
     {
         var cancellation = new CancellationTokenSource();
         recoveryCancellation = cancellation; OnPropertyChanged(nameof(CanStopRecording));
-        IsBusy = true; checkpoint.Stop();
+        IsBusy = true; checkpoint.Stop(); segmentationTimer.Stop();
         Exception lastError = initialError;
         bool cancelled = false;
         try
@@ -343,14 +406,16 @@ public partial class MainPageViewModel : ObservableObject
                 if (!IsRecording || !ReferenceEquals(SelectedArchive, archive)) return;
 
                 segment = new Segment(); archive.Segments.Add(segment);
-                assembler = new TokenAssembler(segment, entry => Entries.Add(entry), ScheduleAutomaticCorrection);
+                assembler = CreateAssembler(segment);
                 var candidate = CreateSpeechSession(); session = candidate; failure = null;
                 try
                 {
-                    await candidate.StartAsync(Config, key, ActiveAudioMode, ActiveOutputId, ActiveInputId, cancellation.Token);
+                    activeSegmentation = Config.Segmentation.Copy().Validate();
+                    sessionStartedTimestamp = System.Diagnostics.Stopwatch.GetTimestamp(); lastTokenReceivedAt = null;
+                    await candidate.StartAsync(Config, activeSegmentation, key, ActiveAudioMode, ActiveOutputId, ActiveInputId, cancellation.Token);
                     cancellation.Token.ThrowIfCancellationRequested();
                     if (failure is not null) throw failure;
-                    checkpoint.Start(); Status = "连接已恢复 · 转写继续，断线前后的内容已分段保存";
+                    checkpoint.Start(); segmentationTimer.Start(); Status = "连接已恢复 · 转写继续，断线前后的内容已分段保存";
                     return;
                 }
                 catch (Exception e)
@@ -488,7 +553,7 @@ public partial class MainPageViewModel : ObservableObject
             try { await recoveryTask; } catch { }
         }
         if (IsBusy || (session is null && !IsRecording)) return;
-        IsBusy = true; checkpoint.Stop(); Status = "正在接收最后结果并保存…";
+        IsBusy = true; checkpoint.Stop(); segmentationTimer.Stop(); Status = "正在接收最后结果并保存…";
         var current = session; string warning = failure?.Message ?? "";
         try { if (current is not null) await current.StopAsync(); }
         catch (Exception e) { warning = warning.Length > 0 ? warning : "最后结果可能不完整：" + e.Message; }
@@ -516,6 +581,11 @@ public partial class MainPageViewModel : ObservableObject
                 catch (Exception e) { Status = "保存失败，请使用导出：" + e.Message; }
             }
             IsBusy = false;
+        }
+        if (!systemSleep && warning.Length == 0 && Config.AutoSummaryEnabled && !IsRecording && SelectedArchive?.Id == completedArchiveId)
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(1700));
+            if (!IsRecording && SelectedArchive?.Id == completedArchiveId) await SummarizeAsync(1);
         }
     }
     public async Task<bool> SplitCompletedSegmentAsync()

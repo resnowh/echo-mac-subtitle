@@ -31,8 +31,10 @@ public sealed class SpeechSession : IAsyncDisposable
     public event Action<string>? Status;
     private bool stopping;
     private bool audioTransportReady;
+    public Task StartAsync(Preferences config, string key, int mode, string? outputId, string? inputId, CancellationToken cancellationToken = default) =>
+        StartAsync(config, config.Segmentation.Copy().Validate(), key, mode, outputId, inputId, cancellationToken);
     public double BufferedAudioSeconds => capture.BufferedSeconds;
-    public async Task StartAsync(Preferences config, string key, int mode, string? outputId, string? inputId, CancellationToken cancellationToken = default)
+    public async Task StartAsync(Preferences config, TranscriptSegmentationSettings segmentation, string key, int mode, string? outputId, string? inputId, CancellationToken cancellationToken = default)
     {
         using var connectTimeout = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, cancellationToken);
         connectTimeout.CancelAfter(TimeSpan.FromSeconds(20));
@@ -69,12 +71,7 @@ public sealed class SpeechSession : IAsyncDisposable
                 if (Volatile.Read(ref captureFailure) is { } error) throw error;
                 throw new TimeoutException("连接转写服务超时。", e);
             }
-            var request = new Dictionary<string, object> {
-                ["model"] = config.SonioxModel, ["audio_format"] = "pcm_s16le", ["sample_rate"] = 16000, ["num_channels"] = 1,
-                ["enable_endpoint_detection"] = true, ["max_endpoint_delay_ms"] = 900, ["enable_language_identification"] = true, ["enable_speaker_diarization"] = config.Speakers
-            };
-            if (!string.IsNullOrWhiteSpace(config.SourceLanguage)) { request["language_hints"] = new[] { config.SourceLanguage }; request["language_hints_strict"] = config.Strict; }
-            if (config.Translate) request["translation"] = new { type = "one_way", target_language = config.TargetLanguage };
+            var request = SonioxRequestBuilder.Build(config, segmentation);
             await socket.SendAsync(JsonSerializer.SerializeToUtf8Bytes(request).AsMemory(), WebSocketMessageType.Text, true, connectTimeout.Token);
             receiver = ReceiveAsync();
             if (Volatile.Read(ref captureFailure) is { } captureError) throw captureError;

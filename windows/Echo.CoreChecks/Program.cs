@@ -36,6 +36,56 @@ void RunIcacls(string path, params string[] arguments)
 }
 var segment = new Segment { StartedAt = 800000000 };
 var assembly = new TokenAssembler(segment, _ => { });
+var overlaySettings = new DesktopSubtitleOverlaySettings();
+Check(overlaySettings.OriginalFontSize == 26 && overlaySettings.TranslationFontSize == 24 && overlaySettings.WidthFraction == .75 && overlaySettings.RetentionSeconds == 5,
+    "desktop subtitle overlay defaults match the Mac visual baseline");
+overlaySettings.ShowOriginal = false; overlaySettings.ShowTranslation = false; overlaySettings.Opacity = double.NaN; overlaySettings.Validate();
+Check(overlaySettings.ShowOriginal && overlaySettings.Opacity == 1, "overlay settings retain a visible language and repair invalid persisted values");
+var overlayFeed = new DesktopSubtitleOverlayFeed();
+var overlayEntry = new Subtitle { English = "Live caption", Chinese = "实时字幕" };
+var overlayAt = DateTimeOffset.Parse("2026-10-09T00:00:00Z");
+overlayFeed.Update(overlayEntry, true, overlayAt);
+Check(overlayFeed.Current is { IsVisible: true, IsFinal: false, TranslationEnabled: true }, "overlay feed presents a provisional bilingual subtitle");
+overlayFeed.Finalize(overlayEntry, true, overlayAt.AddSeconds(1));
+var overlayFinal = overlayFeed.Current!;
+overlayFeed.Update(overlayEntry, true, overlayAt.AddSeconds(3));
+Check(overlayFeed.Current!.FinalizedAt == overlayFinal.FinalizedAt && overlayFeed.Current.RemainsVisible(overlayAt.AddSeconds(5), 5),
+    "identical updates do not extend the final subtitle retention window");
+overlayEntry.Chinese = "延迟到达的译文";
+overlayFeed.Update(overlayEntry, true, overlayAt.AddSeconds(4));
+Check(overlayFeed.Current!.FinalizedAt == overlayAt.AddSeconds(4) && overlayFeed.Current.RemainsVisible(overlayAt.AddSeconds(8), 5),
+    "meaningful late translation resets the final subtitle retention window");
+overlayFeed.Clear();
+Check(overlayFeed.Current is null, "overlay feed clears stale subtitle state");
+var segmentation = new TranscriptSegmentationSettings();
+Check(segmentation.SonioxMaxEndpointDelayMilliseconds == 3000 && segmentation.SonioxEndpointSensitivity == -.3
+    && segmentation.LocalSilenceThresholdSeconds == 4.5 && segmentation.LocalSilenceMinimumWordCount == 5
+    && segmentation.LongSegmentWordThreshold == 80 && segmentation.LongSegmentDurationThresholdSeconds == 90,
+    "segmentation defaults match the Mac settings baseline");
+var segmentationRoundTrip = JsonSerializer.Deserialize<Preferences>(JsonSerializer.Serialize(new Preferences { Segmentation = new() { LocalSilenceThresholdSeconds = 7.5 } }, TranscriptFiles.Json), TranscriptFiles.Json);
+Check(segmentationRoundTrip?.Segmentation.LocalSilenceThresholdSeconds == 7.5, "segmentation settings persist in the existing Windows preferences file");
+segmentation.SonioxMaxEndpointDelayMilliseconds = 4000; segmentation.SonioxEndpointSensitivity = double.NaN;
+segmentation.LocalSilenceThresholdSeconds = -1; segmentation.Validate();
+Check(segmentation.SonioxMaxEndpointDelayMilliseconds == 3000 && segmentation.SonioxEndpointSensitivity == -.3
+    && segmentation.LocalSilenceThresholdSeconds == 4.5, "invalid segmentation preferences recover to safe defaults");
+var requestPreferences = new Preferences { SourceLanguage = "", Translate = false };
+var requestSegmentation = new TranscriptSegmentationSettings { SonioxMaxEndpointDelayMilliseconds = 1750, SonioxEndpointSensitivity = .2, SonioxEndpointLatencyAdjustmentLevel = 2 };
+var sonioxRequest = SonioxRequestBuilder.Build(requestPreferences, requestSegmentation);
+Check((int)sonioxRequest["max_endpoint_delay_ms"] == 1750 && (double)sonioxRequest["endpoint_sensitivity"] == .2
+    && (int)sonioxRequest["endpoint_latency_adjustment_level"] == 2 && !sonioxRequest.ContainsKey("language_hints")
+    && !sonioxRequest.ContainsKey("translation"), "Soniox request carries configured endpoint settings and omits disabled language and translation options");
+var policySettings = new TranscriptSegmentationSettings();
+Check(TranscriptSegmentationPolicy.Trigger("one two three four five", 1, 4.5, policySettings) == TranscriptSegmentationTrigger.Silence
+    && TranscriptSegmentationPolicy.Trigger("one two three four", 1, 10, policySettings) is null
+    && TranscriptSegmentationPolicy.Trigger(new string('w', 1), 90, 0,
+        new TranscriptSegmentationSettings { LongSegmentWordThreshold = 1 }, translationEnabled: true, translationReady: false) is null
+    && TranscriptSegmentationPolicy.Trigger("", 0, 0, policySettings, endpointReached: true) == TranscriptSegmentationTrigger.Endpoint,
+    "segmentation policy requires its thresholds, waits for enabled translation, and gives semantic endpoints priority");
+int localFinalized = 0; var localSegment = new Segment(); var localAssembler = new TokenAssembler(localSegment, _ => { }, _ => localFinalized++);
+using (var localPartial = JsonDocument.Parse("""{"tokens":[{"text":"A completed local phrase","is_final":true}]}""")) localAssembler.Apply(localPartial.RootElement);
+Check(localAssembler.FinalizeCurrent() && localFinalized == 1, "local segmentation finalizes the active subtitle through the shared finalization path");
+using (var afterLocal = JsonDocument.Parse("""{"tokens":[{"text":"Next phrase","is_final":true}]}""")) localAssembler.Apply(afterLocal.RootElement);
+Check(localSegment.Entries.Count == 2 && localSegment.Entries[1].English == "Next phrase", "speech after a local fallback begins a fresh subtitle without duplicating the prior phrase");
 void Apply(string text) { using var doc = JsonDocument.Parse(text); assembly.Apply(doc.RootElement); }
 Apply("""{"tokens":[{"text":"Hel","is_final":false,"start_ms":0,"end_ms":200}]}""");
 Apply("""{"tokens":[{"text":"Hello","is_final":true,"start_ms":0,"end_ms":400},{"text":" world","is_final":false,"start_ms":400,"end_ms":700}]}""");
