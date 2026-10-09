@@ -14,6 +14,7 @@
 
 - `dotnet run --project windows/Echo.CoreChecks/Echo.CoreChecks.csproj -c Release --no-restore`：47 项通过；没有云端调用或音频保存。
 - `dotnet build windows/Echo.Windows/Echo.Windows.csproj -c Release --no-restore /p:Platform=x64 /p:RuntimeIdentifier=win-x64`：Release x64/XAML 编译成功，0 错误、10 条既有 NAudio 弃用警告。
+- 提交 `f1ebcba09069461c72e255d7cfb8e5d37edc33f4` 的 [GitHub Actions 运行 37900335985](https://github.com/resnowh/echo-mac-subtitle/actions/runs/37900335985) 中 Windows 与 Mac jobs 均通过；Windows job 完成锁定依赖还原、47 项核心检查和 Release x64 构建，Mac transport、Debug 与 Release 检查通过。
 - `git diff --check` 通过；静态搜索未发现残留的 `AutomationId="ControlN"`。
 
 ## 未覆盖
