@@ -79,3 +79,7 @@ CoreChecks 单独改变源语言、目标语言、翻译开关、严格限制与
 ## A63 新内容总结的会话边界（2026-10-10）
 
 CoreChecks 构造历史段与当前会话段，验证增量总结只返回起始 Segment 之后的候选，整个存档总结仍包含两段；源码接线检查确认开始录音前保存边界并传入生产选择逻辑。146 项 CoreChecks 与 Release x64 构建（0 警告、0 错误）通过。未调用 DeepSeek；多 Segment 断线恢复及 UI 工作流未实机验收。原始结果和哈希见 [A63 底稿](../sources/windows-a63-summary-session-scope-2026-10-10.md)。
+
+## A64 AI 总结输入与提示词对齐（2026-10-10）
+
+与 Mac `SpeechViewModel.requestAISummary` 和 `DeepSeekService.request` 对照后，Windows 总结文字稿加入 1 起始编号、真实本地时间、中英双语文本；时间沿用 Mac 的首条/跨日 `MM-dd HH:mm:ss`、同日 `HH:mm:ss` 规则。新增内容、当前段和全存档分别使用 Mac 对应提示词，并统一 system prompt。CoreChecks 验证跨午夜格式、Archive 时间回退、双语内容、speaker 不混入，以及三种 scope 的提示词接线。150 项通过；Release x64 构建 0 警告、0 错误。未调用 DeepSeek、未保存音频；长归档分块会保留原有 18,000 字符上限，真实云端响应仍需使用者自己的 API Key 验收。底稿与哈希见 [A64](../sources/windows-a64-summary-input-parity-2026-10-10/README.md)。

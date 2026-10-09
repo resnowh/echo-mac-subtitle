@@ -73,6 +73,10 @@ Check(mainPageViewModelSource.Contains("CorrectionRecognitionSnapshot.Capture(Co
 Check(mainPageViewModelSource.Contains("newContentStartSegmentIndex = SelectedArchive.Segments.Count", StringComparison.Ordinal)
     && mainPageViewModelSource.Contains("Select(requestedArchive, scope, newContentStartSegmentIndex)", StringComparison.Ordinal),
     "new-content summaries are limited to segments created since the current recording session began");
+Check(mainPageViewModelSource.Contains("TranscriptTextChunks.Create(source, archive: requestedArchive)", StringComparison.Ordinal)
+    && mainPageViewModelSource.Contains("TranscriptSummaryPrompt.Build(scope, chunks[i])", StringComparison.Ordinal)
+    && mainPageViewModelSource.Contains("你是一个专业的会议和演讲总结助手。请用简体中文回答。", StringComparison.Ordinal),
+    "AI summaries submit archive-aware bilingual transcript chunks with scope-specific Mac prompts");
 var computerOnlySelection = AudioInputModeSelection.ForSwitch(0, "speaker-id", "mic-id");
 var microphoneOnlySelection = AudioInputModeSelection.ForSwitch(1, "speaker-id", "mic-id");
 var mixedSelection = AudioInputModeSelection.ForSwitch(2, "speaker-id", "mic-id");
@@ -814,6 +818,48 @@ Check(correctionLoaded?.RawSource == "Recognized text" && correctionLoaded.Sourc
 var chunkInput = new Subtitle { English = string.Concat(Enumerable.Repeat("汉", 300)) };
 var chunks = TranscriptTextChunks.Create([chunkInput], 128);
 Check(chunks.Count > 1 && chunks.All(c => c.Length <= 128) && chunks.Sum(c => c.Count(ch => ch == '汉')) == 300, "long transcript chunks stay bounded without dropping Unicode text");
+DateTime firstLocalClock = new(2024, 1, 1, 23, 59, 59, DateTimeKind.Unspecified);
+TimeSpan localOffset = TimeZoneInfo.Local.GetUtcOffset(firstLocalClock);
+DateTimeOffset firstLocal = new(firstLocalClock, localOffset);
+double AppleSeconds(DateTimeOffset local) => (local.ToUniversalTime() - Archive.AppleEpoch).TotalSeconds;
+var timestampEntries = new[]
+{
+    new Subtitle { RecordedAt = AppleSeconds(firstLocal), English = " first English ", Chinese = " 第一条中文 ", Speaker = "speaker_1" },
+    new Subtitle { RecordedAt = AppleSeconds(firstLocal.AddSeconds(2)), English = "second English", Chinese = "第二条中文" },
+    new Subtitle { RecordedAt = AppleSeconds(firstLocal.AddSeconds(4)), English = "third English", Chinese = "第三条中文" }
+};
+var timestampTranscript = TranscriptTextChunks.Create(timestampEntries).Single();
+var nextDayLocal = firstLocal.AddSeconds(2);
+var sameDayLocal = firstLocal.AddSeconds(4);
+Check(timestampTranscript.Contains($"1. [{firstLocal.ToString("MM-dd HH:mm:ss", CultureInfo.InvariantCulture)}]", StringComparison.Ordinal)
+    && timestampTranscript.Contains($"2. [{nextDayLocal.ToString("MM-dd HH:mm:ss", CultureInfo.InvariantCulture)}]", StringComparison.Ordinal)
+    && timestampTranscript.Contains($"3. [{sameDayLocal.ToString("HH:mm:ss", CultureInfo.InvariantCulture)}]", StringComparison.Ordinal)
+    && timestampTranscript.Contains("英文：first English\n中文：第一条中文", StringComparison.Ordinal)
+    && timestampTranscript.Contains("英文：second English\n中文：第二条中文", StringComparison.Ordinal)
+    && !timestampTranscript.Contains("speaker_1", StringComparison.Ordinal),
+    "AI summary transcript preserves numbered bilingual text and Mac local timestamp formatting across midnight");
+var archiveTimedEntries = new[]
+{
+    new Subtitle { Start = 0, English = "archive first", Chinese = "存档第一条" },
+    new Subtitle { Start = 2, English = "archive next day", Chinese = "存档跨日" }
+};
+var archiveTimedTranscript = TranscriptTextChunks.Create(archiveTimedEntries, archive: new Archive
+{
+    Segments = [new Segment { StartedAt = AppleSeconds(firstLocal), Entries = archiveTimedEntries.ToList() }]
+}).Single();
+Check(archiveTimedTranscript.Contains($"1. [{firstLocal.ToString("MM-dd HH:mm:ss", CultureInfo.InvariantCulture)}]", StringComparison.Ordinal)
+    && archiveTimedTranscript.Contains($"2. [{nextDayLocal.ToString("MM-dd HH:mm:ss", CultureInfo.InvariantCulture)}]", StringComparison.Ordinal),
+    "AI summary transcript derives Mac wall-clock times from archive segment start when entry timestamps are absent");
+string incrementalPrompt = TranscriptSummaryPrompt.Build(0, timestampTranscript);
+string sessionPrompt = TranscriptSummaryPrompt.Build(1, timestampTranscript);
+string archivePrompt = TranscriptSummaryPrompt.Build(2, timestampTranscript);
+Check(incrementalPrompt.Contains("### 新增内容", StringComparison.Ordinal)
+    && incrementalPrompt.Contains("新增文字稿：", StringComparison.Ordinal)
+    && sessionPrompt.Contains("请根据下面的英文实时文字稿", StringComparison.Ordinal)
+    && archivePrompt.Contains("只返回总结正文", StringComparison.Ordinal)
+    && sessionPrompt.Contains("中文翻译只作为辅助参考", StringComparison.Ordinal)
+    && sessionPrompt.Contains(timestampTranscript, StringComparison.Ordinal),
+    "incremental and full-summary prompts match Mac scope guidance and include the bilingual transcript");
 var twoHourArchive = new Archive { Segments = [new Segment { StartedAt = 800000000,
     Entries = Enumerable.Range(0, 7200).Select(i => new Subtitle { Start = i, End = i + 1, English = $"Synthetic line {i}", Chinese = $"合成字幕 {i}" }).ToList() }] };
 var archiveStressTimer = Stopwatch.StartNew();

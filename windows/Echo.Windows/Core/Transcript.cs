@@ -181,42 +181,116 @@ public sealed record CorrectionSuggestion(
 
 public static class TranscriptTextChunks
 {
-    public static IReadOnlyList<string> Create(IEnumerable<Subtitle> entries, int maxCharacters = 18000)
+    public static IReadOnlyList<string> Create(IEnumerable<Subtitle> entries, int maxCharacters = 18000, Archive? archive = null)
     {
         if (maxCharacters < 128) throw new ArgumentOutOfRangeException(nameof(maxCharacters));
         var chunks = new List<string>(); var current = new StringBuilder();
+        var archiveTimes = archive?.Segments
+            .SelectMany(segment => segment.Entries.Select(entry => (entry.Id, Timestamp: segment.StartedAt + entry.Start)))
+            .GroupBy(item => item.Id)
+            .ToDictionary(group => group.Key, group => group.First().Timestamp)
+            ?? new Dictionary<Guid, double>();
         void Flush()
         {
             if (current.Length == 0) return;
             chunks.Add(current.ToString()); current.Clear();
         }
-        foreach (var entry in entries)
+        void AddBoundedRow(string row)
         {
-            string prefix = $"[{entry.TimeLabel}] {entry.Speaker} ";
-            if (prefix.Length + entry.English.Length + 1 <= maxCharacters)
+            string separator = current.Length == 0 ? "" : "\n\n";
+            if (row.Length + separator.Length <= maxCharacters && current.Length + row.Length + separator.Length <= maxCharacters)
             {
-                if (current.Length + prefix.Length + entry.English.Length + 1 > maxCharacters) Flush();
-                current.Append(prefix).AppendLine(entry.English);
-                continue;
+                current.Append(separator).Append(row);
+                return;
             }
             Flush();
-            int bodyLimit = Math.Max(1, maxCharacters - prefix.Length - 1);
             var part = new StringBuilder();
-            var elements = StringInfo.GetTextElementEnumerator(entry.English);
+            var elements = StringInfo.GetTextElementEnumerator(row);
             while (elements.MoveNext())
             {
                 string element = (string)elements.Current!;
-                if (part.Length + element.Length > bodyLimit)
+                if (part.Length + element.Length > maxCharacters)
                 {
-                    chunks.Add(prefix + part + "\n"); part.Clear();
+                    if (part.Length > 0) chunks.Add(part.ToString());
+                    part.Clear();
                 }
                 part.Append(element);
             }
-            if (part.Length > 0) chunks.Add(prefix + part + "\n");
+            if (part.Length > 0) chunks.Add(part.ToString());
+        }
+        DateTime? previousLocalDay = null;
+        int rowNumber = 0;
+        foreach (var entry in entries)
+        {
+            double appleSeconds = entry.RecordedAt ?? archiveTimes.GetValueOrDefault(entry.Id, entry.Start);
+            DateTimeOffset localStart = Archive.AppleEpoch.AddSeconds(appleSeconds).ToLocalTime();
+            string time = rowNumber == 0 || previousLocalDay != localStart.Date
+                ? localStart.ToString("MM-dd HH:mm:ss", CultureInfo.InvariantCulture)
+                : localStart.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
+            previousLocalDay = localStart.Date;
+            string row = $"{rowNumber + 1}. [{time}]\n英文：{entry.English.Trim()}\n中文：{entry.Chinese.Trim()}";
+            AddBoundedRow(row);
+            rowNumber++;
         }
         Flush();
         return chunks;
     }
+}
+
+public static class TranscriptSummaryPrompt
+{
+    public static string Build(int scope, string transcript) => scope switch
+    {
+        0 => $$"""
+            下面是一次已经进行中的实时文字稿中，刚刚新增或被修正的部分。请只总结这部分新内容，不要重新总结整场内容，也不要重复之前已经讲过的内容。
+            请按自然主题合并新增内容，不要逐句复述，也不要一句话一个段落。只有主题发生变化时才换段；内容较少时只保留一个段落，不要为了凑数量拆分。每条控制在 1-2 句，合并连续表达同一概念的内容。
+            对新增内容中的复杂概念，在对应要点中补充一句简短解释，说明它是什么、为什么重要或与上下文的关系；把解释和原要点放在同一条中。
+            请直接使用以下格式：
+            ### 新增内容
+            - [开始时间] 新内容要点；必要时补充简短解释。
+            - [开始时间] 相关因果关系、例子或结论。
+            仅在这部分明确出现行动项时追加“### 待办”，没有行动项时省略。
+            合并重复信息，每个主题保留 1-3 条要点；新增内容通常控制在 1-4 条要点，没有新的实质信息时不要编造内容。
+            每条只能标注一个开始时间点。时间是现实世界的本地开始时间：第一条和跨天后的第一条使用 MM-dd HH:mm:ss，同一天其他条目只使用 HH:mm:ss。
+            严禁输出结束时间、时间范围、时间区间、-->、至、到或起止时间之间的短横线。
+            这是一份实时语音识别稿，可能存在听错、漏词、重复词、断句错误，以及机器翻译不准确的问题。
+            英文原文是主要依据，中文翻译只作为辅助参考；如果两者不一致，优先依据英文上下文判断。
+            对明显的同音误识别、专业术语误识别和中文误译进行合理纠正，但不要凭空补充原文没有的信息。
+            只返回增量总结正文，不要解释过程，也不要提及你看到了文字稿。
+
+            新增文字稿：
+            {{transcript}}
+            """,
+        1 or 2 => $$"""
+            请根据下面的英文实时文字稿，生成简洁、准确的简体中文总结。
+            每条文字稿前的方括号是现实世界的本地开始时间，请保留这些时间信息，并在相关要点和待办后尽量标注对应时间。第一条和跨天后的第一条显示 MM-dd HH:mm:ss，同一天的其他条目只显示 HH:mm:ss。时间只表示开始时刻，不要补充结束时间。
+            输出时间时只能引用一个开始时间点，例如 [09-03 11:24:18] 或 [11:25:02]。严禁输出任何结束时间、时间范围、时间区间，严禁使用“-->”“至”“到”或起止时间之间的短横线。
+            这是一份实时语音识别稿，可能存在听错、漏词、重复词、断句错误，以及机器翻译不准确的问题。
+            请结合上下文理解原意：英文原文是主要依据，中文翻译只作为辅助参考；如果两者不一致，优先依据英文上下文判断。
+            对明显的同音误识别、专业术语误识别和中文误译进行合理纠正，但不要凭空补充原文没有的信息。
+            对无法确定的内容使用保守表述，不要把猜测写成事实。
+            请按自然主题组织内容，不要逐句复述，也不要把每句话拆成一个段落。全文通常分成 2-4 个主题段落；只有主题确实发生变化时才换段。每条控制在 1-2 句，合并连续表达同一概念的内容。
+            对复杂概念，在对应要点中补充一句简短解释，说明它是什么、为什么重要或与前后内容的关系；必要时给出原文中出现的例子，但不要写成教科书式长篇扩展。
+            每个主题段落列 1-3 个要点，合并重复信息；全文要点通常控制在 4-8 条。每条尽量以单个 [开始时间] 开头，相关解释和因果关系放在同一条中。
+            请使用以下格式：
+            ## 主题
+            一句话概括全文主旨。
+
+            ### 核心概念或主题一
+            - [开始时间] 关键内容；复杂概念后补充简短解释。
+            - [开始时间] 相关因果关系、例子或结论。
+
+            ### 主题二
+            - [开始时间] 关键内容与必要解释。
+            主题标题和段落不要过度拆分；内容不足时合并主题，不要为了凑数量添加空泛要点。
+            仅在存在明确行动项时输出“待办”一栏，没有行动项时省略该栏；有待办时也请标注单个 [开始时间]。
+            只返回总结正文，不要解释过程，也不要提及你看到了文字稿。
+
+            文字稿：
+            {{transcript}}
+            """,
+        _ => throw new ArgumentOutOfRangeException(nameof(scope))
+    };
 }
 
 public static class TranscriptSummarySelection
