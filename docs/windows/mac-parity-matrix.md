@@ -10,7 +10,7 @@ Windows 来源：当前 PR 分支 `feature/windows-mac-parity`；其历史迁移
 | 数据 | 来源及范围 | 本次记录 | 限制 |
 |---|---|---|---|
 | 当前 Mac 行为 | GitHub `origin/main`，以上 SHA；PR #1–#4 均已合并 | 本表逐项记录 UI、配置、字幕和浮层的源码位置 | 只代表该提交，不代表之后尚未拉取的远端更新 |
-| Windows 实现 | 当前 PR 分支 `windows/`；历史迁移来源见上文 | 文件清单、现有能力、待对齐行为 | 没有运行 UI 或真实音频硬件 |
+| Windows 实现 | 当前 PR 分支 `windows/`；历史迁移来源见上文 | 文件清单、现有能力、待对齐行为 | A33/A47/A48 已做选定窗口与控件 UIA 实测；并非完整 GUI 对照，真实音频硬件未测 |
 | Windows 检查底稿 | `docs/sources/windows-*` | 保留原有构建、核心检查和签名包记录 | 历史测试结论只适用于底稿注明的代码版本 |
 | AI 总结呈现 | Mac `EchoMacApp.swift`、`TranscriptViews.swift` | A29 记录 Markdown 分块、默认展开、收起/复制与 Windows 合成验证 | 尚无 GUI 视觉或剪贴板实测 |
 | Soniox 多响应与控制帧 | Mac 对字符串 `error_message` 立即报错并返回；仅布尔 `finished: true` 才结束；转写字段错误类型安全忽略 | A35 七响应、A42 十三响应、A43 十八响应 production differential；A44 补无 error_code 错误和错误类型 finished 的 loopback 测试 | A35/A42/A43 production differential 和 A44 的 Mac/Windows/Archive CI 全通过；真实云响应仍未覆盖 |
@@ -28,7 +28,7 @@ Windows 来源：当前 PR 分支 `feature/windows-mac-parity`；其历史迁移
 
 | Mac 行为 | Windows 当前实现 | 状态 | 证据与下一步 |
 |---|---|---|---|
-| 简洁主窗口：品牌、主题、置顶、字幕优先、底部录音与存档工具 | 单页 WinUI，双语列表、主题、置顶、录音、归档、导出等均存在；设置是独立页面 | 功能存在但行为不同 | `macOS/EchoMacApp.swift`；`windows/Echo.Windows/MainPage.xaml`。主题默认与循环次序已修正，见 A31；A33 UIA 已验证主路径控件和启动/关闭；压缩布局与 Mac 视觉仍未对照 |
+| 简洁主窗口：品牌、主题、置顶、字幕优先、底部录音与存档工具 | 单页 WinUI，双语列表、主题、置顶、录音、归档、导出等均存在；设置是独立页面 | 功能存在但行为不同 | `macOS/EchoMacApp.swift`；`windows/Echo.Windows/MainPage.xaml`。A48 对齐 820×650 DIP 理想、680×520 DIP 最小尺寸；去掉空字幕时常驻的回底按钮。隔离 GUI 已验初始/最小尺寸且截图检查未见裁切；Mac/Windows 并排视觉对照、多屏工作区仍待验 |
 | 双语字幕列表；支持选择、纠正、说话人、时间和跨天日期分隔 | 双列字幕，带时间、说话人、检测语言、纠正入口；相邻字幕跨本地日历日期时显示日期分隔行 | 功能存在但行为不同 | `macOS/Views/TranscriptViews.swift`；`windows/Echo.Windows/MainPage.xaml`、`MainPageViewModel.cs`、`Core/Transcript.cs`。字体与紧凑行距未 GUI 对照 |
 | 字幕编辑：只保存改动字段；录音继续时其余字段继续更新；确认丢弃、载入最新识别稿、撤销和 AI 建议确认 | 编辑器按 baseline 只提交修改字段；识别稿变化时显示提示，可在未编辑时载入最新文本；关闭有未保存修改时要求确认；人工恢复值仍锁定防止迟到识别覆盖 | 功能存在但行为不同 | Mac `macOS/Views/TranscriptViews.swift`、`SpeechViewModel.swift`、`TranscriptModels.swift`；Windows `MainPage.xaml.cs`、`MainPageViewModel.cs`、`Core/Transcript.cs`。字段锁定/原稿/撤销有核心检查；UI 对话框与正在录音时的交互未实测 |
 | 用户滚离底部后停止跟随，并显示“有新内容”按钮 | 新内容追加时保留用户历史位置，显示回到底部按钮；加载时滚至最新条目 | 功能存在但行为不同 | Mac `SynchronizedTranscriptView`；Windows `MainPage.xaml`、`MainPage.xaml.cs`。应通过 UI smoke 检查滚动事件与虚拟化列表交互 |

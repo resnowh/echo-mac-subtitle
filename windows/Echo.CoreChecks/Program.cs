@@ -38,6 +38,15 @@ void RunIcacls(string path, params string[] arguments)
 }
 var segment = new Segment { StartedAt = 800000000 };
 var assembly = new TokenAssembler(segment, _ => { });
+var mainWindowMinimum = MainWindowSizePolicy.Minimum(1920, 1080, 1);
+var mainWindowInitial = MainWindowSizePolicy.Initial(1920, 1080, 1);
+var mainWindowAt150Percent = MainWindowSizePolicy.Initial(1920, 1080, 1.5);
+var mainWindowConstrained = MainWindowSizePolicy.Initial(700, 500, 1);
+Check(mainWindowMinimum == new MainWindowPixelSize(680, 520)
+    && mainWindowInitial == new MainWindowPixelSize(820, 650)
+    && mainWindowAt150Percent == new MainWindowPixelSize(1230, 975)
+    && mainWindowConstrained == new MainWindowPixelSize(700, 500),
+    "main-window minimum and ideal sizes match Mac in DIPs, scale with DPI, and fit a smaller work area");
 Check(new Preferences().Theme == "Dark" && JsonSerializer.Deserialize<Preferences>("{}", TranscriptFiles.Json)?.Theme == "Dark",
     "new and legacy preferences default to the Mac dark theme when no explicit theme is stored");
 Check(ThemePreference.IndexFor("Light") == 0 && ThemePreference.IndexFor("Dark") == 1 && ThemePreference.IndexFor("Default") == 2
@@ -79,6 +88,10 @@ Check(overlaySubtitleTexts.Length == 4 && overlaySubtitleTexts.All(element =>
         element.Attribute("MaxLines")?.Value == "2" && element.Attribute("TextTrimming")?.Value == "CharacterEllipsis"),
     "overlay original, translation and shadow text all follow Mac two-line tail truncation");
 var mainPageXaml = XDocument.Load(Path.Combine(AppContext.BaseDirectory, "Fixtures", "MainPage.xaml"));
+var alwaysVisibleReturnButton = mainPageXaml.Descendants(presentationNamespace + "Button")
+    .Any(element => element.Attribute("AutomationProperties.AutomationId")?.Value == "ReturnToLatest");
+Check(!alwaysVisibleReturnButton,
+    "the main toolbar does not show a permanent return-to-latest button when Mac only shows it for unread content");
 var settingsOverlay = mainPageXaml.Descendants(presentationNamespace + "Grid")
     .Single(element => element.Attribute(xamlNamespace + "Name")?.Value == "SettingsOverlay");
 var settingsPanelBorder = settingsOverlay.Element(presentationNamespace + "Border");

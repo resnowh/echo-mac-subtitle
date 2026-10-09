@@ -1,4 +1,6 @@
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Windowing;
+using Echo_Windows.Core;
 using Echo_Windows.Services;
 
 // To learn more about WinUI, the WinUI project structure,
@@ -38,9 +40,16 @@ public sealed partial class MainWindow : Window
             powerObserver?.Dispose();
             if (RootFrame.Content is MainPage page) page.CloseSubtitleOverlay();
         };
-        var scale = GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this)) / 96.0;
-        var work = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(AppWindow.Id, Microsoft.UI.Windowing.DisplayAreaFallback.Primary).WorkArea;
-        AppWindow.Resize(new Windows.Graphics.SizeInt32(Math.Min((int)(920 * scale), work.Width), Math.Min((int)(720 * scale), work.Height)));
+        double scale = GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this)) / 96.0;
+        var work = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
+        var minimum = MainWindowSizePolicy.Minimum(work.Width, work.Height, scale);
+        var initial = MainWindowSizePolicy.Initial(work.Width, work.Height, scale);
+        if (AppWindow.Presenter is OverlappedPresenter presenter)
+        {
+            presenter.PreferredMinimumWidth = minimum.Width;
+            presenter.PreferredMinimumHeight = minimum.Height;
+        }
+        AppWindow.Resize(new Windows.Graphics.SizeInt32(initial.Width, initial.Height));
         AppWindow.Closing += async (_, e) =>
         {
             if (closingAfterSave) return;
