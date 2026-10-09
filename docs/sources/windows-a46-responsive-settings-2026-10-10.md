@@ -19,6 +19,7 @@ Windows 保留 `MaxWidth="520" MaxHeight="560"` 作为正常目标上限，取�
 - `Echo.CoreChecks/Program.cs` 检查无固定宽高、最大尺寸仍为 520×560、容器为 Stretch 且仍含 ScrollViewer；修改前 SHA-256 `9C4B864C89DC24F681F1CCCEAF6D13B6D4802B2D23BE3327DE0324B7ACBB3EC6`，修改后 `F4D50445BA36F3ADB14A033A806B319BEE389DF06EBD2EE2A9980FD0420F0E60`。
 - 本机 CoreChecks：121 项通过。
 - 本机 Release x64 构建：0 警告、0 错误。
+- GitHub Actions PR run [`37970748522`](https://github.com/resnowh/echo-mac-subtitle/actions/runs/37970748522) Mac build 与 [`37970748705`](https://github.com/resnowh/echo-mac-subtitle/actions/runs/37970748705) unsigned package preflight 通过。Runs [`37970740322`](https://github.com/resnowh/echo-mac-subtitle/actions/runs/37970740322) 和 [`37970748525`](https://github.com/resnowh/echo-mac-subtitle/actions/runs/37970748525) 的 Mac fixture 生成、Windows CoreChecks/Release 构建及 Mac Archive 回读全部通过。
 - 未启动 Echo；高 DPI、短屏、键盘与 Narrator 的实际 GUI 验收仍待完成。自动契约检查和 XAML 构建不能替代 GUI 实测。
 
 数据为当前公开仓库源码和本机合成检查结果；没有用户数据、音频、凭据或云端服务调用。未修改 `macOS/`。
