@@ -473,6 +473,7 @@ public sealed class TokenAssembler(Segment segment, Action<Subtitle> added, Acti
     private int sourceCursor, translationCursor;
     private readonly Dictionary<int, string> sourceFinal = [], translationFinal = [];
     private readonly Dictionary<int, string> sourceProvisional = [], translationProvisional = [];
+    private readonly HashSet<int> sourceStartSet = [], sourceEndSet = [];
     public bool FinalizeCurrent()
     {
         int index = Math.Max(sourceCursor, translationCursor);
@@ -487,6 +488,7 @@ public sealed class TokenAssembler(Segment segment, Action<Subtitle> added, Acti
     {
         sourceFinal.Remove(index); translationFinal.Remove(index);
         sourceProvisional.Remove(index); translationProvisional.Remove(index);
+        sourceStartSet.Remove(index); sourceEndSet.Remove(index);
     }
     private Subtitle Row(int index)
     {
@@ -522,6 +524,13 @@ public sealed class TokenAssembler(Segment segment, Action<Subtitle> added, Acti
         }
         int provisionalSource = sourceCursor, provisionalTranslation = translationCursor;
         bool reachedEndpoint = false;
+        // Mac can split an already-open row when a final speaker change arrives,
+        // but it does not create/update the current row until after this response's
+        // token loop. Therefore speaker changes within a newly-created row in the
+        // same response are folded into that row, using the last final metadata.
+        bool canSplitSpeakerChange = sourceCursor < segment.Entries.Count
+            && segment.Entries[sourceCursor].Speaker is not null
+            && !string.IsNullOrWhiteSpace(sourceFinal.GetValueOrDefault(sourceCursor));
         var changedRows = new HashSet<int>();
         foreach (var token in tokens.EnumerateArray())
         {
@@ -541,7 +550,7 @@ public sealed class TokenAssembler(Segment segment, Action<Subtitle> added, Acti
                 && finalSpeaker.ValueKind == JsonValueKind.String)
             {
                 string label = "Speaker " + finalSpeaker.GetString();
-                if (sourceCursor < segment.Entries.Count && segment.Entries[sourceCursor] is { } current
+                if (canSplitSpeakerChange && sourceCursor < segment.Entries.Count && segment.Entries[sourceCursor] is { } current
                     && !string.IsNullOrWhiteSpace(sourceFinal.GetValueOrDefault(sourceCursor))
                     && current.Speaker is not null && current.Speaker != label)
                 {
@@ -553,14 +562,25 @@ public sealed class TokenAssembler(Segment segment, Action<Subtitle> added, Acti
                     translationCursor = Math.Max(translationCursor, sourceCursor);
                     provisionalSource = sourceCursor;
                     provisionalTranslation = Math.Max(provisionalTranslation, translationCursor);
+                    canSplitSpeakerChange = false;
                 }
             }
             int index = translation ? (final ? translationCursor : provisionalTranslation) : (final ? sourceCursor : provisionalSource);
             var row = Row(index);
             if (!translation)
             {
-                if (token.TryGetProperty("start_ms", out var start) && row.English.Length == 0) { row.Start = start.GetDouble() / 1000; row.RecordedAt = segment.StartedAt + row.Start; }
-                if (token.TryGetProperty("end_ms", out var end)) row.End = Math.Max(row.Start, end.GetDouble() / 1000);
+                if (token.TryGetProperty("start_ms", out var start))
+                {
+                    double tokenStart = start.GetDouble() / 1000;
+                    if (sourceStartSet.Add(index)) row.Start = tokenStart;
+                    else row.Start = Math.Min(row.Start, tokenStart);
+                    row.RecordedAt = segment.StartedAt + row.Start;
+                }
+                if (token.TryGetProperty("end_ms", out var end))
+                {
+                    double tokenEnd = end.GetDouble() / 1000;
+                    row.End = sourceEndSet.Add(index) ? Math.Max(row.Start, tokenEnd) : Math.Max(row.End, tokenEnd);
+                }
                 if (token.TryGetProperty("speaker", out var speaker)
                     && speaker.ValueKind == JsonValueKind.String && (final || row.Speaker is null))
                     row.Speaker = "Speaker " + speaker.GetString();

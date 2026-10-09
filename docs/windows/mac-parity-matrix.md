@@ -13,7 +13,7 @@ Windows 来源：当前 PR 分支 `feature/windows-mac-parity`；其历史迁移
 | Windows 实现 | 当前 PR 分支 `windows/`；历史迁移来源见上文 | 文件清单、现有能力、待对齐行为 | 没有运行 UI 或真实音频硬件 |
 | Windows 检查底稿 | `docs/sources/windows-*` | 保留原有构建、核心检查和签名包记录 | 历史测试结论只适用于底稿注明的代码版本 |
 | AI 总结呈现 | Mac `EchoMacApp.swift`、`TranscriptViews.swift` | A29 记录 Markdown 分块、默认展开、收起/复制与 Windows 合成验证 | 尚无 GUI 视觉或剪贴板实测 |
-| Soniox 多响应处理 | Mac `SpeechViewModel.handleSonioxMessage` 等生产路径 | A35 在 macOS CI 抽取并运行当前生产 handler，生成五响应合成输出；Windows CI 用它驱动 CoreChecks | 需以本轮 Actions run 成功及归档 fixture 为准；不代表真实云响应或音频验收 |
+| Soniox 多响应处理 | Mac `SpeechViewModel.handleSonioxMessage` 等生产路径 | A35 macOS CI 已生成五响应生产输出并保存；Windows 已修正同响应多 speaker 语义，本机用 artifact 对拍 93 项通过 | 修正后的 Windows CI 仍待复跑；固定合成输入不代表真实云响应或音频验收 |
 | 默认主题与切换顺序 | Mac 默认深色，`AppThemeMode.allCases` 为浅色、深色、系统 | Windows 新配置/缺省字段默认深色，设置项和循环顺序与 Mac 一致；显式保存值保留 | 静态源码及 CoreChecks 通过；系统外观 GUI 尚未实测，见 A31 |
 | 跨显示器悬浮字幕布局与 DPI 变化 | Mac 监听显示器配置变化，按目标屏幕重新计算透明字幕窗位置和宽度，并恢复已保存的屏幕位置 | Windows 按显示器 ID 记住上次屏幕；`AppWindow.Changed` 与 `DisplayAreaWatcher` 更新后重新计算物理像素矩形；拖动/缩放使用屏幕坐标 | A34 的 100/150/200% 合成布局检查通过；真实异 DPI 显示器、拔插、工作区变化仍待 GUI 验收 |
 
@@ -44,7 +44,7 @@ Windows 来源：当前 PR 分支 `feature/windows-mac-parity`；其历史迁移
 
 ## 最高优先级缺口
 
-1. P0：A35 增加 Mac 生产 Soniox handler 与 Windows TokenAssembler 的逐响应 runtime differential；提交后的 Actions 首轮结果、fixture 留档和 SHA-256 尚待记录。A32 双段 Archive 的 Mac→Windows→Mac runtime 检查通过；真实用户历史 Archive 仍未覆盖。
+1. P0：A35 已保存 Mac 生产 Soniox handler 与 Windows TokenAssembler 的逐响应 runtime fixture 和 SHA-256；首轮发现的 speaker 差异已修正，待 GitHub CI 复跑确认。A32 双段 Archive 的 Mac→Windows→Mac runtime 检查通过；真实用户历史 Archive 仍未覆盖。
 2. P1：主界面语言菜单、滚动跟随行为、四类设置和分段配置已接入；A33 完成 12 项启动/控件 UIA smoke，但窄窗口、视觉布局、字幕滚动手感、键盘和 Narrator 仍未实测。
 3. P1：A34 补上上次使用的显示器记忆、DPI/显示器配置变化重排以及跨 DPI 拖动基线；优先完成真实透明合成、点击穿透、多屏和全屏应用验收。悬浮字幕复用同一识别会话和当前字幕状态。
 4. P2：总结面板已补齐 Mac 风格 Markdown 分块、折叠/展开和复制；继续核验自动总结状态反馈、显示条件、主题和窄窗口布局。

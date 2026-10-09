@@ -232,8 +232,9 @@ int finalizedCount = 0; var finalizedSegment = new Segment(); var finalizedAssem
 using (var finalTurn = JsonDocument.Parse("""{"tokens":[{"text":"finished sentence","is_final":true},{"text":"<end>","is_final":true}]}""")) finalizedAssembler.Apply(finalTurn.RootElement);
 Check(finalizedCount == 1, "transcript final boundary triggers a single opt-in correction job");
 int speakerFinalized = 0; var speakerSegment = new Segment(); var speakerAssembler = new TokenAssembler(speakerSegment, _ => { }, _ => speakerFinalized++);
-using (var speakerTurn = JsonDocument.Parse("""{"tokens":[{"text":"first speaker","is_final":true,"speaker":"1","language":"en","start_ms":0,"end_ms":500},{"text":"second speaker","is_final":true,"speaker":"2","language":"ja","start_ms":600,"end_ms":1000},{"text":"<end>","is_final":true}]}""")) speakerAssembler.Apply(speakerTurn.RootElement);
-Check(speakerSegment.Entries.Count == 2 && speakerSegment.Entries[0].English == "first speaker" && speakerSegment.Entries[0].Speaker == "Speaker 1" && speakerSegment.Entries[0].Language == "en" && speakerSegment.Entries[1].English == "second speaker" && speakerSegment.Entries[1].Speaker == "Speaker 2" && speakerSegment.Entries[1].Language == "ja" && speakerFinalized == 2, "final speaker change splits rows, retains detected language and finalizes each anonymous speaker turn once");
+using (var firstSpeakerTurn = JsonDocument.Parse("""{"tokens":[{"text":"first speaker","is_final":true,"speaker":"1","language":"en","start_ms":0,"end_ms":500}]}""")) speakerAssembler.Apply(firstSpeakerTurn.RootElement);
+using (var nextSpeakerTurn = JsonDocument.Parse("""{"tokens":[{"text":"second speaker","is_final":true,"speaker":"2","language":"ja","start_ms":600,"end_ms":1000},{"text":"<end>","is_final":true}]}""")) speakerAssembler.Apply(nextSpeakerTurn.RootElement);
+Check(speakerSegment.Entries.Count == 2 && speakerSegment.Entries[0].English == "first speaker" && speakerSegment.Entries[0].Speaker == "Speaker 1" && speakerSegment.Entries[0].Language == "en" && speakerSegment.Entries[1].English == "second speaker" && speakerSegment.Entries[1].Speaker == "Speaker 2" && speakerSegment.Entries[1].Language == "ja" && speakerFinalized == 2, "final speaker change across responses splits rows, retains language and finalizes each turn once like Mac");
 var languageSegment = new Segment(); var languageAssembler = new TokenAssembler(languageSegment, _ => { });
 void ApplyLanguage(string text) { using var doc = JsonDocument.Parse(text); languageAssembler.Apply(doc.RootElement); }
 ApplyLanguage("""{"tokens":[{"text":"hello","is_final":false,"language":"en"}]}""");
@@ -281,7 +282,7 @@ using (var sonioxFixture = JsonDocument.Parse(File.ReadAllText(sonioxFixturePath
                     && Math.Abs(actual.End - entry.GetProperty("end").GetDouble()) < 0.001;
             }).All(matches => matches)
             && fixtureFinalized == step.GetProperty("expectedFinalizations").GetInt32();
-        Check(stateMatches, $"Mac-derived Soniox fixture response {++fixtureEventIndex} matches snapshots, metadata, timestamps, and finalization callbacks");
+        Check(stateMatches, $"Mac production Soniox fixture response {++fixtureEventIndex} matches snapshots, metadata, timestamps, and finalization callbacks");
     }
 }
 var archive = new Archive { CreatedAt = 800000000, Summary = "已保存总结", SummarizedEntries = { [segment.Entries[0].Id] = TranscriptFiles.SummarySignature(segment.Entries[0].English) }, Segments = [segment, new Segment { StartedAt = 800000010, Entries = [new Subtitle { Start = 0, End = 1, English = "Again" }] }] };
