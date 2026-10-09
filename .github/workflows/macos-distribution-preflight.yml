@@ -40,6 +40,6 @@ jobs:
           bash scripts/macos-package.sh preflight \
             "$RUNNER_TEMP/echo-distribution-preflight/Build/Products/Release/Echo.app" \
             "$RUNNER_TEMP/echo-distribution-check-output"
-          shasum -a 256 -c "$RUNNER_TEMP/echo-distribution-check-output/"*.sha256
+          (cd "$RUNNER_TEMP/echo-distribution-check-output" && shasum -a 256 -c ./*.sha256)
 
       # Deliberately do not upload an unsigned package as a distributable download.
