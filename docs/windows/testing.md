@@ -182,3 +182,11 @@ CoreChecks 检查字幕行加载时读取统一显示状态、并在 ViewModel �
 - 将“有新内容”提示移入字幕 Grid 的独立 `Auto` 行，避免遮住字幕纠正按钮；CoreChecks 静态验证布局、折叠默认状态、`ScrollToLatest` AutomationId 和 transcript follow state 可见性接线。
 - 隔离 Windows Release x64 构建：0 警告、0 错误；CoreChecks 189 项通过。首次运行的合成 WebSocket 测试遇到未完成关闭握手，原始失败日志已保留；隔离重跑完整通过。
 - 没有启动 Echo，也没有做 UIA 或截图验收；真实提示高度、间距、DPI 和视觉效果仍由用户检查。未修改 `macOS/`。日志和哈希见 [A87 来源底稿](../sources/windows-ui-refinement-2026-10-10/README.md)。
+
+## A88 摘要与字幕可用空间 GUI 检查（2026-10-10）
+
+- 使用临时独立包身份和合成存档/摘要，在 144 DPI 下测试 Mac 理想窗口 820×650 DIP 与最小窗口 680×520 DIP；未启动正式安装包、未读用户存档/API Key、未录音或联网。
+- 首次截图复现展开摘要将 `TranscriptList` 压至 0 高。最终实现摘要让位策略、120/140 DIP 字幕最小区，以及按稳定窗口宽度更新的录音工具栏布局。
+- 最终 UIA：820×650 时字幕列表 140 DIP，连接状态和音源按钮同排；680×520 时列表 120 DIP、合成字幕完整可见，工具栏使用紧凑换行。最终深色截图和测量 JSON 见 [A88 底稿](../sources/windows-a88-gui-review-2026-10-10/README.md)。
+- CoreChecks 191 项通过；Release x64 和隔离 Debug 包构建均 0 警告/错误。测试包关闭并注销，`macOS/` 未改。
+- **仍待视觉验收**：Mac 并排截图、浅色/高对比、Narrator/键盘焦点、其他 DPI/宽度、录音权限和滚动状态。

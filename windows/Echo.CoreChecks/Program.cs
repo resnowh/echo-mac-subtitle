@@ -161,6 +161,7 @@ Check(transcriptRegion?.Attribute("Opacity") is null
     "transcript divider opacity is isolated to its one-pixel line so subtitles, empty state, and unread-content control keep full contrast");
 var summaryPanel = audioModePageXaml.Descendants(XName.Get("Grid", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
     .FirstOrDefault(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value == "SummarySection");
+var summaryContainer = summaryPanel?.Parent;
 var correctionButton = audioModePageXaml.Descendants(XName.Get("Button", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
     .FirstOrDefault(element => element.Attribute("Click")?.Value == "Correction_Click");
 var sourceTranscriptText = audioModePageXaml.Descendants(XName.Get("TextBlock", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
@@ -242,8 +243,16 @@ var archiveRow = archiveButton?.Parent as XElement;
 var waveformBorder = audioModePageXaml.Descendants(XName.Get("Border", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
     .FirstOrDefault(element => element.Elements(XName.Get("StackPanel", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
         .Any(panel => panel.Attribute(mainPageXamlNamespace + "Name")?.Value == "WaveformBars"));
-Check(recordingPanel?.Attribute("Margin")?.Value == "20"
-    && recordingPanel.Attribute("RowSpacing")?.Value == "18"
+Check(recordingPanel?.Attribute("Margin")?.Value == "16"
+    && recordingPanel.Attribute("RowSpacing")?.Value == "12"
+    && recordingPanel.Descendants(XName.Get("AdaptiveTrigger", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Any(element => element.Attribute("MinWindowWidth")?.Value == "700") == true
+    && recordingPanel.Descendants(XName.Get("VisualState.Setters", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Elements(XName.Get("Setter", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Any(element => element.Attribute("Target")?.Value == "RecordingPanel.Margin" && element.Attribute("Value")?.Value == "20")
+    && recordingPanel.Descendants(XName.Get("VisualState.Setters", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Elements(XName.Get("Setter", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Any(element => element.Attribute("Target")?.Value == "RecordingPanel.RowSpacing" && element.Attribute("Value")?.Value == "18")
     && archiveRow?.Element(XName.Get("Grid.ColumnDefinitions", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))?
         .Elements(XName.Get("ColumnDefinition", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
         .FirstOrDefault()?.Attribute("Width")?.Value == "*"
@@ -252,6 +261,12 @@ Check(recordingPanel?.Attribute("Margin")?.Value == "20"
     && File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "MainPage.xaml.cs"))
         .Contains("await ViewModel.SummarizeAsync(scope)", StringComparison.Ordinal),
     "main spacing, expanding archive selection, quiet waveform surface and summary scope actions follow the Mac layout contract");
+Check(transcriptCodeBehindSource.Contains("double availableWidth = XamlRoot?.Size.Width ?? RecordingPanel.ActualWidth", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("bool isWide = availableWidth >= 700", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("Grid.SetRow(ConnectionStatusControl, isWide ? 0 : 1)", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("Grid.SetColumn(ConnectionStatusControl, isWide ? 3 : 0)", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("Grid.SetColumnSpan(ConnectionStatusControl, isWide ? 1 : 4)", StringComparison.Ordinal),
+    "recording toolbar and margins adapt directly to the available content width");
 var appResources = XDocument.Load(Path.Combine(AppContext.BaseDirectory, "Fixtures", "App.xaml"));
 var darkTheme = appResources.Descendants(XName.Get("ResourceDictionary", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
     .FirstOrDefault(element => element.Attribute(mainPageXamlNamespace + "Key")?.Value == "Dark");
@@ -368,7 +383,7 @@ Check(startRecordingControl.Attribute("AutomationProperties.Name")?.Value == "�
     && connectionStatus.Attribute("Grid.Row")?.Value == "1"
     && connectionStatus.Attribute("Grid.ColumnSpan")?.Value == "4"
     && responsiveRecordingState.Descendants(presentationNamespace + "AdaptiveTrigger")
-        .Any(element => element.Attribute("MinWindowWidth")?.Value == "760")
+        .Any(element => element.Attribute("MinWindowWidth")?.Value == "700")
     && responsiveRecordingState.Elements(presentationNamespace + "VisualState.Setters")
         .Elements(presentationNamespace + "Setter")
         .Any(element => element.Attribute("Target")?.Value == "ConnectionStatusControl.(Grid.Row)"
@@ -473,6 +488,23 @@ Check(summaryBlocks.Select(block => (block.Kind, block.Text)).SequenceEqual([
     (SummaryMarkdownBlockKind.Bullet, "第一项"),
     (SummaryMarkdownBlockKind.Bullet, "第二项")
 ]), "summary markdown blocks match the Mac title, heading, bullet, and paragraph rules across Windows line endings");
+var summaryLayout = SummaryPanelLayoutPolicy.Calculate(flexibleHeight: 300, fixedPanelHeight: 108, minimumTranscriptHeight: 140, preferredContentMaxHeight: 220);
+var compactSummaryLayout = SummaryPanelLayoutPolicy.Calculate(flexibleHeight: 150, fixedPanelHeight: 108, minimumTranscriptHeight: 120, preferredContentMaxHeight: 220);
+var summaryLayoutRecordingPanel = audioModePageXaml.Descendants(XName.Get("Grid", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .FirstOrDefault(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value == "RecordingPanel");
+var summaryScrollViewer = summaryPanel?.Descendants(XName.Get("ScrollViewer", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .FirstOrDefault(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value == "SummaryScrollViewer");
+Check(summaryLayout == new SummaryPanelLayout(160, 52)
+    && compactSummaryLayout.PanelMaxHeight == 30 && compactSummaryLayout.ContentMaxHeight == 0
+    && summaryLayoutRecordingPanel?.Element(XName.Get("Grid.RowDefinitions", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))?
+        .Elements(XName.Get("RowDefinition", "http://schemas.microsoft.com/winfx/2006/xaml/presentation")).ElementAtOrDefault(2)?.Attribute("MinHeight")?.Value == "120"
+    && summaryContainer?.Attribute(mainPageXamlNamespace + "Name")?.Value == "SummaryContainer"
+    && summaryScrollViewer?.Parent?.Element(XName.Get("Grid.RowDefinitions", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))?
+        .Elements(XName.Get("RowDefinition", "http://schemas.microsoft.com/winfx/2006/xaml/presentation")).ElementAtOrDefault(2)?.Attribute("Height")?.Value == "*"
+    && transcriptCodeBehindSource.Contains("RecordingPanel.ActualHeight >= 560 ? 140 : 120", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("SummaryPanelLayoutPolicy.Calculate(flexibleHeight, fixedSummaryHeight, minimumTranscriptHeight, 220)", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("SummaryScrollViewer.MaxHeight = layout.ContentMaxHeight", StringComparison.Ordinal),
+    "expanded AI summary yields excess height to the transcript while retaining its Mac 220 DIP content cap");
 Check(segmentation.SonioxMaxEndpointDelayMilliseconds == 3000 && segmentation.SonioxEndpointSensitivity == -.3
     && segmentation.LocalSilenceThresholdSeconds == 4.5 && segmentation.LocalSilenceMinimumWordCount == 5
     && segmentation.LongSegmentWordThreshold == 80 && segmentation.LongSegmentDurationThresholdSeconds == 90,

@@ -1,0 +1,34 @@
+{
+  "dpi": 144,
+  "widthDip": 680.0,
+  "heightDip": 520.0,
+  "transcript": {
+    "type": "List",
+    "name": "双语字幕记录",
+    "automationId": "TranscriptList",
+    "className": "ListView",
+    "isEnabled": true,
+    "isOffscreen": false,
+    "x": 301,
+    "y": 480,
+    "width": 950,
+    "height": 180,
+    "selector": "TranscriptList",
+    "scrollDir": "v",
+    "isInvokable": false
+  },
+  "status": {
+    "type": "Text",
+    "name": "录音状态：准备就绪 · 先在服务设置中填写 Soniox API Key",
+    "automationId": "Status",
+    "className": "TextBlock",
+    "isEnabled": true,
+    "isOffscreen": false,
+    "x": 325,
+    "y": 729,
+    "width": 373,
+    "height": 24,
+    "selector": "Status",
+    "isInvokable": false
+  }
+}

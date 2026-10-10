@@ -10,11 +10,11 @@
 | Speaker/时间戳 | 仅在当前显示配置启用 speaker 且行内标签非空时显示 Speaker；时间始终显示，次级 caption/等宽数字 | 12 DIP secondary，Tabular numeral；A86 令 Speaker 与分隔点跟随当前活动/保存配置及非空字段 | CoreChecks 与 Release x64 编译通过；字体和实际间距仍待截图验收 |
 | 双栏正文/分隔线 | 翻译开启时双栏顶部对齐、间距14；关闭时原文占整行；body、lineSpacing3、padding7；低对比度 Divider | 双栏固定平分，未翻译时右侧空白 | 开翻译等宽双栏；关翻译折叠译文、原文 Grid.ColumnSpan=2；间距14、正文15 DIP、自动换行；行上下6；1 DIP 分隔线 .55 | CoreChecks/构建通过；当前会话/下次会话切换行为由静态契约验证，GUI 像素仍待看 |
 | 纠正操作 | 元信息行右侧 Pencil + 文字，borderless/secondary | 普通按钮 padding `8,2`、min-height 28 | 透明按钮 padding `4,2`、min-height30；12 DIP 铅笔/文字，保留逐字幕 AutomationId 和焦点状态 | CoreChecks/构建通过；焦点可见态未 GUI 检查 |
-| 录音控制 | gap10；音源宽148；同一切换按钮宽126；空闲 Mint、录音 red；8点状态圆点；ViewThatFits 空间不足时换行 | 三态 ComboBox、默认 WinUI 高度/边框、状态固定横排 | 轻量三态菜单保留实时路由；A82 开始/停止统一高34、宽126；A84 窗宽小于760 DIP 时将连接状态移到按钮组下方 | CoreChecks/构建及 PR CI 验证；运行态缩放仍待 GUI 目测 |
+| 录音控制 | gap10；音源宽148；同一切换按钮宽126；空闲 Mint、录音 red；8点状态圆点；ViewThatFits 空间不足时换行 | 三态 ComboBox、默认 WinUI 高度/边框、状态固定横排 | 轻量三态菜单保留实时路由；A82 开始/停止统一高34、宽126；A88 按实际内容宽度700 DIP切换状态同行/换行，宽屏边距20、窄屏16 | A88 在144 DPI实测820/680 DIP并以UIA确认；其他DPI及键盘焦点待验 |
 | 存档工具栏 | gap10；存档最大260，Spacer 将导出/更多推右 | Auto/Auto/Auto/*，操作靠左 | */Auto/Auto，存档伸展且内容左对齐，导出/更多右靠 | XAML 布局契约通过；窄窗口实际换行未测 |
 | 波形 | 48 samples，宽/间距3、圆角2，高52、pad12、quaternary opacity .35 | 48点与52高匹配，默认 CardBackgroundFill | 保留真实48点映射，低强调主题表面深色6%/浅色4%/HC系统色 | CoreChecks/构建通过；真实声卡和合成对照未测 |
-| AI 总结 | 轻量面板，pad12、圆角10、quaternary opacity .35；标题右侧总结菜单；正文最大高220 | 默认折叠 Expander，scope ComboBox 与生成按钮隐藏在内容区；卡片默认填充 | 主题低强调表面，标题右侧菜单直接提供三种总结范围；状态、结果滚动、展开/复制保留 | CoreChecks/构建通过；主题截图和内容挤压未测 |
-| 截图对照 | 需要同数据、同窗口/DPI/主题看实际呈现 | 当前用户附件无法用作 Echo 参考 | 本轮未启动应用；附件图是邮件界面 | 尚未完成 Mac/Windows 并排截图视觉验收；不声称像素一致 |
+| AI 总结 | 轻量面板，pad12、圆角10、quaternary opacity .35；标题右侧总结菜单；正文最大高220 | 默认折叠 Expander，scope ComboBox 与生成按钮隐藏在内容区；卡片默认填充 | 主题低强调表面，标题右侧菜单直接提供三种总结范围；状态、结果滚动、展开/复制保留；A88 按剩余空间约束正文并保留字幕最小高度 | CoreChecks、构建与合成摘要截图通过；其他主题和较长文本滚动待验 |
+| 截图对照 | 需要同数据、同窗口/DPI/主题看实际呈现 | 当前用户附件无法用作 Echo 参考 | A88 有隔离合成数据的 Windows 深色截图，820×650 与680×520 DIP、144 DPI | Windows 截图已留底；尚无 Mac 并排图，也未声称像素一致 |
 
 核验日期：2026-10-10
 macOS 基线：`origin/main`，`ae0359dc90da0ccb5e526a275da1747954a49a4f`

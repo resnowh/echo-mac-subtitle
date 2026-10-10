@@ -56,6 +56,16 @@ public sealed partial class MainPage : Page
     public MainPage()
     {
         InitializeComponent();
+        RecordingPanel.SizeChanged += (_, _) =>
+        {
+            UpdateResponsiveLayout();
+            UpdateSummaryLayout();
+        };
+        RecordingPanel.Loaded += (_, _) => DispatcherQueue.TryEnqueue(() =>
+        {
+            UpdateResponsiveLayout();
+            UpdateSummaryLayout();
+        });
         var c = ViewModel.Config;
         Mode.SelectedIndex = c.AudioInputMode;
         InitializeLanguageFlyouts();
@@ -175,7 +185,11 @@ public sealed partial class MainPage : Page
                 InitializeLanguageFlyouts();
             }
             if (e.PropertyName == nameof(ViewModel.Summary)) RenderSummary();
-            if (e.PropertyName is nameof(ViewModel.HasGeneratedSummary) or nameof(ViewModel.SummaryStatus) or nameof(ViewModel.IsRecording)) UpdateSummaryVisibility();
+            if (e.PropertyName is nameof(ViewModel.HasGeneratedSummary) or nameof(ViewModel.SummaryStatus) or nameof(ViewModel.IsRecording) or nameof(ViewModel.IsSummaryPanelVisible))
+            {
+                UpdateSummaryVisibility();
+                DispatcherQueue.TryEnqueue(UpdateSummaryLayout);
+            }
         };
         RenderSummary();
         UpdateAudioDisplay();
@@ -712,6 +726,7 @@ public sealed partial class MainPage : Page
     {
         isSummaryExpanded = !isSummaryExpanded;
         UpdateSummaryVisibility();
+        DispatcherQueue.TryEnqueue(UpdateSummaryLayout);
     }
     private void SummaryCopy_Click(object sender, RoutedEventArgs e)
     {
@@ -763,6 +778,35 @@ public sealed partial class MainPage : Page
         SummaryScrollViewer.Visibility = ViewModel.HasGeneratedSummary && isSummaryExpanded ? Visibility.Visible : Visibility.Collapsed;
         SummaryExpandButton.Content = isSummaryExpanded ? "收起" : "展开全部";
         SummaryRecordingHint.Visibility = ViewModel.IsRecording && !ViewModel.HasGeneratedSummary ? Visibility.Visible : Visibility.Collapsed;
+    }
+    private void UpdateSummaryLayout()
+    {
+        if (SummaryContainer.Visibility != Visibility.Visible || RecordingPanel.RowDefinitions.Count < 4) return;
+        double fixedPageRows = RecordingPanel.RowDefinitions[0].ActualHeight
+            + RecordingPanel.RowDefinitions[1].ActualHeight
+            + RecordingPanel.RowDefinitions[3].ActualHeight;
+        double flexibleHeight = RecordingPanel.ActualHeight
+            - fixedPageRows
+            - RecordingPanel.RowSpacing * (RecordingPanel.RowDefinitions.Count - 1);
+        double fixedSummaryHeight = SummaryContainer.Padding.Top + SummaryContainer.Padding.Bottom
+            + SummarySection.RowSpacing * (SummarySection.RowDefinitions.Count - 1)
+            + SummarySection.RowDefinitions[0].ActualHeight
+            + SummarySection.RowDefinitions[1].ActualHeight
+            + SummarySection.RowDefinitions[3].ActualHeight;
+        double minimumTranscriptHeight = RecordingPanel.ActualHeight >= 560 ? 140 : 120;
+        var layout = SummaryPanelLayoutPolicy.Calculate(flexibleHeight, fixedSummaryHeight, minimumTranscriptHeight, 220);
+        SummaryContainer.MaxHeight = layout.PanelMaxHeight;
+        SummaryScrollViewer.MaxHeight = layout.ContentMaxHeight;
+    }
+    private void UpdateResponsiveLayout()
+    {
+        double availableWidth = XamlRoot?.Size.Width ?? RecordingPanel.ActualWidth;
+        bool isWide = availableWidth >= 700;
+        RecordingPanel.Margin = new Thickness(isWide ? 20 : 16);
+        RecordingPanel.RowSpacing = isWide ? 18 : 12;
+        Grid.SetRow(ConnectionStatusControl, isWide ? 0 : 1);
+        Grid.SetColumn(ConnectionStatusControl, isWide ? 3 : 0);
+        Grid.SetColumnSpan(ConnectionStatusControl, isWide ? 1 : 4);
     }
     private static TextBlock CreateSummaryText(string value, double fontSize, bool emphasize = false) => new()
     {
