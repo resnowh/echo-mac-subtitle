@@ -165,15 +165,16 @@ Check(DesktopSubtitleOverlayPresentation.ShouldShowOriginal(originalOnlyState, t
     && DesktopSubtitleOverlayPresentation.ShouldShowTranslation(translatedState, translationOnlySettings)
     && DesktopSubtitleOverlayPresentation.ShouldShowOriginal(translatedState, noLanguageSettings),
     "overlay visibility matches Mac when translation is disabled, when only translation is selected, and when both language switches are off");
-var overlayXaml = XDocument.Load(Path.Combine(AppContext.BaseDirectory, "Fixtures", "DesktopSubtitleOverlayWindow.xaml"));
 XNamespace presentationNamespace = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 XNamespace xamlNamespace = "http://schemas.microsoft.com/winfx/2006/xaml";
-var overlaySubtitleTexts = overlayXaml.Descendants(presentationNamespace + "TextBlock")
-    .Where(element => element.Attribute(xamlNamespace + "Name")?.Value is "OriginalShadow" or "OriginalText" or "TranslationShadow" or "TranslationText")
-    .ToArray();
-Check(overlaySubtitleTexts.Length == 4 && overlaySubtitleTexts.All(element =>
-        element.Attribute("MaxLines")?.Value == "2" && element.Attribute("TextTrimming")?.Value == "CharacterEllipsis"),
-    "overlay original, translation and shadow text all follow Mac two-line tail truncation");
+Check(normalizedNativeOverlaySource.Contains("new CanvasTextLayout(drawing, text, format, width, maxLayoutHeight)", StringComparison.Ordinal)
+    && normalizedNativeOverlaySource.Contains("TrimmingGranularity = CanvasTextTrimmingGranularity.Character", StringComparison.Ordinal)
+    && normalizedNativeOverlaySource.Contains("TrimmingSign = CanvasTrimmingSign.Ellipsis", StringComparison.Ordinal)
+    && normalizedNativeOverlaySource.Contains("drawing.DrawTextLayout(layout", StringComparison.Ordinal),
+    "native DirectWrite overlay uses a bounded two-line layout with Mac-equivalent tail ellipsis for text and shadows");
+Check(normalizedNativeOverlaySource.Contains("private const int MaxSubtitleLines = 2;", StringComparison.Ordinal)
+    && normalizedNativeOverlaySource.Contains("float maxLayoutHeight = Math.Min(height, fontSize * 1.175f * MaxSubtitleLines);", StringComparison.Ordinal),
+    "native overlay constrains each subtitle line to at most two DirectWrite lines");
 var mainPageXaml = XDocument.Load(Path.Combine(AppContext.BaseDirectory, "Fixtures", "MainPage.xaml"));
 var startRecordingControl = mainPageXaml.Descendants(presentationNamespace + "Button")
     .Single(element => element.Attribute("AutomationProperties.AutomationId")?.Value == "StartRecording");

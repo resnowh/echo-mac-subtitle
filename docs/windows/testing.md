@@ -21,7 +21,7 @@ Windows 仓库已有 `windows/Echo.CoreChecks/Program.cs`，覆盖转写 token �
 5. A34 本轮未启动 GUI 或已安装 Echo；显示器事件、透明像素与点击穿透在真实多屏设备上的行为仍待 UI 验收。
 6. A35 的 macOS runtime harness 从当前 `macOS/ViewModels/SpeechViewModel.swift` 临时提取生产处理函数，并与生产 `TranscriptModels.swift` 一起编译；只使用合成文本，不启动 Echo、不采集音频、不连接服务。首轮 CI 暴露同响应多 speaker 的差异；Windows 修正后 run `37953208733` 的 Mac 夹具生成、Windows 93 项对拍/Release x64 构建及 Mac Archive 回读全部通过。PR 的 Mac CI 与 unsigned package preflight 也通过。
 7. A37 参照 Soniox 官方 WebSocket、鉴权和端点文档，核实 Windows 使用 Bearer 握手而配置不携带 Key；本地模拟 WebSocket 覆盖握手后 error frame 的认证/配额/服务失败分类。官方资料摘录和 SHA-256 源清单见 [A37](../sources/windows-a37-soniox-auth-protocol-2026-10-10.md)；未调用真实 Soniox 服务。
-8. A38 比对 Mac `subtitleLines` 后修正 Windows 浮层：翻译关闭时强制展示原文，原文/译文/阴影层均设为最多两行并在尾部省略；CoreChecks 断言语言可见组合与四个 XAML TextBlock 的限制。Release 构建验证 XAML 可编译；没有启动窗口，真实透明、截断排版和多屏行为仍待 GUI 验收。
+8. A38 比对 Mac `subtitleLines` 后修正 Windows 浮层的语言可见规则。最初的行数检查只覆盖已退役的 XAML 浮层；A76 删除了这套旧控件，并改为检查实际 Win2D/DirectWrite 绘制路径的两行布局高度和尾部省略号。当前源码契约、166 项 CoreChecks 和 Release 构建通过；当时及本轮均未用真实字幕窗口验证字体截断和透明合成，仍需隔离 GUI 验收。
 9. A39 对比 Mac `handleSonioxMessage` 与 Windows 接收路径，修正空有效响应期间的静默计时；CoreChecks 覆盖空 token、端点、结束和错误响应。数据底稿、源码 SHA-256 及控制流摘录见 [A39](../sources/windows-a39-soniox-quiet-activity-2026-10-10.md)。
 10. A40 对比 Mac `rmsLevel`、`recordAudioLevel` 和 `WaveformView`，将 Windows 电平与波形改为按来源 RMS、20Hz 快攻慢放、48 个真实历史样本；CoreChecks 覆盖采样边界、平滑、容量和重置。合成逻辑与 XAML 编译通过，真实输入与动态视觉尚未实测，来源哈希见 [A40](../sources/windows-a40-audio-meter-parity-2026-10-10.md)。
 11. A41 对比 Mac 摘要面板可见条件与状态提示：Windows 现在按自动总结开关、已有总结或状态文字决定显隐；状态和录音提示显示在面板中。105 项 CoreChecks 与 Release x64 构建通过，未启动应用、未调用 DeepSeek；真实 GUI 排版和自动总结生命周期仍待验。源码 SHA-256 与来源摘录见 [A41](../sources/windows-a41-summary-panel-parity-2026-10-10.md)。
@@ -129,3 +129,7 @@ Mac `SpeechViewModel` 在麦克风安装后 1.2 秒无原始回调时，以 450m
 ## A75 麦克风转换 PCM 健康监测（2026-10-10）
 
 对照 Mac `SpeechViewModel`：首次回调后还需在 2.5 秒内产出转换后的音频；超时应明确报错并停止，不能把转换故障当作无输入而无限重试。Windows 以当前采集源的首个重采样输出作为 PCM 健康信号；热切换前用独立临时重采样器探测候选缓冲，不消耗提交后新会话的重采样状态。WASAPI Silent 标记按有效静音包处理。合成采集器 + 本机 WebSocket 验证原始输入存在但无转换输出时明确失败、单一识别连接，以及初始和热切换均需等待转换输出。165 项 CoreChecks 通过，Release x64 0 警告、0 错误。没有打开音频设备、调用 Soniox 或保存音频；真实转换异常和设备拔插仍待实机验收。原始输出、Mac 源码摘录、源码哈希及 Git 基线见 [A75 底稿](../sources/windows-a75-microphone-conversion-health-2026-10-10/README.md)。
+
+## A76 原生浮层双行尾部省略（2026-10-10）
+
+逐项复核 Mac `DesktopSubtitleOverlayView.subtitleText` 与 Windows 实际运行路径时发现，A38 的旧检查只读取已弃用的 WinUI XAML 浮层；当前原生 HWND/DirectWrite 绘制并未受该检查覆盖。现已删除不再实例化的 XAML 浮层和代码后置，并让原生渲染器将每条字幕布局高度限制为两行，使用字符级尾部省略号绘制文字与阴影。CoreChecks 改为检查原生绘制实现，166 项通过；Release x64 构建 0 警告、0 错误。未启动 Echo 窗口，也未保存桌面截图；真实字体行高、溢出文字视觉、RTL/复杂脚本、透明合成及 DPI 仍待隔离 GUI 验收。原始 Mac 代码摘录、构建/测试日志、文件哈希和边界见 [A76 来源底稿](../sources/windows-a76-overlay-two-line-rendering-2026-10-10/README.md)。

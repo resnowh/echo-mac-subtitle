@@ -60,6 +60,7 @@ public sealed class NativeDesktopSubtitleOverlayWindow
     private const int ResizeGripDip = 22;
     private const int OverlayHeightDip = 150;
     private const int HorizontalPaddingDip = 18;
+    private const int MaxSubtitleLines = 2;
 
     private static readonly string WindowClassName = "Echo.Windows.NativeSubtitleOverlay.1";
     private static readonly ConcurrentDictionary<nint, NativeDesktopSubtitleOverlayWindow> Instances = new();
@@ -449,6 +450,8 @@ public sealed class NativeDesktopSubtitleOverlayWindow
         {
             FontFamily = "Segoe UI",
             FontSize = fontSize,
+            LineSpacing = fontSize * 1.175f,
+            LineSpacingBaseline = fontSize * .92f,
             FontWeight = new FontWeight { Weight = weight },
             HorizontalAlignment = CanvasHorizontalAlignment.Center,
             VerticalAlignment = CanvasVerticalAlignment.Center,
@@ -456,6 +459,8 @@ public sealed class NativeDesktopSubtitleOverlayWindow
             TrimmingGranularity = CanvasTextTrimmingGranularity.Character,
             TrimmingSign = CanvasTrimmingSign.Ellipsis
         };
+        float maxLayoutHeight = Math.Min(height, fontSize * 1.175f * MaxSubtitleLines);
+        using var layout = new CanvasTextLayout(drawing, text, format, width, maxLayoutHeight);
         var rect = new Rect(HorizontalPaddingDip * dpiScale, y, width, height);
         byte opacity = (byte)Math.Clamp((int)Math.Round(settings.Opacity * 255), 0, 255);
         if (shadow && settings.ShadowStrength > 0)
@@ -465,14 +470,14 @@ public sealed class NativeDesktopSubtitleOverlayWindow
             double dx = 0.8 * dpiScale;
             double dy = 1.5 * dpiScale;
             var shadowRect = new Rect(rect.X, rect.Y + dy, rect.Width, rect.Height);
-            drawing.DrawText(text, shadowRect, shadowBrush, format);
+            drawing.DrawTextLayout(layout, (float)shadowRect.X, (float)shadowRect.Y, shadowBrush);
             shadowRect = new Rect(rect.X - dx, rect.Y + dy, rect.Width, rect.Height);
-            drawing.DrawText(text, shadowRect, shadowBrush, format);
+            drawing.DrawTextLayout(layout, (float)shadowRect.X, (float)shadowRect.Y, shadowBrush);
             shadowRect = new Rect(rect.X + dx, rect.Y + dy, rect.Width, rect.Height);
-            drawing.DrawText(text, shadowRect, shadowBrush, format);
+            drawing.DrawTextLayout(layout, (float)shadowRect.X, (float)shadowRect.Y, shadowBrush);
         }
         using var textBrush = new CanvasSolidColorBrush(canvasDevice, Color.FromArgb(opacity, 255, 255, 255));
-        drawing.DrawText(text, rect, textBrush, format);
+        drawing.DrawTextLayout(layout, (float)rect.X, (float)rect.Y, textBrush);
     }
 
     private void DrawResizeGrip(CanvasDrawingSession drawing, int width, int height)
