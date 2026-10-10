@@ -50,3 +50,11 @@
 - `git-baseline.txt`：刷新后的基线引用。
 
 本轮结论是源码级条件和 XAML 构建已验证；Mac/Windows 截图视觉验收仍未完成，不将静态检查描述为像素级匹配。
+
+## 提交与 GitHub CI
+
+- Windows UI 修改提交：`e2ad87f3a125391ce252883290e1c47700d8e822`，已推送至 [PR #6](https://github.com/resnowh/echo-mac-subtitle/pull/6)，目标仍为 `feature/windows-mac-parity`。
+- Windows CI：run [`38028073622`](https://github.com/resnowh/echo-mac-subtitle/actions/runs/38028073622) 全部 6 个 job 通过，含 CoreChecks、Release x64 和 Mac Archive/SRT 回读。
+- macOS CI：run [`38028073642`](https://github.com/resnowh/echo-mac-subtitle/actions/runs/38028073642) 通过。
+- macOS unsigned distribution preflight：run [`38028073669`](https://github.com/resnowh/echo-mac-subtitle/actions/runs/38028073669) 通过。
+- 上述 run 的原始 JSON 和 PR check 摘要见 `windows-ci-e2ad87f.json`、`macos-ci-e2ad87f.json`、`distribution-preflight-e2ad87f.json`、`pr-checks-e2ad87f.json`。
