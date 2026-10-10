@@ -3,6 +3,7 @@ using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 using System.Buffers;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Echo_Windows.Core;
 
@@ -26,6 +27,7 @@ public interface ISpeechSessionCapture : IDisposable
     bool IsFollowingDefault(DataFlow flow);
     void Start(int mode, string? outputId, string? inputId);
     Task<bool> WaitForMicrophoneInputFrameAsync(bool prepared, TimeSpan timeout, CancellationToken cancellationToken);
+    Task<bool> WaitForMicrophoneConvertedFrameAsync(bool prepared, TimeSpan timeout, CancellationToken cancellationToken);
     void Restart(int mode, string? outputId, string? inputId);
     void PrepareRestart(int mode, string? outputId, string? inputId);
     void CommitPreparedRestart();
@@ -72,6 +74,7 @@ public sealed class AudioCapture : ISpeechSessionCapture
 {
     public const double PrebufferSeconds = 2.5;
     public static readonly TimeSpan MicrophoneFirstFrameTimeout = TimeSpan.FromMilliseconds(1200);
+    public static readonly TimeSpan MicrophoneConversionTimeout = TimeSpan.FromMilliseconds(2500);
     public static readonly TimeSpan MicrophoneRetryDelay = TimeSpan.FromMilliseconds(450);
     public const int MicrophoneStartupRetryLimit = 2;
     private readonly object gate = new();
@@ -130,6 +133,53 @@ public sealed class AudioCapture : ISpeechSessionCapture
             return true;
         }
         catch (TimeoutException) { return false; }
+    }
+    public async Task<bool> WaitForMicrophoneConvertedFrameAsync(bool prepared, TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        Source? microphone;
+        lock (gate)
+        {
+            List<Source>? target = prepared ? preparedSources : sources;
+            microphone = target?.FirstOrDefault(source => source.Flow == DataFlow.Capture);
+        }
+        if (microphone is null) return false;
+
+        if (!prepared)
+        {
+            try
+            {
+                await microphone.FirstConvertedFrame.Task.WaitAsync(timeout, cancellationToken);
+                return true;
+            }
+            catch (TimeoutException) { return false; }
+        }
+
+        ISampleProvider probe;
+        lock (gate)
+        {
+            if (preparedSources?.Contains(microphone) != true) return false;
+            probe = ToMono16k(microphone.Buffer.Samples);
+        }
+        var convertedSamples = new float[320];
+        var timer = Stopwatch.StartNew();
+        while (timer.Elapsed < timeout)
+        {
+            lock (gate)
+            {
+                if (preparedSources?.Contains(microphone) != true) return false;
+                if (Volatile.Read(ref microphone.StartupFailure) is { } startupError) throw startupError;
+                if (microphone.FirstConvertedFrame.Task.IsCompletedSuccessfully) return true;
+                if (probe.Read(convertedSamples.AsSpan()) > 0)
+                {
+                    microphone.FirstConvertedFrame.TrySetResult();
+                    return true;
+                }
+            }
+            TimeSpan remaining = timeout - timer.Elapsed;
+            if (remaining <= TimeSpan.Zero) break;
+            await Task.Delay(remaining < TimeSpan.FromMilliseconds(10) ? remaining : TimeSpan.FromMilliseconds(10), cancellationToken);
+        }
+        return false;
     }
     public void Restart(int mode, string? outputId, string? inputId)
     {
@@ -272,13 +322,20 @@ public sealed class AudioCapture : ISpeechSessionCapture
         var buffer = new BoundedAudioPrebuffer(capture.WaveFormat, PrebufferSeconds);
         var source = new Source(capture, buffer, ToMono16k(buffer.Samples), flow) { Staged = staged };
         target.Add(source);
-        source.DataHandler = (data, bytesRecorded, _, _) =>
+        source.DataHandler = (data, flags, _, _) =>
         {
             if (source.Stopping) return;
+            if (flags.HasFlag(AudioClientBufferFlags.Silent))
+            {
+                source.FirstInputFrame.TrySetResult();
+                source.FirstConvertedFrame.TrySetResult();
+                return;
+            }
+            if (data.IsEmpty) return;
             try
             {
                 buffer.AddSamples(data);
-                if (bytesRecorded > 0) source.FirstInputFrame.TrySetResult();
+                source.FirstInputFrame.TrySetResult();
             }
             catch (Exception error)
             {
@@ -376,6 +433,7 @@ public sealed class AudioCapture : ISpeechSessionCapture
         public ISampleProvider Resampled { get; } = resampled;
         public DataFlow Flow { get; } = flow;
         public TaskCompletionSource FirstInputFrame { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource FirstConvertedFrame { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public ClockDriftController Drift { get; } = new();
         public float[] InputFrame { get; } = new float[320 + ClockDriftController.MaximumFrameAdjustment];
         public float[] OutputFrame { get; } = new float[320];
@@ -390,6 +448,7 @@ public sealed class AudioCapture : ISpeechSessionCapture
             int inputFrames = Drift.InputFramesFor(OutputFrame.Length, Buffer.BufferedSeconds);
             var input = InputFrame.AsSpan(0, inputFrames);
             int read = Resampled.Read(input);
+            if (read > 0) FirstConvertedFrame.TrySetResult();
             if (read < inputFrames) input[read..].Clear();
             if (read <= 0) return 0;
             double sourceStride = (double)(inputFrames - 1) / (OutputFrame.Length - 1);

@@ -71,6 +71,11 @@ Check(correctionRecognitionSnapshot.Matches(correctionPreferences)
     && !correctionRecognitionSnapshot.Matches(new Preferences { SourceLanguage = "en", TargetLanguage = "zh", Translate = true, Strict = false, Speakers = false }),
     "AI correction recognition snapshots become stale when any Mac-equivalent language or speaker option changes");
 var mainPageViewModelSource = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "MainPageViewModel.cs"));
+var audioCaptureSource = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "AudioCapture.cs"));
+Check(audioCaptureSource.Contains("flags.HasFlag(AudioClientBufferFlags.Silent)", StringComparison.Ordinal)
+    && audioCaptureSource.Contains("buffer.AddSamples(data)", StringComparison.Ordinal)
+    && audioCaptureSource.Contains("source.FirstConvertedFrame.TrySetResult()", StringComparison.Ordinal),
+    "WASAPI microphone readiness accepts silent packets and marks converted output only after valid samples are buffered");
 Check(mainPageViewModelSource.Contains("CorrectionRecognitionSnapshot.Capture(Config)", StringComparison.Ordinal)
     && mainPageViewModelSource.Contains("!recognitionSnapshot.Matches(Config)", StringComparison.Ordinal)
     && mainPageViewModelSource.Contains("旧建议已忽略", StringComparison.Ordinal),
@@ -1386,6 +1391,7 @@ using (var switchTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(12))
         switchSession.Status += message => switchStatuses.Enqueue(message);
         await switchSession.StartAsync(new Preferences(), "synthetic", 1, null, null, switchTimeout.Token);
         bool microphoneStartupRetried = syntheticCapture.MicrophoneReadinessChecks == 2
+            && syntheticCapture.MicrophoneConversionChecks == 1
             && syntheticCapture.SuccessfulRestarts == 1 && syntheticCapture.IsRunning;
         int framesBeforeRejectedPrepare = syntheticCapture.FramesReadWhileRunning;
         AudioDeviceSwitchException? switchError = null;
@@ -1421,7 +1427,53 @@ using (var switchTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(12))
             "synthetic default microphone change restarts capture on the new endpoint while preserving the recognition WebSocket and audio flow");
         Check(syntheticCapture.MicrophoneReadinessChecks == 4 && defaultDeviceChangeContinued,
             "synthetic default microphone switch retries a candidate with no first frame before replacing the active capture");
+        Check(syntheticCapture.MicrophoneConversionChecks == 2 && defaultDeviceChangeContinued,
+            "synthetic microphone startup and default-device switch both wait for converted PCM before reporting readiness");
     }
+}
+var conversionPortProbe = new TcpListener(IPAddress.Loopback, 0); conversionPortProbe.Start();
+int conversionPort = ((IPEndPoint)conversionPortProbe.LocalEndpoint).Port; conversionPortProbe.Stop();
+using (var conversionListener = new HttpListener())
+using (var conversionTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(10)))
+{
+    conversionListener.Prefixes.Add($"http://127.0.0.1:{conversionPort}/"); conversionListener.Start();
+    int conversionConnections = 0, conversionConfigValid = 0;
+    var conversionServer = Task.Run(async () =>
+    {
+        try
+        {
+            var context = await conversionListener.GetContextAsync().WaitAsync(conversionTimeout.Token);
+            using var socket = (await context.AcceptWebSocketAsync(null)).WebSocket;
+            Interlocked.Increment(ref conversionConnections);
+            var packet = new byte[4096];
+            var configResult = await socket.ReceiveAsync(new ArraySegment<byte>(packet), conversionTimeout.Token);
+            using var config = JsonDocument.Parse(packet.AsMemory(0, configResult.Count));
+            if (configResult.MessageType == WebSocketMessageType.Text
+                && context.Request.Headers["Authorization"] == "Bearer synthetic"
+                && config.RootElement.GetProperty("sample_rate").GetInt32() == 16000)
+                Volatile.Write(ref conversionConfigValid, 1);
+            while (true)
+            {
+                var result = await socket.ReceiveAsync(new ArraySegment<byte>(packet), conversionTimeout.Token);
+                if (result.MessageType == WebSocketMessageType.Close) break;
+            }
+        }
+        catch (WebSocketException) { }
+    }, conversionTimeout.Token);
+    var conversionCapture = new SyntheticSpeechSessionCapture();
+    conversionCapture.QueueMicrophoneConversionReadiness(false);
+    AudioCaptureFailureException? conversionFailure = null;
+    await using (var conversionSession = new SpeechSession(
+        new Uri($"ws://127.0.0.1:{conversionPort}/"), captureEnabled: true, capture: conversionCapture))
+    {
+        try { await conversionSession.StartAsync(new Preferences(), "synthetic", 1, null, null, conversionTimeout.Token); }
+        catch (AudioCaptureFailureException error) { conversionFailure = error; }
+    }
+    await conversionServer.WaitAsync(conversionTimeout.Token); conversionListener.Stop();
+    Check(conversionFailure?.Message.Contains("音频转换失败", StringComparison.Ordinal) == true
+        && conversionCapture.MicrophoneReadinessChecks == 1 && conversionCapture.MicrophoneConversionChecks == 1
+        && Volatile.Read(ref conversionConnections) == 1 && Volatile.Read(ref conversionConfigValid) == 1,
+        "synthetic raw microphone input without converted PCM fails explicitly without a duplicate recognition connection");
 }
 if (args.Contains("--audio"))
 {
@@ -1576,6 +1628,7 @@ sealed class FiniteToneSampleProvider(int sampleRate, int channels, double durat
 sealed class SyntheticSpeechSessionCapture : ISpeechSessionCapture
 {
     private readonly Queue<bool> microphoneFrameReadiness = new();
+    private readonly Queue<bool> microphoneConversionReadiness = new();
     private readonly object readinessGate = new();
     private int defaultCaptureEndpointVersion = 1;
     private int tailFrames;
@@ -1598,6 +1651,8 @@ sealed class SyntheticSpeechSessionCapture : ISpeechSessionCapture
     public int SuccessfulRestarts => Volatile.Read(ref successfulRestarts);
     private int microphoneReadinessChecks;
     public int MicrophoneReadinessChecks => Volatile.Read(ref microphoneReadinessChecks);
+    private int microphoneConversionChecks;
+    public int MicrophoneConversionChecks => Volatile.Read(ref microphoneConversionChecks);
     public bool FailNextPrepare { get; set; }
     public int StopInputsCount { get; private set; }
     private (int Mode, string? OutputId, string? InputId)? prepared;
@@ -1607,12 +1662,23 @@ sealed class SyntheticSpeechSessionCapture : ISpeechSessionCapture
     {
         lock (readinessGate) foreach (bool result in results) microphoneFrameReadiness.Enqueue(result);
     }
+    public void QueueMicrophoneConversionReadiness(params bool[] results)
+    {
+        lock (readinessGate) foreach (bool result in results) microphoneConversionReadiness.Enqueue(result);
+    }
     public Task<bool> WaitForMicrophoneInputFrameAsync(bool prepared, TimeSpan timeout, CancellationToken cancellationToken)
     {
         Interlocked.Increment(ref microphoneReadinessChecks);
         cancellationToken.ThrowIfCancellationRequested();
         lock (readinessGate)
             return Task.FromResult(microphoneFrameReadiness.Count == 0 || microphoneFrameReadiness.Dequeue());
+    }
+    public Task<bool> WaitForMicrophoneConvertedFrameAsync(bool prepared, TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        Interlocked.Increment(ref microphoneConversionChecks);
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (readinessGate)
+            return Task.FromResult(microphoneConversionReadiness.Count == 0 || microphoneConversionReadiness.Dequeue());
     }
     public void NotifyDefaultDeviceChanged(DataFlow flow)
     {

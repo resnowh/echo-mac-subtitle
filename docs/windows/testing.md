@@ -125,3 +125,7 @@ Mac 使用不随应用失活隐藏的 floating panel；Windows 原生浮层创�
 ## A74 麦克风首帧检测与有限重试（2026-10-10）
 
 Mac `SpeechViewModel` 在麦克风安装后 1.2 秒无原始回调时，以 450ms 间隔重试两次；回调已到但转换 PCM 未到时另以 2.5 秒报错。Windows 新增首个非空 WASAPI 回调等待；初始话筒/混合模式若超时，最多重启两次；录音中切换的候选话筒若无首帧则丢弃候选并保留旧采集，正常设备打开错误仍立即失败。合成采集器 + 本地 WebSocket 验证首帧重试、默认话筒切换失败后重试、旧输入继续发 PCM、单一 WebSocket。162 项 CoreChecks 通过；Release x64 构建 0 警告、0 错误。未访问真实话筒、Soniox 或保存音频。Windows 尚无独立的转换 PCM 健康超时；权限、拔插和真实采集连续性仍待设备验收。原始日志、源文件哈希及 Git 基线见 [A74 底稿](../sources/windows-a74-microphone-first-frame-retry-2026-10-10/README.md)。
+
+## A75 麦克风转换 PCM 健康监测（2026-10-10）
+
+对照 Mac `SpeechViewModel`：首次回调后还需在 2.5 秒内产出转换后的音频；超时应明确报错并停止，不能把转换故障当作无输入而无限重试。Windows 以当前采集源的首个重采样输出作为 PCM 健康信号；热切换前用独立临时重采样器探测候选缓冲，不消耗提交后新会话的重采样状态。WASAPI Silent 标记按有效静音包处理。合成采集器 + 本机 WebSocket 验证原始输入存在但无转换输出时明确失败、单一识别连接，以及初始和热切换均需等待转换输出。165 项 CoreChecks 通过，Release x64 0 警告、0 错误。没有打开音频设备、调用 Soniox 或保存音频；真实转换异常和设备拔插仍待实机验收。原始输出、Mac 源码摘录、源码哈希及 Git 基线见 [A75 底稿](../sources/windows-a75-microphone-conversion-health-2026-10-10/README.md)。

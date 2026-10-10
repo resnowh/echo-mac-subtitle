@@ -1,5 +1,6 @@
 using System.Net.WebSockets;
 using System.Net.Sockets;
+using System.Diagnostics;
 using System.Text.RegularExpressions;
 using System.Text.Json;
 using Echo_Windows.Core;
@@ -80,9 +81,10 @@ public sealed class SpeechSession : IAsyncDisposable
             await socket.SendAsync(JsonSerializer.SerializeToUtf8Bytes(request).AsMemory(), WebSocketMessageType.Text, true, connectTimeout.Token);
             receiver = ReceiveAsync();
             if (Volatile.Read(ref captureFailure) is { } captureError) throw captureError;
+            long microphoneStartupTimestamp = Stopwatch.GetTimestamp();
             sender = SendAudioAsync();
             if (mode is 1 or 2)
-                await EnsureMicrophoneInputStartedAsync(connectTimeout.Token);
+                await EnsureMicrophoneInputStartedAsync(microphoneStartupTimestamp, connectTimeout.Token);
             Volatile.Write(ref audioTransportReady, true);
             if (Volatile.Read(ref defaultFlowsPending) != 0 && Interlocked.CompareExchange(ref defaultSwitchRunning, 1, 0) == 0)
                 _ = Task.Run(FollowDefaultDeviceAsync);
@@ -101,18 +103,20 @@ public sealed class SpeechSession : IAsyncDisposable
         var match = Regex.Match(error.Message, @"status code\s+'(?<status>[1-5]\d{2})'", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         return match.Success && int.TryParse(match.Groups["status"].Value, out int messageStatus) ? messageStatus : null;
     }
-    private async Task EnsureMicrophoneInputStartedAsync(CancellationToken cancellationToken)
+    private async Task EnsureMicrophoneInputStartedAsync(long initialAttemptTimestamp, CancellationToken cancellationToken)
     {
         Exception? lastError = null;
+        long attemptTimestamp = initialAttemptTimestamp;
         for (int attempt = 0; attempt <= AudioCapture.MicrophoneStartupRetryLimit; attempt++)
         {
+            bool inputReady;
             try
             {
-                if (await capture.WaitForMicrophoneInputFrameAsync(
+                inputReady = await capture.WaitForMicrophoneInputFrameAsync(
                     prepared: false,
                     timeout: AudioCapture.MicrophoneFirstFrameTimeout,
-                    cancellationToken: cancellationToken)) return;
-                lastError = new TimeoutException("麦克风音频回调未到达。");
+                    cancellationToken: cancellationToken);
+                if (!inputReady) lastError = new TimeoutException("麦克风音频回调未到达。");
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception error)
@@ -121,12 +125,27 @@ public sealed class SpeechSession : IAsyncDisposable
                     "麦克风启动后采集异常，请检查输入设备和麦克风权限后重试。", error);
             }
 
+            if (inputReady)
+            {
+                TimeSpan conversionTimeRemaining = AudioCapture.MicrophoneConversionTimeout - Stopwatch.GetElapsedTime(attemptTimestamp);
+                if (conversionTimeRemaining <= TimeSpan.Zero
+                    || !await capture.WaitForMicrophoneConvertedFrameAsync(
+                        prepared: false,
+                        timeout: conversionTimeRemaining,
+                        cancellationToken: cancellationToken))
+                    throw new AudioCaptureFailureException(
+                        "麦克风已连接，但音频转换失败，请检查输入设备后重试。",
+                        new TimeoutException("麦克风首个重采样 PCM 帧未在 2.5 秒内产生。"));
+                return;
+            }
+
             if (attempt == AudioCapture.MicrophoneStartupRetryLimit) break;
             Status?.Invoke($"麦克风尚未收到音频，正在重试（{attempt + 1}/{AudioCapture.MicrophoneStartupRetryLimit}）…");
             await Task.Delay(AudioCapture.MicrophoneRetryDelay, cancellationToken);
             try { await Task.Run(() => capture.Restart(mode, outputId, inputId), cancellationToken); }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception error) { lastError = error; }
+            attemptTimestamp = Stopwatch.GetTimestamp();
         }
 
         throw new AudioCaptureFailureException(
@@ -166,17 +185,27 @@ public sealed class SpeechSession : IAsyncDisposable
                     break;
                 }
 
+                long candidateStartedAt = Stopwatch.GetTimestamp();
                 try
                 {
-                    if (await capture.WaitForMicrophoneInputFrameAsync(
+                    bool inputReady = await capture.WaitForMicrophoneInputFrameAsync(
                         prepared: true,
                         timeout: AudioCapture.MicrophoneFirstFrameTimeout,
-                        cancellationToken: audioStop.Token))
+                        cancellationToken: audioStop.Token);
+                    TimeSpan conversionTimeRemaining = AudioCapture.MicrophoneConversionTimeout - Stopwatch.GetElapsedTime(candidateStartedAt);
+                    bool convertedReady = inputReady && conversionTimeRemaining > TimeSpan.Zero
+                        && await capture.WaitForMicrophoneConvertedFrameAsync(
+                            prepared: true,
+                            timeout: conversionTimeRemaining,
+                            cancellationToken: audioStop.Token);
+                    if (inputReady && convertedReady)
                     {
                         prepareError = null;
                         break;
                     }
-                    prepareError = new TimeoutException("新麦克风在启动后未送来音频回调。");
+                    prepareError = new TimeoutException(inputReady
+                        ? "新麦克风已连接，但转换 PCM 未在 2.5 秒内产生。"
+                        : "新麦克风在启动后未送来音频回调。");
                 }
                 catch (OperationCanceledException) when (audioStop.IsCancellationRequested)
                 {
@@ -190,7 +219,7 @@ public sealed class SpeechSession : IAsyncDisposable
                     await Task.Delay(AudioCapture.MicrophoneRetryDelay, audioStop.Token);
             }
             if (prepareError is not null)
-                throw new AudioDeviceSwitchException("新麦克风未能启动并送来首帧；旧音源仍在采集，录音继续。", true, prepareError);
+                throw new AudioDeviceSwitchException("新麦克风未能产生可用音频帧；旧音源仍在采集，录音继续。", true, prepareError);
             capture.StopInputs();
             try { await SendCaptureTailAsync(); }
             catch (Exception e)
