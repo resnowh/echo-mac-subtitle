@@ -97,3 +97,10 @@ Windows 字幕元信息现在与 Mac `metadata(for:)` 一致：录音时遵循�
 | 区域 | Mac 行为 | Windows 调整 | 验证与边界 |
 |---|---|---|---|
 | 新内容提示 | 用户离开最新位置后才显示，并提供回到最新入口 | 提示放在 ListView 下方独立 Auto 行，列表可滚动区域不再被按钮覆盖；可见性继续由 transcript follow state 驱动 | CoreChecks 静态断言 XAML 行位置、折叠默认值、AutomationId 和可见性接线；Release x64 构建通过。未启动 GUI，按钮出现时的实际高度和视觉间距待用户评估 |
+
+## A92 Windows 浮层交互优先实现（2026-10-10）
+
+| Mac/目标行为 | Windows 当前实现 | 状态 | 证据与边界 |
+|---|---|---|---|
+| 悬停显示拖动、锁定、穿透、设置、关闭工具条；浮层内直接设置字幕 | 字幕仍由透明分层 HWND 绘制；独立 WinUI 控件 HWND 通过光标轮询显示工具栏与设置窗。主菜单仅保留开关和紧急恢复。设置控件含字号、透明度、阴影、显示语言、最大宽度、保留时间、锁定/穿透、默认值和位置重置 | 部分实现 | A92 Release x64 0 警告/错误、193 项 CoreChecks 通过；真实隔离 GUI 点击、拖动、屏幕阅读器、显示器和 DPI 验收仍待运行，见 [A92 交互说明](overlay-interaction.md) 与 [A92 测试记录](testing.md) |
+| 锁定与点击穿透互不影响；穿透时可恢复；拖动位置持久化 | `PositionLocked` 控制拖动，`ClickThrough` 独立决定字幕 HWND 的 `WS_EX_TRANSPARENT`；工具/设置 HWND 保持可操作；主窗口提供强制关闭穿透并解锁的恢复命令。拖动与键盘方向键更新现有显示器归一化位置 | 部分实现 | CoreChecks 验证源码接线；真实 HWND 层级和下层应用命中结果须由新的隔离 GUI/UIA 证据确认。真实多屏/DPI仍待测 |

@@ -222,3 +222,11 @@ CoreChecks 检查字幕行加载时读取统一显示状态、并在 ViewModel �
 | 深浅主题 | A88 主窗口深色；A90 浅色只覆盖常规设置页，主窗口浅色未截图 | 部分证据 |
 
 额外 DPI 方面，A88 的 144 DPI 对应 150% 缩放；125% 和 200% 主窗口截图仍未做。当前没有可用的 Echo Mac 同尺寸截图，因此任何 Windows 截图都不代表完成了像素级或并排视觉验收。真实音频设备、键盘完整路径和 Narrator 也未运行。
+
+## A92 悬浮字幕交互重做（2026-10-10）
+
+- **基线**：先检查 PR #5 (`b52f68e`) 与 PR #6 (`d5832dc`)，两者均开放且当时 CI 全绿；新分支 `feature/windows-overlay-interaction` 从 PR #6 实际 HEAD `d5832dc` 快进切出。隔离目录为 `%LOCALAPPDATA%\Temp\Echo-WindowsOverlayInteraction`。没有改 `macOS/`，没有接触已运行的 Echo。
+- **实现**：保留透明 Win2D/Direct2D 字幕 HWND；加入独立 WinUI 工具条/设置 HWND、90ms 光标轮询、锁/穿透分离、设置实时预览与延时保存，以及主窗口紧急恢复菜单。没有全局鼠标 Hook。详见 [悬浮字幕交互设计](overlay-interaction.md)。
+- **自动化验证**：隔离 Release x64 构建 0 警告、0 错误；CoreChecks 193 项通过，其中新增断言检查主菜单仅保留开关/恢复、工具栏和设置控件 AutomationId、字幕穿透状态和窗口分层接线。
+- **真实 GUI 状态**：本节初稿记录时尚未运行新的隔离包 UIA/鼠标验收；悬停、拖动、锁定、设置预览、穿透下层命中、恢复、最小化、关闭重开、双屏与 DPI 均不能据此声称通过。后续实际测试结果必须追加原始 JSON、截图、包身份、PID 与清理记录。
+- **边界**：仅使用本地代码与合成数据；不启用录音、不访问 API Key、不调用 Soniox/DeepSeek。真实第二显示器、DPI 热切换、Narrator 和长时间资源检查若无法在本机执行，应列为待验。

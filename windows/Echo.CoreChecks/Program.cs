@@ -316,8 +316,8 @@ string normalizedNativeOverlaySource = nativeOverlaySource.Replace("\r\n", "\n",
 Check(normalizedNativeOverlaySource.Contains("case WmSettingChange when wParam == SpiSetWorkArea:\n                OnDisplayConfigurationChanged();\n                return 0;", StringComparison.Ordinal)
     && normalizedNativeOverlaySource.Contains("case WmDisplayChange:\n                OnDisplayConfigurationChanged();\n                return 0;", StringComparison.Ordinal),
     "native overlay recomputes its placement when Windows reports display or work-area changes");
-Check(normalizedNativeOverlaySource.Contains("public void HideOverlay()\n    {\n        if (adjusting) SetAdjusting(false);", StringComparison.Ordinal),
-    "hiding the native overlay exits adjustment mode as Mac hide does");
+Check(normalizedNativeOverlaySource.Contains("public void HideOverlay()\n    {\n        hoverTimer.Stop();\n        interactionWindows.HideAll();\n        if (adjusting) SetAdjusting(false);", StringComparison.Ordinal),
+    "hiding the native overlay hides its controls, stops hover polling, and exits adjustment mode");
 Check(normalizedNativeOverlaySource.Contains("0, 0, GetModuleHandle(null), 0);", StringComparison.Ordinal)
     && normalizedNativeOverlaySource.Contains("ShowWindow(hwnd, SwShowNoActivate);", StringComparison.Ordinal)
     && normalizedNativeOverlaySource.Contains("SetWindowPos(hwnd, HwndTopMost", StringComparison.Ordinal),
@@ -411,20 +411,40 @@ Check(mainPageCode.Contains("PreferredSourceLanguage = source.Code", StringCompa
     && mainPageCode.Contains("UpdatePreferredSourceSettingsVisibility", StringComparison.Ordinal)
     && mainPageCode.Contains("c.SourceLanguage = SettingsSourceMode.SelectedItem == AutomaticSourceMode ? string.Empty", StringComparison.Ordinal),
     "recognition mode persists the preferred language while automatic mode omits hints and hides strict-language controls");
-var overlayLockMenuItem = mainPageXaml.Descendants(presentationNamespace + "MenuFlyoutItem")
-    .FirstOrDefault(element => element.Attribute(xamlNamespace + "Name")?.Value == "LockOverlayMenuItem");
-int saveOverlayStart = mainPageCode.IndexOf("private void SaveOverlaySettings", StringComparison.Ordinal);
-int persistOverlayStart = mainPageCode.IndexOf("private void PersistOverlayPlacement", StringComparison.Ordinal);
-string saveOverlayBody = saveOverlayStart >= 0 && persistOverlayStart > saveOverlayStart
-    ? mainPageCode[saveOverlayStart..persistOverlayStart] : "";
-Check(overlayLockMenuItem?.Attribute("Click")?.Value == "ToggleOverlayLock_Click"
-    && overlayLockMenuItem.Attribute("AutomationProperties.AutomationId")?.Value == "ToggleSubtitleOverlayLock"
-    && mainPageCode.Contains("LockOverlayMenuItem.Text = ViewModel.Config.SubtitleOverlay.PositionLocked ? \"解锁位置\" : \"锁定位置\"", StringComparison.Ordinal)
-    && mainPageCode.Contains("bool positionLockChanged = current.PositionLocked != wasPositionLocked", StringComparison.Ordinal)
-    && mainPageCode.Contains("if (positionLockChanged && current.Enabled) subtitleOverlayWindow?.SetAdjusting(!current.PositionLocked)", StringComparison.Ordinal)
-    && mainPageCode.Contains("if (settings.Enabled) subtitleOverlayWindow?.SetAdjusting(unlock)", StringComparison.Ordinal)
-    && !saveOverlayBody.Contains("SetAdjusting", StringComparison.Ordinal),
-    "overlay menu exposes Mac-equivalent lock/unlock and appearance saves preserve the current adjustment mode");
+var overlayMenu = mainPageXaml.Descendants(presentationNamespace + "Button")
+    .Single(element => element.Attribute(xamlNamespace + "Name")?.Value == "SubtitleOverlayButton");
+var overlayMenuItems = overlayMenu.Descendants(presentationNamespace + "MenuFlyoutItem").ToArray();
+var overlayToggleItem = overlayMenuItems.FirstOrDefault(element => element.Attribute("AutomationProperties.AutomationId")?.Value == "ToggleSubtitleOverlay");
+var overlayRecoveryItem = overlayMenuItems.FirstOrDefault(element => element.Attribute("AutomationProperties.AutomationId")?.Value == "RestoreSubtitleOverlayControls");
+Check(overlayMenuItems.Length == 2
+    && overlayToggleItem?.Attribute("Click")?.Value == "ToggleOverlay_Click"
+    && overlayRecoveryItem?.Attribute("Click")?.Value == "RestoreOverlayControls_Click"
+    && mainPageCode.Contains("settings.ClickThrough = false", StringComparison.Ordinal)
+    && mainPageCode.Contains("settings.PositionLocked = false", StringComparison.Ordinal)
+    && mainPageCode.Contains("subtitleOverlayWindow?.SetAdjusting(true)", StringComparison.Ordinal),
+    "main overlay menu keeps only enable/disable and a safe control-recovery route");
+string interactionSource = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "OverlayInteractionWindows.cs"));
+Check(interactionSource.Contains("OverlayMoveHandle", StringComparison.Ordinal)
+    && interactionSource.Contains("OverlayPositionLock", StringComparison.Ordinal)
+    && interactionSource.Contains("OverlayClickThrough", StringComparison.Ordinal)
+    && interactionSource.Contains("OverlayOpenSettings", StringComparison.Ordinal)
+    && interactionSource.Contains("OverlayClose", StringComparison.Ordinal)
+    && interactionSource.Contains("OverlayOriginalFontSize", StringComparison.Ordinal)
+    && interactionSource.Contains("OverlayTranslationFontSize", StringComparison.Ordinal)
+    && interactionSource.Contains("OverlayOpacity", StringComparison.Ordinal)
+    && interactionSource.Contains("OverlayMaximumWidth", StringComparison.Ordinal)
+    && interactionSource.Contains("OverlayRetention", StringComparison.Ordinal)
+    && interactionSource.Contains("OverlayShadow", StringComparison.Ordinal)
+    && interactionSource.Contains("OverlayResetPosition", StringComparison.Ordinal)
+    && interactionSource.Contains("OverlayRestoreDefaults", StringComparison.Ordinal),
+    "floating toolbar and its own settings window expose named controls for all requested adjustments");
+Check(nativeOverlaySource.Contains("hoverTimer.Interval = TimeSpan.FromMilliseconds(90)", StringComparison.Ordinal)
+    && nativeOverlaySource.Contains("bool transparent = settings.ClickThrough", StringComparison.Ordinal)
+    && nativeOverlaySource.Contains("interactionWindows.ContainsPoint", StringComparison.Ordinal)
+    && nativeOverlaySource.Contains("BeginPointerOperationFromToolbar", StringComparison.Ordinal)
+    && interactionSource.Contains("IsSettingsVisible", StringComparison.Ordinal)
+    && interactionSource.Contains("UpdateSettingsPosition", StringComparison.Ordinal),
+    "click-through caption and interactive HWNDs remain separate while hover and monitor placement are coordinated");
 Check(mainPageCode.Contains("DirectManipulationStarted") && mainPageCode.Contains("DirectManipulationCompleted")
     && mainPageCode.Contains("PointerWheelChanged") && mainPageCode.Contains("PreviewKeyDown")
     && mainPageCode.Contains("transcriptFollowState.ViewChanged"),
