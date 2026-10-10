@@ -1,0 +1,19 @@
+{
+  "targetLanguage": "zh",
+  "segmentation": {},
+  "sourceLanguage": "en",
+  "deepSeekSecret": "",
+  "sonioxSecret": "",
+  "autoSummaryEnabled": false,
+  "theme": "Dark",
+  "translate": true,
+  "subtitleOverlay": {
+    "enabled": false
+  },
+  "correctionTerms": "",
+  "audioInputMode": 1,
+  "speakers": true,
+  "preferredSourceLanguage": "en",
+  "strict": false,
+  "autoCorrectionEnabled": false
+}

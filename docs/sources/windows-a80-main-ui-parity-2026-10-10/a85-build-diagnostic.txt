@@ -1,0 +1,1 @@
+A85 首次尝试在 DataTemplate 中通过 x:Bind 访问页面级 ViewModel。WinUI XAML 编译器在 BindingPathListener.ResolveNameOnRoot 阶段报 WMC9999，并因错误资源程序集不可用而未能输出正常绑定错误。修正：模板行 Loaded 时按页面当前状态设置 Grid.ColumnSpan/译文 Visibility；ViewModel 显示属性变化时仅遍历 ListView 当前已实现的容器并刷新。最终隔离 CoreChecks 186 项通过，Release x64 构建 0 警告、0 错误。

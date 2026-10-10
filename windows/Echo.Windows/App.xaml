@@ -17,6 +17,7 @@
                     <SolidColorBrush x:Key="EchoSoftAccentBrush" Color="#293D35"/>
                     <SolidColorBrush x:Key="EchoAccentForegroundBrush" Color="#142B21"/>
                     <SolidColorBrush x:Key="EchoScrimBrush" Color="#99000000"/>
+                    <SolidColorBrush x:Key="EchoSubtleSurfaceBrush" Color="#FFFFFF" Opacity="0.06"/>
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Light">
                     <SolidColorBrush x:Key="EchoCanvasBrush" Color="#FAFBF9"/>
@@ -24,6 +25,7 @@
                     <SolidColorBrush x:Key="EchoSoftAccentBrush" Color="#E4EFE7"/>
                     <SolidColorBrush x:Key="EchoAccentForegroundBrush" Color="#FFFFFF"/>
                     <SolidColorBrush x:Key="EchoScrimBrush" Color="#99000000"/>
+                    <SolidColorBrush x:Key="EchoSubtleSurfaceBrush" Color="#000000" Opacity="0.04"/>
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="HighContrast">
                     <StaticResource x:Key="EchoCanvasBrush" ResourceKey="SystemColorWindowColorBrush"/>
@@ -31,6 +33,7 @@
                     <StaticResource x:Key="EchoSoftAccentBrush" ResourceKey="SystemColorWindowColorBrush"/>
                     <StaticResource x:Key="EchoAccentForegroundBrush" ResourceKey="SystemColorHighlightTextColorBrush"/>
                     <StaticResource x:Key="EchoScrimBrush" ResourceKey="SystemColorWindowColorBrush"/>
+                    <StaticResource x:Key="EchoSubtleSurfaceBrush" ResourceKey="SystemColorWindowColorBrush"/>
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
         </ResourceDictionary>

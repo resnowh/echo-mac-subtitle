@@ -1,0 +1,5 @@
+origin/main ae0359dc90da0ccb5e526a275da1747954a49a4f
+origin/feature/windows-mac-parity b52f68efafd7fd1b0d1671ded4fc3f37c9a701e7
+origin/feature/windows-ui-mac-parity 6c22c95c84389b9f3b15ea2284a1d0a696d6d30d
+pr #6 https://github.com/resnowh/echo-mac-subtitle/pull/6
+fetch: 2026-10-10; no newer remote commits at start of A87

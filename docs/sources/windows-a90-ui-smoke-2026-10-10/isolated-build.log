@@ -1,0 +1,13 @@
+dotnet build C:\Users\HENRY\AppData\Local\Temp\Echo-A90-UIA-20261010-41dc84afb17144a281a9a5a679baefca\checkout\windows\Echo.Windows\Echo.Windows.csproj -c Debug -r win-x64 -v minimal -tl:off -p:Platform=x64 -p:CsWinRTWindowsMetadata=C:\Users\HENRY\.nuget\packages\microsoft.windows.sdk.net.ref\10.0.26100.57\winmd
+  正在确定要还原的项目…
+  已还原 C:\Users\HENRY\AppData\Local\Temp\Echo-A90-UIA-20261010-41dc84afb17144a281a9a5a679baefca\checkout\windows\Echo.Windows\Echo.Windows.csproj (用时 1.88 秒)。
+  Echo.Windows -> C:\Users\HENRY\AppData\Local\Temp\Echo-A90-UIA-20261010-41dc84afb17144a281a9a5a679baefca\checkout\windows\Echo.Windows\bin\x64\Debug\net10.0-windows10.0.26100.0\win-x64\Echo.Windows.dll
+
+已成功生成。
+    0 个警告
+    0 个错误
+
+已用时间 00:00:20.61
+{
+  "AUMID": "041833B0-BB1F-458D-B149-AC9E04107D04_1z32rh13vfry6!App"
+}

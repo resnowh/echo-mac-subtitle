@@ -1,0 +1,15 @@
+  正在确定要还原的项目…
+  已还原 C:\Users\HENRY\AppData\Local\Temp\Echo-A86-20261010\checkout\windows\Echo.Windows\Echo.Windows.csproj (用时 361 毫秒)。
+C:\Users\HENRY\AppData\Local\Temp\Echo-A86-20261010\checkout\windows\Echo.Windows\MainPage.xaml(34,149): XamlCompiler warning WMC1506: OneWay bindings require at least one of their steps to support raising notifications when their value changes [C:\Users\HENRY\AppData\Local\Temp\Echo-A86-20261010\checkout\windows\Echo.Windows\Echo.Windows.csproj]
+C:\Users\HENRY\AppData\Local\Temp\Echo-A86-20261010\checkout\windows\Echo.Windows\MainPage.xaml(34,337): XamlCompiler warning WMC1506: OneWay bindings require at least one of their steps to support raising notifications when their value changes [C:\Users\HENRY\AppData\Local\Temp\Echo-A86-20261010\checkout\windows\Echo.Windows\Echo.Windows.csproj]
+C:\Users\HENRY\AppData\Local\Temp\Echo-A86-20261010\checkout\windows\Echo.Windows\obj\x64\Release\net10.0-windows10.0.26100.0\win-x64\MainPage.g.cs(333,62): error CS0103: 当前上下文中不存在名称“p0” [C:\Users\HENRY\AppData\Local\Temp\Echo-A86-20261010\checkout\windows\Echo.Windows\Echo.Windows.csproj]
+
+生成失败。
+
+C:\Users\HENRY\AppData\Local\Temp\Echo-A86-20261010\checkout\windows\Echo.Windows\MainPage.xaml(34,149): XamlCompiler warning WMC1506: OneWay bindings require at least one of their steps to support raising notifications when their value changes [C:\Users\HENRY\AppData\Local\Temp\Echo-A86-20261010\checkout\windows\Echo.Windows\Echo.Windows.csproj]
+C:\Users\HENRY\AppData\Local\Temp\Echo-A86-20261010\checkout\windows\Echo.Windows\MainPage.xaml(34,337): XamlCompiler warning WMC1506: OneWay bindings require at least one of their steps to support raising notifications when their value changes [C:\Users\HENRY\AppData\Local\Temp\Echo-A86-20261010\checkout\windows\Echo.Windows\Echo.Windows.csproj]
+C:\Users\HENRY\AppData\Local\Temp\Echo-A86-20261010\checkout\windows\Echo.Windows\obj\x64\Release\net10.0-windows10.0.26100.0\win-x64\MainPage.g.cs(333,62): error CS0103: 当前上下文中不存在名称“p0” [C:\Users\HENRY\AppData\Local\Temp\Echo-A86-20261010\checkout\windows\Echo.Windows\Echo.Windows.csproj]
+    2 个警告
+    1 个错误
+
+已用时间 00:00:14.15

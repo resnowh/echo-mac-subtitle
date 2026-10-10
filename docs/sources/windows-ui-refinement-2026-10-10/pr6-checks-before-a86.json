@@ -1,0 +1,50 @@
+[
+  {
+    "conclusion": "success",
+    "html_url": "https://github.com/resnowh/echo-mac-subtitle/actions/runs/38027011436/job/114140398142",
+    "name": "verify-mac-archive-roundtrip",
+    "status": "completed"
+  },
+  {
+    "conclusion": "success",
+    "html_url": "https://github.com/resnowh/echo-mac-subtitle/actions/runs/38027011436/job/114140091265",
+    "name": "build-and-check",
+    "status": "completed"
+  },
+  {
+    "conclusion": "success",
+    "html_url": "https://github.com/resnowh/echo-mac-subtitle/actions/runs/38027011436/job/114139875925",
+    "name": "generate-mac-audio-conversion-fixture",
+    "status": "completed"
+  },
+  {
+    "conclusion": "success",
+    "html_url": "https://github.com/resnowh/echo-mac-subtitle/actions/runs/38027011436/job/114139875914",
+    "name": "generate-mac-segmentation-fixture",
+    "status": "completed"
+  },
+  {
+    "conclusion": "success",
+    "html_url": "https://github.com/resnowh/echo-mac-subtitle/actions/runs/38027011436/job/114139875896",
+    "name": "generate-mac-archive-fixture",
+    "status": "completed"
+  },
+  {
+    "conclusion": "success",
+    "html_url": "https://github.com/resnowh/echo-mac-subtitle/actions/runs/38027011484/job/114139875852",
+    "name": "build",
+    "status": "completed"
+  },
+  {
+    "conclusion": "success",
+    "html_url": "https://github.com/resnowh/echo-mac-subtitle/actions/runs/38027011436/job/114139875812",
+    "name": "generate-mac-soniox-runtime-fixture",
+    "status": "completed"
+  },
+  {
+    "conclusion": "success",
+    "html_url": "https://github.com/resnowh/echo-mac-subtitle/actions/runs/38027011468/job/114139875765",
+    "name": "unsigned-package-check",
+    "status": "completed"
+  }
+]

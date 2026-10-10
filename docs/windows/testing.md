@@ -1,5 +1,15 @@
 # Windows 验证范围和证据
 
+## A80 当前主界面 UI 验证（2026-10-10）
+
+工作树 `D:\ProgramData\WorkSpace\EchoWindowsUIParity`，分支 `feature/windows-ui-mac-parity`，起点 PR #5 最新 head `b52f68efafd7fd1b0d1671ded4fc3f37c9a701e7`；Mac 对照为 `origin/main` `ae0359dc90da0ccb5e526a275da1747954a49a4f`。A80 更新后的 CoreChecks 共184项通过，涵盖语言/音源菜单、目标“不翻译”常驻、录音提示、列表容器和行参数、日期头留白、Tabular时间数字、纠正按钮、存档右靠、深浅/高对比低强调表面和总结三范围菜单。Release x64 构建成功，0警告、0错误；仅构建，没有启动应用。
+
+PR #6 当前代码 head `7056cdc25039a136c7adf0b3cce714e1fd1d0f07` 的8项 Actions 检查全部成功：Windows CI（含 CoreChecks、Release x64 与 Mac Archive 回读）、Mac CI 和 unsigned package preflight。本轮尊重用户明确的 GUI 使用安排，没有启动已安装或隔离的 Echo、没有做 UIA 或截图比较。目标任务附件目录无图片；此前两张图已检查为邮件界面，不能支持 Echo 视觉判断。Mac/Windows 实际截图并排验收尚未完成。详情、原始输出及源哈希见 [A80 底稿](../sources/windows-a80-main-ui-parity-2026-10-10/README.md)。
+
+## A82 录音状态按钮尺寸回归（2026-10-10）
+
+Mac 使用同一个切换按钮承载开始和停止录音。Windows 开始按钮此前继承 32 DIP 的通用工具栏最小高度，而停止按钮为 34 DIP；现将开始按钮明确设为 34 DIP，并让 CoreChecks 比较两种状态的最小宽度 126 DIP 与高度 34 DIP。CoreChecks 184 项通过，Release x64 构建 0 警告、0 错误。没有启动 GUI；控件实际布局和焦点仍待用户视觉验收。日志与哈希见 [A80/A82 底稿](../sources/windows-a80-main-ui-parity-2026-10-10/README.md)。
+
 ## 基线
 
 - Mac 来源：`origin/main` `ae0359dc90da0ccb5e526a275da1747954a49a4f`。
@@ -145,3 +155,70 @@ Mac CI 从 `SpeechViewModel.swift` 抽取未修改的生产 `handleSonioxMessage
 ## A79：Mac/Windows 生产音频转换对拍（2026-10-10）
 
 固定 float32 输入覆盖 48 kHz mono、44.1 kHz stereo、150 ms 起音和反相双声道。Mac CI 从 `macOS/Audio/AudioCapture.swift` 提取未修改的生产 `MacMicrophoneCapture.convert`，以 1,024 帧块复用 converter，输出 16 kHz mono PCM16 参考；Windows 使用同一输入调用生产 `AudioCapture.ToMono16k`。首次生产对拍发现 Mac 立体声转单声道保留首声道、Windows 原实现平均所有声道；Windows 现按 Mac 保留首声道，并验证反相右声道时仍有信号。比较在 PCM16 量化后允许 0.1 帧步进对齐，以反映 AVFoundation/WDL 的分数采样延迟差异；输出帧数容差 8 帧（0.5 ms）、相关性至少 0.995、RMS 差异至多 3%。PR #5 的 Actions run `38012345830` 全部通过：Mac 生产 harness/artifact、Windows CoreChecks/Release x64 和 Mac Archive 往返；使用其保存的 Mac artifact 本机复跑 184 项全过，四组相关性 0.999864–0.999970，帧数差 6。日志及哈希见 [A79 来源底稿](../sources/windows-a79-audio-conversion-parity-2026-10-10/README.md)。该测试不替代真实设备时钟、WASAPI 欠载或长会话硬件验收。
+
+## A83 主字幕对比度回归（2026-10-10）
+
+静态对照 Mac `macOS/Views/TranscriptViews.swift` 的 Divider `.opacity(0.55)` 与 Windows `MainPage.xaml` 后发现，Windows 曾将透明度设在容纳 ListView、空态与新内容提示的父 Grid 上，整块内容会一起变淡。现改为仅让独立的 1 DIP 顶部分隔线使用 0.55 透明度；CoreChecks 检查父容器无 Opacity、透明度仅作用于细线。该检查是静态 XAML 契约，不替代深浅主题及显示器上的视觉验收。未访问用户字幕、录音、API Key 或截图；未启动 Echo；`macOS/` 未改。
+
+## A84 录音工具栏窄窗布局（2026-10-10）
+
+Mac `EchoMacApp.swift` 用 `ViewThatFits` 在横向空间不足时把连接状态放到录音按钮下方；Windows 原来一直固定在同一行。现增加 760 DIP `AdaptiveTrigger`：窄窗状态置于第二行，宽窗恢复右侧排列，状态内容与原 360 DIP 省略及 UI Automation 名称保持不变。CoreChecks 验证默认窄窗位置和宽窗触发/Setter。源码契约与构建不是运行态缩放验收；未启动 Echo，真实布局仍交由用户查看。
+
+## A85 翻译列布局回归（2026-10-10）
+
+CoreChecks 检查字幕行加载时读取统一显示状态、并在 ViewModel 通知后更新已实现的 ListView 项；原文 ColumnSpan 与译文 Visibility 随状态切换。检查 ViewModel 在录音时采用活动会话配置、闲置时采用保存配置；目标语言菜单和设置保存会刷新布局属性。这是静态 XAML/C# 契约；当前/下次会话切换、各主题渲染仍待 GUI 验收。
+
+## A86 Speaker 元信息显示回归（2026-10-10）
+
+以 Mac `SynchronizedTranscriptView.metadata(for:)` 对照 Windows `MainPage.xaml`：录音中使用会话开始时的 speaker 设置，闲置时使用保存设置；字段为空时 Speaker 和中点分隔符收起。为避开 WinUI DataTemplate 对嵌套静态方法参数的代码生成缺陷，已实现行的可见性由 `Loaded/Unloaded/DataContextChanged` 路径更新；Speaker 字段变化时刷新当前虚拟化行，避免容器复用保留旧状态。
+
+- 隔离 worktree CoreChecks：最终源码 188 项通过；合成检查无云请求、未保存音频。最终日志 `a86-corechecks-final5.log`。
+- 隔离 worktree Windows Release x64：最终 UI/XAML 源码构建成功，0 警告、0 错误；日志 `a86-build-final4.log`。
+- `git diff --check` 通过。无 GUI、UIA 或截图运行；目标附件为无关邮件截图，当前仍无可用 Echo Mac/Windows 对照图。视觉、键盘/Narrator、浅/深/高对比和 125/150/200% DPI 运行态验收未完成。
+- 早期隔离尝试的外置 MSBuild 中间目录会重复包含生成源码；另一次模板函数绑定会触发编译器错误。两类失败及最终成功原始日志保存在 [A86 来源底稿](../sources/windows-ui-refinement-2026-10-10/README.md)，最后采用独立 worktree 的常规构建目录完成验证。
+
+## A87 新内容提示布局回归（2026-10-10）
+
+- 将“有新内容”提示移入字幕 Grid 的独立 `Auto` 行，避免遮住字幕纠正按钮；CoreChecks 静态验证布局、折叠默认状态、`ScrollToLatest` AutomationId 和 transcript follow state 可见性接线。
+- 隔离 Windows Release x64 构建：0 警告、0 错误；CoreChecks 189 项通过。首次运行的合成 WebSocket 测试遇到未完成关闭握手，原始失败日志已保留；隔离重跑完整通过。
+- 没有启动 Echo，也没有做 UIA 或截图验收；真实提示高度、间距、DPI 和视觉效果仍由用户检查。未修改 `macOS/`。日志和哈希见 [A87 来源底稿](../sources/windows-ui-refinement-2026-10-10/README.md)。
+
+## A88 摘要与字幕可用空间 GUI 检查（2026-10-10）
+
+- 使用临时独立包身份和合成存档/摘要，在 144 DPI 下测试 Mac 理想窗口 820×650 DIP 与最小窗口 680×520 DIP；未启动正式安装包、未读用户存档/API Key、未录音或联网。
+- 首次截图复现展开摘要将 `TranscriptList` 压至 0 高。最终实现摘要让位策略、120/140 DIP 字幕最小区，以及按稳定窗口宽度更新的录音工具栏布局。
+- 最终 UIA：820×650 时字幕列表 140 DIP，连接状态和音源按钮同排；680×520 时列表 120 DIP、合成字幕完整可见，工具栏使用紧凑换行。最终深色截图和测量 JSON 见 [A88 底稿](../sources/windows-a88-gui-review-2026-10-10/README.md)。
+- CoreChecks 191 项通过；Release x64 和隔离 Debug 包构建均 0 警告/错误。测试包关闭并注销，`macOS/` 未改。
+- **仍待视觉验收**：Mac 并排截图、浅色/高对比、Narrator/键盘焦点、其他 DPI/宽度、录音权限和滚动状态。
+
+## A89 UI Automation smoke 更新（2026-10-10）
+
+旧 `windows/ui-smoke.ps1` 仍期待已移除的语言 ComboBox 和旧电脑音频默认值，且以窗口消息发送 Escape，无法可靠驱动 WinUI flyout。现改为检查当前模式的可访问名称、识别/翻译菜单选项、Settings 四分类、主题、存档菜单、字幕列表和纠正编辑器；Escape 使用 UIA 工具要求的 `send-input`。PowerShell AST 和脚本 UIA selector 与当前 XAML/C# 对照检查通过。本次没有启动应用；端到端结果须在下一次独立合成数据 GUI 批次中记录，不能把静态检查称为 UI smoke 通过。
+
+## A90 隔离包 UIA smoke 实测（2026-10-10）
+
+- **基线**：从 PR #6 分支 `feature/windows-ui-mac-parity` 的 `0d103514f98f3e549298859791add5dbde8303b2` 创建临时本地副本；测试包使用唯一身份 `041833B0-BB1F-458D-B149-AC9E04107D04` 和独立包数据目录。
+- **验证**：隔离 Debug x64 包构建 0 警告、0 错误；`windows/ui-smoke.ps1` 在一次进程会话内通过 10/10 UIA 项，覆盖录音空闲状态、音源/语言标签、语言菜单幂等状态、无新内容提示、四个设置分栏及深浅主题、合成存档/导出、校对弹窗关闭、空存档状态。最终 JSON 与截图见 [A90 证据底稿](../sources/windows-a90-ui-smoke-2026-10-10/README.md)。
+- **隔离与清理**：仅使用合成设置和字幕；未启动录音、访问真实存档/API Key、连接云服务或读取用户截图。测试进程结束后注销了该唯一开发包身份，确认不再注册；临时构建目录和数据证据保留。`macOS/` 未改。
+- **验收边界**：UIA 和合成截图证明控件可访问、流程可操作，不替代 Mac 与 Windows 并排视觉验收、Narrator/键盘全路径、多显示器或其他 DPI 的人工检查。
+
+## A91 目标截图场景覆盖审计（2026-10-10）
+
+下表只认隔离合成包的运行态截图或 UIA 回执；静态 XAML/CoreChecks 不替代视觉截图。用户负责最终视觉评估。
+
+| 目标场景 | 当前证据 | 状态 |
+|---|---|---|
+| 多条长字幕 | A88 合成存档有 18 条字幕，最长英文 197 字符；最终截图未显示长句完整换行 | 未完成截图验收 |
+| 短字幕 | A88 最终宽窗和最小窗截图含短字幕双栏 | 已截图 |
+| 无字幕 | A90 空存档截图；UIA 未发现字幕纠正行 | 已截图 |
+| 录音中 | 没有开启真实音频或 Soniox；未构造纯视图模拟状态 | 未验证 |
+| 未录音 | A88 820×650 与 680×520 DIP 截图显示空闲/未录音状态 | 已截图 |
+| 长列表滚动 | A88 数据有 18 条；UIA 见 `TranscriptList` 垂直滚动能力，但没有滚动过程或滚动后截图 | 部分证据，未完成视觉验收 |
+| 新内容提示出现 | A48/A90 检查无新字幕时不显示常驻入口；新增内容状态的出现、避让和点击没有运行态截图 | 部分证据，未完成视觉验收 |
+| 字幕校对窗口 | A90 合成字幕校对弹窗截图，UIA 打开并关闭且未编辑文本 | 已截图 |
+| 设置页面 | A90 覆盖常规/识别/分段/AI 服务 UIA；保留深色常规及浅色常规截图 | 已截图，尚非 Mac 并排对照 |
+| AI 总结展开 | A88 最终宽窗截图展示展开总结及可见字幕列表 | 已截图 |
+| 最小窗口尺寸 | A88 在 144 DPI 实测 680×520 DIP，字幕列表高 120 DIP并保留工具栏/字幕 | 已截图/UIA 测量 |
+| 深浅主题 | A88 主窗口深色；A90 浅色只覆盖常规设置页，主窗口浅色未截图 | 部分证据 |
+
+额外 DPI 方面，A88 的 144 DPI 对应 150% 缩放；125% 和 200% 主窗口截图仍未做。当前没有可用的 Echo Mac 同尺寸截图，因此任何 Windows 截图都不代表完成了像素级或并排视觉验收。真实音频设备、键盘完整路径和 Narrator 也未运行。

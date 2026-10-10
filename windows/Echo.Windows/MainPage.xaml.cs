@@ -24,6 +24,7 @@ public sealed record LanguageChoice(string? Code, string Title);
 
 public sealed partial class MainPage : Page
 {
+    private readonly HashSet<Grid> realizedTranscriptRows = [];
     private readonly List<Border> waveform = [];
     private NativeDesktopSubtitleOverlayWindow? subtitleOverlayWindow;
     private static readonly LanguageChoice[] SourceLanguages =
@@ -55,10 +56,20 @@ public sealed partial class MainPage : Page
     public MainPage()
     {
         InitializeComponent();
+        RecordingPanel.SizeChanged += (_, _) =>
+        {
+            UpdateResponsiveLayout();
+            UpdateSummaryLayout();
+        };
+        RecordingPanel.Loaded += (_, _) => DispatcherQueue.TryEnqueue(() =>
+        {
+            UpdateResponsiveLayout();
+            UpdateSummaryLayout();
+        });
         var c = ViewModel.Config;
         Mode.SelectedIndex = c.AudioInputMode;
-        SourceLanguageChoice.ItemsSource = SourceLanguages;
-        TargetLanguageChoice.ItemsSource = TargetLanguages;
+        InitializeLanguageFlyouts();
+        UpdateAudioModeMenu();
         SettingsSourceLanguage.ItemsSource = PreferredLanguages;
         SettingsTargetLanguage.ItemsSource = TargetLanguages;
         CorrectionTerms.Text = c.CorrectionTerms;
@@ -164,11 +175,21 @@ public sealed partial class MainPage : Page
                 syncingAudioMode = true;
                 Mode.SelectedIndex = ViewModel.ActiveAudioMode;
                 syncingAudioMode = false;
+                UpdateAudioModeMenu();
             }
             if (e.PropertyName is nameof(ViewModel.Level) or nameof(ViewModel.IsRecording) or nameof(ViewModel.Status) or nameof(ViewModel.AudioWaveformSamples)) UpdateAudioDisplay();
-            if (e.PropertyName == nameof(ViewModel.IsRecording)) UpdateRecordingLanguageHint();
+            if (e.PropertyName is nameof(ViewModel.IsTranslationColumnVisible) or nameof(ViewModel.IsSpeakerMetadataVisible)) UpdateRealizedTranscriptRows();
+            if (e.PropertyName == nameof(ViewModel.IsRecording))
+            {
+                UpdateRecordingLanguageHint();
+                InitializeLanguageFlyouts();
+            }
             if (e.PropertyName == nameof(ViewModel.Summary)) RenderSummary();
-            if (e.PropertyName is nameof(ViewModel.HasGeneratedSummary) or nameof(ViewModel.SummaryStatus) or nameof(ViewModel.IsRecording)) UpdateSummaryVisibility();
+            if (e.PropertyName is nameof(ViewModel.HasGeneratedSummary) or nameof(ViewModel.SummaryStatus) or nameof(ViewModel.IsRecording) or nameof(ViewModel.IsSummaryPanelVisible))
+            {
+                UpdateSummaryVisibility();
+                DispatcherQueue.TryEnqueue(UpdateSummaryLayout);
+            }
         };
         RenderSummary();
         UpdateAudioDisplay();
@@ -189,13 +210,21 @@ public sealed partial class MainPage : Page
     public static Visibility VisibleWhen(bool value) => value ? Visibility.Visible : Visibility.Collapsed;
     public static Visibility HiddenWhen(bool value) => value ? Visibility.Collapsed : Visibility.Visible;
     public static bool Not(bool value) => !value;
+    public static int TranscriptColumnSpan(bool translationEnabled) => translationEnabled ? 1 : 2;
+    public static bool HasValue(string? value) => !string.IsNullOrWhiteSpace(value);
     public static string AccessibleText(string role, string? value) => string.IsNullOrWhiteSpace(value) ? string.Empty : $"{role}：{value}";
+    public static string TranscriptDisplayText(string? value, string placeholder) => string.IsNullOrEmpty(value) ? placeholder : value;
     public static string SubtitleEditAutomationId(Guid subtitleId) => $"EditSubtitle_{subtitleId:N}";
     private void UpdateLanguageHeaders()
     {
-        SourceLanguageChoice.SelectedItem = SourceLanguages.FirstOrDefault(item => item.Code == (string.IsNullOrWhiteSpace(ViewModel.Config.SourceLanguage) ? null : ViewModel.Config.SourceLanguage)) ?? SourceLanguages[0];
-        TargetLanguageChoice.SelectedItem = TargetLanguages.FirstOrDefault(item => item.Code == (ViewModel.Config.Translate ? ViewModel.Config.TargetLanguage : null)) ?? TargetLanguages[0];
-        TargetLanguageChoice.Visibility = ViewModel.Config.Translate ? Visibility.Visible : Visibility.Collapsed;
+        var source = SourceLanguages.FirstOrDefault(item => item.Code == (string.IsNullOrWhiteSpace(ViewModel.Config.SourceLanguage) ? null : ViewModel.Config.SourceLanguage)) ?? SourceLanguages[0];
+        var target = TargetLanguages.FirstOrDefault(item => item.Code == (ViewModel.Config.Translate ? ViewModel.Config.TargetLanguage : null)) ?? TargetLanguages[0];
+        SourceLanguageTitle.Text = source.Title;
+        TargetLanguageTitle.Text = target.Title;
+        AutomationProperties.SetName(SourceLanguageChoice, $"识别语言：{source.Title}");
+        AutomationProperties.SetName(TargetLanguageChoice, $"翻译目标：{target.Title}");
+        UpdateLanguageFlyoutChecks(SourceLanguageFlyout, source.Code);
+        UpdateLanguageFlyoutChecks(TargetLanguageFlyout, target.Code);
         SettingsSourceMode.SelectedItem = string.IsNullOrWhiteSpace(ViewModel.Config.SourceLanguage) ? AutomaticSourceMode : PreferredSourceMode;
         SettingsSourceLanguage.SelectedItem = PreferredLanguages.FirstOrDefault(item => item.Code == ViewModel.Config.PreferredSourceLanguage) ?? PreferredLanguages[0];
         UpdatePreferredSourceSettingsVisibility();
@@ -256,6 +285,7 @@ public sealed partial class MainPage : Page
                 if (observedSubtitleIds.Add(entry.Id))
                     entry.PropertyChanged += (_, args) =>
                     {
+                        if (args.PropertyName == nameof(Subtitle.Speaker)) UpdateRealizedTranscriptRows();
                         if (ReferenceEquals(ViewModel.Entries.LastOrDefault(), entry)
                             && args.PropertyName is nameof(Subtitle.English) or nameof(Subtitle.Chinese))
                             TranscriptContentChanged();
@@ -297,23 +327,121 @@ public sealed partial class MainPage : Page
         }
         return null;
     }
-    private void SourceLanguage_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private static T? FindDescendant<T>(DependencyObject parent, string name) where T : FrameworkElement
     {
-        if (SourceLanguageChoice.SelectedItem is not LanguageChoice selected) return;
+        int count = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(parent);
+        for (int index = 0; index < count; index++)
+        {
+            var child = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(parent, index);
+            if (child is T match && match.Name == name) return match;
+            if (FindDescendant<T>(child, name) is { } nested) return nested;
+        }
+        return null;
+    }
+    private void TranscriptRow_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is Grid row)
+        {
+            realizedTranscriptRows.Add(row);
+            UpdateTranscriptRowPresentation(row);
+        }
+    }
+    private void TranscriptRow_Unloaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is Grid row) realizedTranscriptRows.Remove(row);
+    }
+    private void TranscriptRow_DataContextChanged(FrameworkElement sender, DataContextChangedEventArgs e)
+    {
+        if (sender is Grid row && row.IsLoaded) UpdateTranscriptRowPresentation(row);
+    }
+    private void UpdateRealizedTranscriptRows()
+    {
+        foreach (Grid row in realizedTranscriptRows.ToArray())
+            UpdateTranscriptRowPresentation(row);
+    }
+    private void UpdateTranscriptRowPresentation(Grid row)
+    {
+        bool translationEnabled = ViewModel.IsTranslationColumnVisible;
+        if (FindDescendant<TextBlock>(row, "OriginalTranscriptText") is { } original)
+            Grid.SetColumnSpan(original, TranscriptColumnSpan(translationEnabled));
+        if (FindDescendant<TextBlock>(row, "TranslatedTranscriptText") is { } translated)
+            translated.Visibility = VisibleWhen(translationEnabled);
+        bool showSpeaker = ViewModel.IsSpeakerMetadataVisible && HasValue((row.DataContext as Subtitle)?.Speaker);
+        if (FindDescendant<TextBlock>(row, "SpeakerMetadataText") is { } speaker)
+            speaker.Visibility = VisibleWhen(showSpeaker);
+        if (FindDescendant<TextBlock>(row, "SpeakerSeparator") is { } separator)
+            separator.Visibility = VisibleWhen(showSpeaker);
+    }
+    private void InitializeLanguageFlyouts()
+    {
+        PopulateLanguageFlyout(SourceLanguageFlyout, SourceLanguages, "SourceLanguage", SourceLanguageMenuItem_Click);
+        PopulateLanguageFlyout(TargetLanguageFlyout, TargetLanguages, "TargetLanguage", TargetLanguageMenuItem_Click);
+    }
+    private void PopulateLanguageFlyout(MenuFlyout flyout, IReadOnlyList<LanguageChoice> languages, string automationIdPrefix, RoutedEventHandler handler)
+    {
+        flyout.Items.Clear();
+        foreach (var language in languages)
+        {
+            var item = new MenuFlyoutItem { Text = language.Title, Tag = language.Code ?? string.Empty };
+            item.Click += handler;
+            AutomationProperties.SetAutomationId(item, $"{automationIdPrefix}_{(language.Code ?? "none")}");
+            flyout.Items.Add(item);
+        }
+        if (ViewModel.IsRecording)
+        {
+            flyout.Items.Add(new MenuFlyoutSeparator());
+            flyout.Items.Add(new MenuFlyoutItem { Text = "下次录音生效", IsEnabled = false });
+        }
+    }
+    private static void UpdateLanguageFlyoutChecks(MenuFlyout flyout, string? selectedCode)
+    {
+        foreach (var item in flyout.Items.OfType<MenuFlyoutItem>())
+        {
+            var code = (string)item.Tag;
+            item.Icon = (code.Length == 0 ? selectedCode is null : code == selectedCode)
+                ? new FontIcon { Glyph = "\uE73E", FontSize = 12 }
+                : null;
+        }
+    }
+    private void SourceLanguageMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuFlyoutItem { Tag: string code } || !TryFindLanguage(SourceLanguages, code, out var selected)) return;
         ViewModel.Config.SourceLanguage = selected.Code ?? string.Empty;
         if (selected.Code is not null) ViewModel.Config.PreferredSourceLanguage = selected.Code;
         ViewModel.Config.Save();
         UpdateLanguageHeaders();
         UpdateRecordingLanguageHint();
     }
-    private void TargetLanguage_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void TargetLanguageMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        if (TargetLanguageChoice.SelectedItem is not LanguageChoice selected) return;
+        if (sender is not MenuFlyoutItem { Tag: string code } || !TryFindLanguage(TargetLanguages, code, out var selected)) return;
         ViewModel.Config.Translate = selected.Code is not null;
         if (selected.Code is not null) ViewModel.Config.TargetLanguage = selected.Code;
         Translate.IsOn = ViewModel.Config.Translate;
-        TargetLanguageChoice.Visibility = ViewModel.Config.Translate ? Visibility.Visible : Visibility.Collapsed;
         ViewModel.Config.Save();
+        UpdateLanguageHeaders();
+        ViewModel.RefreshTranscriptPresentation();
+    }
+    private static bool TryFindLanguage(IReadOnlyList<LanguageChoice> languages, string code, out LanguageChoice language)
+    {
+        language = languages.FirstOrDefault(item => (item.Code ?? string.Empty) == code)!;
+        return language is not null;
+    }
+    private void AudioModeMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuFlyoutItem { Tag: string value } && int.TryParse(value, out int mode))
+            Mode.SelectedIndex = mode;
+    }
+    private void UpdateAudioModeMenu()
+    {
+        if (Mode is null || AudioModeTitle is null) return;
+        AudioModeTitle.Text = Mode.SelectedItem as string ?? "音频来源";
+        AutomationProperties.SetName(AudioModeButton, $"音频来源：{AudioModeTitle.Text}");
+        for (int index = 0; index < AudioModeFlyout.Items.Count; index++)
+        {
+            if (AudioModeFlyout.Items[index] is not MenuFlyoutItem item) continue;
+            item.Icon = index == Mode.SelectedIndex ? new FontIcon { Glyph = "\uE73E", FontSize = 12 } : null;
+        }
     }
     private void UpdateAudioDisplay()
     {
@@ -416,6 +544,7 @@ public sealed partial class MainPage : Page
             Mode.SelectedIndex = ViewModel.ActiveAudioMode;
             syncingAudioMode = false;
         }
+        UpdateAudioModeMenu();
     }
     private async void Stop_Click(object sender, RoutedEventArgs e) => await ViewModel.StopAsync();
     private async void SwitchAudio_Click(object sender, RoutedEventArgs e)
@@ -587,10 +716,17 @@ public sealed partial class MainPage : Page
         NewContentButton.Visibility = Visibility.Collapsed;
     }
     private async void Summary_Click(object sender, RoutedEventArgs e) => await ViewModel.SummarizeAsync(SummaryScope.SelectedIndex);
+    private async void SummaryMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuFlyoutItem { Tag: string value } || !int.TryParse(value, out int scope) || scope is < 0 or > 2) return;
+        SummaryScope.SelectedIndex = scope;
+        await ViewModel.SummarizeAsync(scope);
+    }
     private void SummaryExpand_Click(object sender, RoutedEventArgs e)
     {
         isSummaryExpanded = !isSummaryExpanded;
         UpdateSummaryVisibility();
+        DispatcherQueue.TryEnqueue(UpdateSummaryLayout);
     }
     private void SummaryCopy_Click(object sender, RoutedEventArgs e)
     {
@@ -642,6 +778,35 @@ public sealed partial class MainPage : Page
         SummaryScrollViewer.Visibility = ViewModel.HasGeneratedSummary && isSummaryExpanded ? Visibility.Visible : Visibility.Collapsed;
         SummaryExpandButton.Content = isSummaryExpanded ? "收起" : "展开全部";
         SummaryRecordingHint.Visibility = ViewModel.IsRecording && !ViewModel.HasGeneratedSummary ? Visibility.Visible : Visibility.Collapsed;
+    }
+    private void UpdateSummaryLayout()
+    {
+        if (SummaryContainer.Visibility != Visibility.Visible || RecordingPanel.RowDefinitions.Count < 4) return;
+        double fixedPageRows = RecordingPanel.RowDefinitions[0].ActualHeight
+            + RecordingPanel.RowDefinitions[1].ActualHeight
+            + RecordingPanel.RowDefinitions[3].ActualHeight;
+        double flexibleHeight = RecordingPanel.ActualHeight
+            - fixedPageRows
+            - RecordingPanel.RowSpacing * (RecordingPanel.RowDefinitions.Count - 1);
+        double fixedSummaryHeight = SummaryContainer.Padding.Top + SummaryContainer.Padding.Bottom
+            + SummarySection.RowSpacing * (SummarySection.RowDefinitions.Count - 1)
+            + SummarySection.RowDefinitions[0].ActualHeight
+            + SummarySection.RowDefinitions[1].ActualHeight
+            + SummarySection.RowDefinitions[3].ActualHeight;
+        double minimumTranscriptHeight = RecordingPanel.ActualHeight >= 560 ? 140 : 120;
+        var layout = SummaryPanelLayoutPolicy.Calculate(flexibleHeight, fixedSummaryHeight, minimumTranscriptHeight, 220);
+        SummaryContainer.MaxHeight = layout.PanelMaxHeight;
+        SummaryScrollViewer.MaxHeight = layout.ContentMaxHeight;
+    }
+    private void UpdateResponsiveLayout()
+    {
+        double availableWidth = XamlRoot?.Size.Width ?? RecordingPanel.ActualWidth;
+        bool isWide = availableWidth >= 700;
+        RecordingPanel.Margin = new Thickness(isWide ? 20 : 16);
+        RecordingPanel.RowSpacing = isWide ? 18 : 12;
+        Grid.SetRow(ConnectionStatusControl, isWide ? 0 : 1);
+        Grid.SetColumn(ConnectionStatusControl, isWide ? 3 : 0);
+        Grid.SetColumnSpan(ConnectionStatusControl, isWide ? 1 : 4);
     }
     private static TextBlock CreateSummaryText(string value, double fontSize, bool emphasize = false) => new()
     {
@@ -862,6 +1027,7 @@ public sealed partial class MainPage : Page
             c.AutoSummaryEnabled = AutoSummary.IsOn;
             c.Theme = ThemePreference.FromIndex(ThemeChoice.SelectedIndex);
             c.Save();
+            ViewModel.RefreshTranscriptPresentation();
             bool sonioxStillUnreadable = sonioxSecretUnreadable && SonioxKey.Password.Trim().Length == 0;
             bool deepSeekStillUnreadable = deepSeekSecretUnreadable && DeepSeekKey.Password.Trim().Length == 0;
             sonioxSecretUnreadable = sonioxStillUnreadable;

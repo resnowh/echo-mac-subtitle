@@ -102,6 +102,185 @@ var audioModeControl = audioModePageXaml.Descendants(XName.Get("ComboBox", "http
 Check(audioModeControl?.Attribute("SelectionChanged")?.Value == "AudioMode_SelectionChanged"
     && audioModeControl.Attribute("IsEnabled")?.Value.Contains("CanChangeAudioMode", StringComparison.Ordinal) == true,
     "audio input mode remains available during recording and routes selections through the live switch handler");
+var visibleAudioMode = audioModePageXaml.Descendants(XName.Get("Button", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .FirstOrDefault(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value == "AudioModeButton");
+Check(visibleAudioMode?.Attribute("AutomationProperties.AutomationId")?.Value == "InputMode"
+    && audioModePageXaml.Descendants(XName.Get("MenuFlyoutItem", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Count(element => element.Attribute("Click")?.Value == "AudioModeMenuItem_Click") == 3
+    && File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "MainPage.xaml.cs")).Contains("Mode.SelectedIndex = mode", StringComparison.Ordinal)
+    && File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "MainPage.xaml.cs")).Contains("SwitchAudioModeAsync(Mode.SelectedIndex)", StringComparison.Ordinal),
+    "compact audio source menu preserves the three existing modes and routes through live audio switching");
+var languageButtons = audioModePageXaml.Descendants(XName.Get("Button", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .Where(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value is "SourceLanguageChoice" or "TargetLanguageChoice")
+    .ToDictionary(element => element.Attribute(mainPageXamlNamespace + "Name")!.Value);
+var languageNextSessionHint = audioModePageXaml.Descendants(XName.Get("TextBlock", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .FirstOrDefault(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value == "LanguageNextSessionHint");
+string languagePageSource = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "MainPage.xaml.cs"));
+Check(languageButtons.Count == 2
+    && languageButtons["SourceLanguageChoice"].Attribute("AutomationProperties.AutomationId")?.Value == "SourceLanguageChoice"
+    && languageButtons["TargetLanguageChoice"].Attribute("AutomationProperties.AutomationId")?.Value == "TargetLanguageChoice"
+    && audioModePageXaml.Descendants(XName.Get("ComboBox", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .All(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value is not "SourceLanguageChoice" and not "TargetLanguageChoice")
+    && languagePageSource.Contains("PopulateLanguageFlyout(SourceLanguageFlyout, SourceLanguages", StringComparison.Ordinal)
+    && languagePageSource.Contains("PopulateLanguageFlyout(TargetLanguageFlyout, TargetLanguages", StringComparison.Ordinal)
+    && languagePageSource.Contains("\"SourceLanguage\", SourceLanguageMenuItem_Click", StringComparison.Ordinal)
+    && languagePageSource.Contains("\"TargetLanguage\", TargetLanguageMenuItem_Click", StringComparison.Ordinal)
+    && languagePageSource.Contains("{automationIdPrefix}_{(language.Code ?? \"none\")}", StringComparison.Ordinal)
+    && languagePageSource.Contains("下次录音生效", StringComparison.Ordinal)
+    && languagePageSource.Contains("AutomationProperties.SetName(TargetLanguageChoice", StringComparison.Ordinal)
+    && languageButtons.Values.All(button => button.Descendants(XName.Get("FontIcon", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Any(icon => icon.Attribute("Foreground")?.Value == "{ThemeResource TextFillColorTertiaryBrush}") )
+    && languageNextSessionHint?.Attribute("Foreground")?.Value == "{ThemeResource TextFillColorTertiaryBrush}"
+    && !languagePageSource.Contains("TargetLanguageChoice.Visibility =", StringComparison.Ordinal),
+    "top language choices use accessible buttons, retain all options, keep the no-translation target visible, and use Mac tertiary emphasis for chevrons and recording hint");
+var transcriptList = audioModePageXaml.Descendants(XName.Get("ListView", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .FirstOrDefault(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value == "TranscriptList");
+var transcriptRegion = transcriptList?.Parent;
+string newContentCodeBehindSource = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "MainPage.xaml.cs"));
+var transcriptLayoutRows = transcriptRegion?.Element(XName.Get("Grid.RowDefinitions", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    ?.Elements(XName.Get("RowDefinition", "http://schemas.microsoft.com/winfx/2006/xaml/presentation")).ToArray();
+var newContentButton = audioModePageXaml.Descendants(XName.Get("Button", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .FirstOrDefault(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value == "NewContentButton");
+Check(transcriptLayoutRows is { Length: 2 }
+    && transcriptLayoutRows[0].Attribute("Height")?.Value == "*"
+    && transcriptLayoutRows[1].Attribute("Height")?.Value == "Auto"
+    && transcriptList?.Attribute("Grid.Row")?.Value == "0"
+    && newContentButton is not null
+    && newContentButton.Parent == transcriptRegion
+    && newContentButton.Attribute("Grid.Row")?.Value == "1"
+    && newContentButton.Attribute("Visibility")?.Value == "Collapsed"
+    && newContentButton.Attribute("AutomationProperties.AutomationId")?.Value == "ScrollToLatest"
+    && newContentCodeBehindSource.Contains("NewContentButton.Visibility = transcriptFollowState.HasNewContent ? Visibility.Visible : Visibility.Collapsed;", StringComparison.Ordinal),
+    "new-content prompt occupies its own collapsed row below the transcript so it cannot cover subtitle edit actions");
+var transcriptDivider = transcriptRegion?.Elements(XName.Get("Border", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .SingleOrDefault(element => element.Attribute("Height")?.Value == "1");
+Check(transcriptRegion?.Attribute("Opacity") is null
+    && transcriptDivider is not null
+    && transcriptDivider.Attribute("Opacity")?.Value == "0.55"
+    && transcriptDivider.Attribute("IsHitTestVisible")?.Value == "False",
+    "transcript divider opacity is isolated to its one-pixel line so subtitles, empty state, and unread-content control keep full contrast");
+var summaryPanel = audioModePageXaml.Descendants(XName.Get("Grid", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .FirstOrDefault(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value == "SummarySection");
+var summaryContainer = summaryPanel?.Parent;
+var correctionButton = audioModePageXaml.Descendants(XName.Get("Button", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .FirstOrDefault(element => element.Attribute("Click")?.Value == "Correction_Click");
+var sourceTranscriptText = audioModePageXaml.Descendants(XName.Get("TextBlock", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .Single(element => element.Attribute("Text")?.Value.Contains("TranscriptDisplayText(English", StringComparison.Ordinal) == true);
+var translatedTranscriptText = audioModePageXaml.Descendants(XName.Get("TextBlock", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .Single(element => element.Attribute("Text")?.Value.Contains("TranscriptDisplayText(Chinese", StringComparison.Ordinal) == true);
+var transcriptViewModelSource = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "MainPageViewModel.cs"));
+var transcriptCodeBehindSource = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "MainPage.xaml.cs"));
+Check(transcriptViewModelSource.Contains("IsTranslationColumnVisible => IsRecording ? activeTranslationEnabled : Config.Translate", StringComparison.Ordinal)
+    && transcriptViewModelSource.Contains("OnPropertyChanged(nameof(IsTranslationColumnVisible))", StringComparison.Ordinal)
+    && transcriptViewModelSource.Contains("RefreshTranscriptPresentation() { OnPropertyChanged(nameof(IsTranslationColumnVisible)); OnPropertyChanged(nameof(IsSpeakerMetadataVisible)); }", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("TranscriptColumnSpan(bool translationEnabled) => translationEnabled ? 1 : 2", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("TranscriptRow_Loaded", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("realizedTranscriptRows.Add(row)", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("realizedTranscriptRows.Remove(row)", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("foreach (Grid row in realizedTranscriptRows.ToArray())", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("UpdateTranscriptRowPresentation(row)", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("ViewModel.RefreshTranscriptPresentation();", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Split("ViewModel.RefreshTranscriptPresentation();", StringSplitOptions.None).Length >= 3,
+    "translation column visibility follows the active recording config and refreshes when the saved language choice changes");
+Check(!TranscriptPresentationPolicy.SpeakerMetadataVisible(isRecording: true, activeSessionSetting: false, savedSetting: true)
+    && TranscriptPresentationPolicy.SpeakerMetadataVisible(isRecording: true, activeSessionSetting: true, savedSetting: false)
+    && TranscriptPresentationPolicy.SpeakerMetadataVisible(isRecording: false, activeSessionSetting: true, savedSetting: false) == false
+    && TranscriptPresentationPolicy.SpeakerMetadataVisible(isRecording: false, activeSessionSetting: false, savedSetting: true),
+    "speaker metadata visibility follows the frozen recording setting during a session and saved preference while idle");
+var speakerMetadataGroup = audioModePageXaml.Descendants(XName.Get("StackPanel", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .FirstOrDefault(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value == "SpeakerMetadataGroup");
+Check(transcriptViewModelSource.Contains("IsSpeakerMetadataVisible => TranscriptPresentationPolicy.SpeakerMetadataVisible(IsRecording, activeSpeakerDiarizationEnabled, Config.Speakers)", StringComparison.Ordinal)
+    && transcriptViewModelSource.Contains("activeSpeakerDiarizationEnabled = Config.Speakers", StringComparison.Ordinal)
+    && transcriptViewModelSource.Contains("OnPropertyChanged(nameof(IsSpeakerMetadataVisible))", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("nameof(ViewModel.IsSpeakerMetadataVisible)", StringComparison.Ordinal)
+    && speakerMetadataGroup?.Elements(XName.Get("TextBlock", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Take(2).All(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value is "SpeakerMetadataText" or "SpeakerSeparator"
+            && element.Attribute("Visibility")?.Value == "Collapsed") == true
+    && transcriptCodeBehindSource.Contains("bool showSpeaker = ViewModel.IsSpeakerMetadataVisible && HasValue((row.DataContext as Subtitle)?.Speaker)", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("speaker.Visibility = VisibleWhen(showSpeaker)", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("separator.Visibility = VisibleWhen(showSpeaker)", StringComparison.Ordinal)
+    && !transcriptCodeBehindSource.Contains("speakerMetadata.Visibility", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("or nameof(ViewModel.IsSpeakerMetadataVisible)", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("TranscriptRow_DataContextChanged(FrameworkElement sender, DataContextChangedEventArgs e)", StringComparison.Ordinal)
+    && speakerMetadataGroup?.Parent?.Attribute("DataContextChanged")?.Value == "TranscriptRow_DataContextChanged"
+    && transcriptCodeBehindSource.Contains("args.PropertyName == nameof(Subtitle.Speaker)", StringComparison.Ordinal),
+    "speaker labels and separator are hidden when disabled or absent, matching the Mac transcript metadata row");
+var dateHeading = audioModePageXaml.Descendants(XName.Get("TextBlock", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .FirstOrDefault(element => element.Attribute("Text")?.Value.Contains("DateSeparatorLabel", StringComparison.Ordinal) == true);
+var timeLabel = audioModePageXaml.Descendants(XName.Get("TextBlock", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .FirstOrDefault(element => element.Attribute("Text")?.Value.Contains("TimeLabel", StringComparison.Ordinal) == true);
+Check(transcriptList?.Element(XName.Get("ListView.ItemContainerStyle", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))?
+        .Elements(XName.Get("Style", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Elements(XName.Get("Setter", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Any(element => element.Attribute("Property")?.Value == "Padding" && element.Attribute("Value")?.Value == "0") == true
+    && correctionButton?.Attribute("Style")?.Value == "{StaticResource SubtitleActionButtonStyle}"
+    && correctionButton.Descendants(XName.Get("FontIcon", "http://schemas.microsoft.com/winfx/2006/xaml/presentation")).Any()
+    && sourceTranscriptText.Attribute(mainPageXamlNamespace + "Name")?.Value == "OriginalTranscriptText"
+    && sourceTranscriptText.Attribute("Grid.ColumnSpan")?.Value == "1"
+    && translatedTranscriptText.Attribute(mainPageXamlNamespace + "Name")?.Value == "TranslatedTranscriptText"
+    && translatedTranscriptText.Attribute("Grid.Column")?.Value == "1"
+    && transcriptList?.Descendants(XName.Get("Grid", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Any(element => element.Attribute("Loaded")?.Value == "TranscriptRow_Loaded") == true
+    && summaryPanel?.Attribute("AutomationProperties.AutomationId")?.Value == "SummarySection"
+    && summaryPanel.Parent is XElement summaryBorder
+    && summaryBorder.Name == XName.Get("Border", "http://schemas.microsoft.com/winfx/2006/xaml/presentation")
+    && summaryBorder.Attribute("Background")?.Value == "{ThemeResource EchoSubtleSurfaceBrush}"
+    && audioModePageXaml.Descendants(XName.Get("MenuFlyoutItem", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Count(element => element.Attribute("Click")?.Value == "SummaryMenuItem_Click") == 3
+    && dateHeading?.Attribute("Margin")?.Value == "0,12,0,4"
+    && timeLabel?.Attribute("Typography.NumeralAlignment")?.Value == "Tabular"
+    && audioModePageXaml.Descendants(XName.Get("TextBlock", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Any(element => element.Attribute("Text")?.Value.Contains("TranscriptDisplayText(English, '…')", StringComparison.Ordinal) == true)
+    && audioModePageXaml.Descendants(XName.Get("TextBlock", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Any(element => element.Attribute("Text")?.Value.Contains("TranscriptDisplayText(Chinese, ' ')", StringComparison.Ordinal) == true)
+    && languagePageSource.Contains("string.IsNullOrEmpty(value) ? placeholder : value", StringComparison.Ordinal),
+    "transcript rows retain Mac empty-text placeholders, date spacing and tabular time with a quiet correction action and low-emphasis summary surface");
+var recordingPanel = audioModePageXaml.Descendants(XName.Get("Grid", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .FirstOrDefault(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value == "RecordingPanel");
+var archiveButton = audioModePageXaml.Descendants(XName.Get("Button", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .FirstOrDefault(element => element.Attribute("AutomationProperties.AutomationId")?.Value == "ArchiveMenu");
+var archiveRow = archiveButton?.Parent as XElement;
+var waveformBorder = audioModePageXaml.Descendants(XName.Get("Border", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .FirstOrDefault(element => element.Elements(XName.Get("StackPanel", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Any(panel => panel.Attribute(mainPageXamlNamespace + "Name")?.Value == "WaveformBars"));
+Check(recordingPanel?.Attribute("Margin")?.Value == "16"
+    && recordingPanel.Attribute("RowSpacing")?.Value == "12"
+    && recordingPanel.Descendants(XName.Get("AdaptiveTrigger", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Any(element => element.Attribute("MinWindowWidth")?.Value == "700") == true
+    && recordingPanel.Descendants(XName.Get("VisualState.Setters", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Elements(XName.Get("Setter", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Any(element => element.Attribute("Target")?.Value == "RecordingPanel.Margin" && element.Attribute("Value")?.Value == "20")
+    && recordingPanel.Descendants(XName.Get("VisualState.Setters", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Elements(XName.Get("Setter", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Any(element => element.Attribute("Target")?.Value == "RecordingPanel.RowSpacing" && element.Attribute("Value")?.Value == "18")
+    && archiveRow?.Element(XName.Get("Grid.ColumnDefinitions", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))?
+        .Elements(XName.Get("ColumnDefinition", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .FirstOrDefault()?.Attribute("Width")?.Value == "*"
+    && archiveButton?.Attribute("HorizontalAlignment")?.Value == "Stretch"
+    && waveformBorder?.Attribute("Background")?.Value == "{ThemeResource EchoSubtleSurfaceBrush}"
+    && File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "MainPage.xaml.cs"))
+        .Contains("await ViewModel.SummarizeAsync(scope)", StringComparison.Ordinal),
+    "main spacing, expanding archive selection, quiet waveform surface and summary scope actions follow the Mac layout contract");
+Check(transcriptCodeBehindSource.Contains("double availableWidth = XamlRoot?.Size.Width ?? RecordingPanel.ActualWidth", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("bool isWide = availableWidth >= 700", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("Grid.SetRow(ConnectionStatusControl, isWide ? 0 : 1)", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("Grid.SetColumn(ConnectionStatusControl, isWide ? 3 : 0)", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("Grid.SetColumnSpan(ConnectionStatusControl, isWide ? 1 : 4)", StringComparison.Ordinal),
+    "recording toolbar and margins adapt directly to the available content width");
+var appResources = XDocument.Load(Path.Combine(AppContext.BaseDirectory, "Fixtures", "App.xaml"));
+var darkTheme = appResources.Descendants(XName.Get("ResourceDictionary", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .FirstOrDefault(element => element.Attribute(mainPageXamlNamespace + "Key")?.Value == "Dark");
+var lightTheme = appResources.Descendants(XName.Get("ResourceDictionary", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .FirstOrDefault(element => element.Attribute(mainPageXamlNamespace + "Key")?.Value == "Light");
+var highContrastTheme = appResources.Descendants(XName.Get("ResourceDictionary", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .FirstOrDefault(element => element.Attribute(mainPageXamlNamespace + "Key")?.Value == "HighContrast");
+Check(darkTheme?.Elements(XName.Get("SolidColorBrush", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Any(element => element.Attribute(mainPageXamlNamespace + "Key")?.Value == "EchoSubtleSurfaceBrush" && element.Attribute("Opacity")?.Value == "0.06") == true
+    && lightTheme?.Elements(XName.Get("SolidColorBrush", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Any(element => element.Attribute(mainPageXamlNamespace + "Key")?.Value == "EchoSubtleSurfaceBrush" && element.Attribute("Opacity")?.Value == "0.04") == true
+    && highContrastTheme?.Elements(XName.Get("StaticResource", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Any(element => element.Attribute(mainPageXamlNamespace + "Key")?.Value == "EchoSubtleSurfaceBrush" && element.Attribute("ResourceKey")?.Value == "SystemColorWindowColorBrush") == true,
+    "low-emphasis background remains theme-aware and falls back to a system brush in High Contrast");
 string correctionEditorSource = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "MainPage.xaml.cs"));
 Check(correctionEditorSource.Contains("var historyExpander = new Expander { Header = \"识别稿与修改前版本\"", StringComparison.Ordinal)
     && correctionEditorSource.Contains("SetAutomationId(historyExpander, \"CorrectionHistory\")", StringComparison.Ordinal)
@@ -181,12 +360,34 @@ var startRecordingControl = mainPageXaml.Descendants(presentationNamespace + "Bu
     .Single(element => element.Attribute("AutomationProperties.AutomationId")?.Value == "StartRecording");
 var stopRecordingControl = mainPageXaml.Descendants(presentationNamespace + "Button")
     .Single(element => element.Attribute("AutomationProperties.AutomationId")?.Value == "StopRecording");
+var stopRecordingStyle = mainPageXaml.Descendants(presentationNamespace + "Style")
+    .Single(element => element.Attribute(xamlNamespace + "Key")?.Value == "StopRecordingButtonStyle");
+var recordingToolbar = mainPageXaml.Descendants(presentationNamespace + "Grid")
+    .Single(element => element.Attribute(xamlNamespace + "Name")?.Value == "RecordingToolbar");
+var responsiveRecordingState = recordingToolbar.Descendants(presentationNamespace + "VisualState")
+    .Single(element => element.Attribute(xamlNamespace + "Name")?.Value == "RecordingToolbarWide");
+var connectionStatus = recordingToolbar.Descendants(presentationNamespace + "StackPanel")
+    .Single(element => element.Attribute(xamlNamespace + "Name")?.Value == "ConnectionStatusControl");
 var archiveListControl = mainPageXaml.Descendants(presentationNamespace + "ListView")
     .Single(element => element.Attribute("AutomationProperties.AutomationId")?.Value == "ArchiveList");
 var recordingStatusControl = mainPageXaml.Descendants(presentationNamespace + "TextBlock")
     .Single(element => element.Attribute("AutomationProperties.AutomationId")?.Value == "Status");
 Check(startRecordingControl.Attribute("AutomationProperties.Name")?.Value == "开始录音"
     && stopRecordingControl.Attribute("AutomationProperties.Name")?.Value == "停止录音"
+    && startRecordingControl.Attribute("MinWidth")?.Value == "126"
+    && startRecordingControl.Attribute("MinHeight")?.Value == "34"
+    && stopRecordingStyle.Elements(presentationNamespace + "Setter")
+        .Any(element => element.Attribute("Property")?.Value == "MinWidth" && element.Attribute("Value")?.Value == "126")
+    && stopRecordingStyle.Elements(presentationNamespace + "Setter")
+        .Any(element => element.Attribute("Property")?.Value == "MinHeight" && element.Attribute("Value")?.Value == "34")
+    && connectionStatus.Attribute("Grid.Row")?.Value == "1"
+    && connectionStatus.Attribute("Grid.ColumnSpan")?.Value == "4"
+    && responsiveRecordingState.Descendants(presentationNamespace + "AdaptiveTrigger")
+        .Any(element => element.Attribute("MinWindowWidth")?.Value == "700")
+    && responsiveRecordingState.Elements(presentationNamespace + "VisualState.Setters")
+        .Elements(presentationNamespace + "Setter")
+        .Any(element => element.Attribute("Target")?.Value == "ConnectionStatusControl.(Grid.Row)"
+            && element.Attribute("Value")?.Value == "0")
     && archiveListControl.Attribute("AutomationProperties.Name")?.Value == "本地存档"
     && recordingStatusControl.Attribute("AutomationProperties.Name")?.Value.Contains("AccessibleText('录音状态', ViewModel.Status)", StringComparison.Ordinal) == true
     && recordingStatusControl.Attribute("AutomationProperties.LiveSetting")?.Value == "Polite",
@@ -287,6 +488,23 @@ Check(summaryBlocks.Select(block => (block.Kind, block.Text)).SequenceEqual([
     (SummaryMarkdownBlockKind.Bullet, "第一项"),
     (SummaryMarkdownBlockKind.Bullet, "第二项")
 ]), "summary markdown blocks match the Mac title, heading, bullet, and paragraph rules across Windows line endings");
+var summaryLayout = SummaryPanelLayoutPolicy.Calculate(flexibleHeight: 300, fixedPanelHeight: 108, minimumTranscriptHeight: 140, preferredContentMaxHeight: 220);
+var compactSummaryLayout = SummaryPanelLayoutPolicy.Calculate(flexibleHeight: 150, fixedPanelHeight: 108, minimumTranscriptHeight: 120, preferredContentMaxHeight: 220);
+var summaryLayoutRecordingPanel = audioModePageXaml.Descendants(XName.Get("Grid", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .FirstOrDefault(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value == "RecordingPanel");
+var summaryScrollViewer = summaryPanel?.Descendants(XName.Get("ScrollViewer", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .FirstOrDefault(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value == "SummaryScrollViewer");
+Check(summaryLayout == new SummaryPanelLayout(160, 52)
+    && compactSummaryLayout.PanelMaxHeight == 30 && compactSummaryLayout.ContentMaxHeight == 0
+    && summaryLayoutRecordingPanel?.Element(XName.Get("Grid.RowDefinitions", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))?
+        .Elements(XName.Get("RowDefinition", "http://schemas.microsoft.com/winfx/2006/xaml/presentation")).ElementAtOrDefault(2)?.Attribute("MinHeight")?.Value == "120"
+    && summaryContainer?.Attribute(mainPageXamlNamespace + "Name")?.Value == "SummaryContainer"
+    && summaryScrollViewer?.Parent?.Element(XName.Get("Grid.RowDefinitions", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))?
+        .Elements(XName.Get("RowDefinition", "http://schemas.microsoft.com/winfx/2006/xaml/presentation")).ElementAtOrDefault(2)?.Attribute("Height")?.Value == "*"
+    && transcriptCodeBehindSource.Contains("RecordingPanel.ActualHeight >= 560 ? 140 : 120", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("SummaryPanelLayoutPolicy.Calculate(flexibleHeight, fixedSummaryHeight, minimumTranscriptHeight, 220)", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("SummaryScrollViewer.MaxHeight = layout.ContentMaxHeight", StringComparison.Ordinal),
+    "expanded AI summary yields excess height to the transcript while retaining its Mac 220 DIP content cap");
 Check(segmentation.SonioxMaxEndpointDelayMilliseconds == 3000 && segmentation.SonioxEndpointSensitivity == -.3
     && segmentation.LocalSilenceThresholdSeconds == 4.5 && segmentation.LocalSilenceMinimumWordCount == 5
     && segmentation.LongSegmentWordThreshold == 80 && segmentation.LongSegmentDurationThresholdSeconds == 90,

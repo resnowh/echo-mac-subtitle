@@ -4,6 +4,44 @@
 
 ## 主窗口
 
+### A80 主界面 Mac 信息层级收敛（2026-10-10）
+
+基于 PR #5 最新头 `b52f68efafd7fd1b0d1671ded4fc3f37c9a701e7`，参考 Mac `origin/main` `ae0359dc90da0ccb5e526a275da1747954a49a4f` 的 SwiftUI 实现。下表记录参数来源、改前差异与当前改动；Mac 实际绘制效果仍以用户视觉验收为准。
+
+| 区域 | Mac 源码参数/表现 | Windows PR #5 改前 | 当前 Windows 改动/仍有的差异 |
+|---|---|---|---|
+| 顶部品牌与工具栏 | 根视图 `.padding(20)`、纵向间隔 18；ECHO 为 caption bold/Mint，右侧浮层/设置/主题/置顶为 borderless 图标按钮 | 主内容边距 `28,12,28,24`、行距 16；ECHO 12 DIP；工具按钮固定 36×36 并带 QuietButton 内边距 | 根边距调整为 20、主行距 18；保留 Windows 标题栏与 36×36 工具按钮及全部入口，保持现有主题 Mint。WinUI 标题栏/图标视觉继续采用平台样式 |
+| 语言选择 | 两个等宽菜单，列距 14；subheadline semibold/secondary，小箭头 9 pt/tertiary；录音提示 caption2/tertiary，语言下方 Divider opacity .55 | 两个带 Header 的 ComboBox，默认背景、边框、内边距和最小高度 | Button + MenuFlyout；按钮透明、padding 0×3、min-height 30，文字 14 DIP semibold/secondary、箭头 9/tertiary；录音提示改用 tertiary brush；选中项有勾；“不翻译”始终在目标列。保留设置保存、动态名称与 AutomationId |
+| 字幕列表容器 | ScrollView + `LazyVStack(spacing: 0)`；日期头上/下留白 12/4，单条内容上下留白 7，元信息至正文间距 5；仅 Divider opacity .55 | ListView 外 padding `0,16,0,24`；未覆盖 ListViewItem 默认 padding/min-height；数据行 Grid padding `0,8`、行间距 5；区域容器 opacity .55 会连字幕一起变淡 | ListView padding `0,8,0,12`，列表项 Padding/Margin 清零、MinHeight=0、背景透明；每行上下 6 DIP、行间距 4。日期头补 12/4 DIP，保留动态高度和虚拟化；顶部 1 DIP 分隔线单独设 opacity .55，不降低整块字幕对比度；无逐字幕背景卡片 |
+| 双栏正文 | HStack 顶部对齐、间距 14；Mac 仅翻译开启时显示译文列，关闭时原文使用整行；font.body，lineSpacing 3；空原文显示省略号 | 两列等宽、间距 14；原文与译文固定各占一列，即使关闭翻译也空留半幅 | 翻译开启时两列等宽、间距14、正文15 DIP；关闭时译文列折叠、原文跨两列；自动换行；行上下6、行间距4；逐字幕细分隔线；正文实际栅格效果待截图核验
+| Speaker/时间/语言 | caption.monospacedDigit + secondary；时间格式 HH:mm:ss；语言和纠正状态只在需要时显示 | CaptionTextBlockStyle、secondary；元信息间距 8 | 字号 12 DIP、secondary；时间启用 Tabular numeral；保留语言与“已纠正”条件。元信息横向间距收至 7 DIP |
+| 纠正操作 | Pencil +“纠正/查看校对”，borderless，caption 色，与元信息同行右对齐 | 每行普通 Button，padding `8,2`、min-height 28，WinUI 默认按钮状态可见 | 透明背景、padding `4,2`、min-width 0、min-height 30；12 DIP 铅笔与文字，右对齐；继承 DefaultButtonStyle 以保留 hover/focus 键盘反馈与逐字幕 AutomationId |
+| 录音控制 | HStack 间距 10；音源菜单最小宽 148；同一切换按钮最小宽 126，borderedProminent，录音时红色、空闲 Mint；状态圆点 8、文字间距 7；空间不足时 ViewThatFits 将状态放到下一行 | 三态 ComboBox 和开始/停止按钮列；状态原本固定处于按钮右侧 | 轻量三态菜单复用原 Mode 事件，min-width 148；开始/停止统一 min-width 126、min-height 34；开始沿用 Echo Mint，停止用系统 Critical brush；状态 8 DIP 圆点和 360 DIP 截断保留；A84 在窗口宽小于 760 DIP 时将状态移至第二行 |
+| 存档工具栏 | HStack 间距 10；存档菜单最大宽 260，Spacer 将导出和更多推至右侧 | 四列 Auto/Auto/Auto/*，存档宽限 240；导出、更多实际靠左排列 | 改为 */Auto/Auto；存档按钮横向 Stretch、内容左对齐，导出/更多靠右；三个操作原 AutomationId 和业务处理保留 |
+| 波形 | 48 个样本；条宽/间距 3，圆角 2，活动高 `max(2,min(46,3+sample×44))`；容器 52、水平 padding 12、quaternary opacity .35/corner 10 | 48 个样本和 52 高已对齐，但容器用 CardBackgroundFillColorDefaultBrush | 保留 48 点、条宽/间距/高度映射；改为主题化弱表面：深色白色 6% 不透明、浅色黑色 4%、高对比度系统 Window 色；真实合成效果待 GUI 验收 |
+| AI 总结 | 轻量标题与右侧总结菜单；内部状态/内容直接可见，正文 ScrollView 最大高 220；面板 padding 12、quaternary opacity .35、圆角 10 | 默认折叠 Expander；scope ComboBox 和“生成总结”仅在展开后可见；主体卡片填充默认卡片色 | 改为始终可见的轻表面和标题右侧 MenuFlyout（三种总结范围）；保留录音提示、状态、最大高 220 的内容滚动、展开/复制与原 ViewModel 调用；范围选择继续由原索引状态接线 |
+| 颜色、窗口与主题 | 系统深/浅色语义，Mint；窗口 min 680×520、ideal 820×650，主视图 padding 20 | Windows 已有 Echo 深/浅/高对比主题、Accent 资源与 A48 窗口尺寸 | 沿用现有 Echo 和系统语义资源，不改 macOS；补充低强调表面主题资源并为高对比度映射到系统 Window brush。未通过 GUI 核实各状态下对比度 |
+
+### 全局视觉规范与控件状态
+
+这些颜色以 SwiftUI 语义色为准，而不是固定 RGB。Mac 源码没有给主窗口背景写死十六进制值；字体也使用系统语义样式，因此 Windows 数值是可审阅的对应参数，是否在实际像素上接近仍需同主题、同尺寸截图确认。
+
+| 视觉项 | Mac 源码基准 | Windows 当前实现 | 验收边界 |
+|---|---|---|---|
+| 主背景 | `WindowGroup` 的系统窗口表面；主题为 dark/light/system，没有自定义窗口底色 | 深色 `#202222`、浅色 `#FAFBF9`；High Contrast 映射系统 Window brush | Mac 与 Windows 的窗口材质/颜色不能从源码数值直接一一换算，需截图对照 |
+| 次级表面 | 波形和总结使用 `.quaternary.opacity(0.35)`，圆角 10 | `EchoSubtleSurfaceBrush`：深色白色 6%、浅色黑色 4%；High Contrast 使用系统 Window brush | 语义对齐，实际混色与对比度待深浅主题截图验收 |
+| 主文字 | SwiftUI 默认 primary 文本色 | WinUI 系统 primary text brush | 随系统主题；未对比实际显示器像素 |
+| 次级/三级文字 | `.secondary` 用于语言标题、元信息和状态；`.tertiary` 用于箭头与录音中提示 | `TextFillColorSecondaryBrush` / `TextFillColorTertiaryBrush`；A81 将语言箭头和提示改为 tertiary | 语义层级明确；高对比度/焦点场景仍待 GUI 检查 |
+| 品牌强调色 | SwiftUI `.mint`；录音状态、ECHO 标记和活动波形按语义使用 | 深色 `#94D9BD`、浅色 `#27664F`，High Contrast 使用系统 Highlight brush | Mac Mint 为系统语义色；两端 RGB 不保证相同 |
+| 分隔线 | SwiftUI `Divider().opacity(0.55)` | `DividerStrokeColorDefaultBrush`，透明度 0.55 | 需在真实浅/深主题里确认线条强弱 |
+| 字体与字号 | 系统字体；标题/菜单使用 `.headline`、`.subheadline`，正文 `.body` + 行距 3，元信息 `.caption.monospacedDigit()`，录音提示 `.caption2` | 系统 WinUI 字体；语言 14 DIP，正文 15 DIP，元信息/状态 12 DIP，数字 Tabular；正文没有自定义 3 DIP 行距 | SwiftUI 点值与 Windows DIP/字体栅格不能仅靠数值等同，正文行高是待截图验证的差异 |
+| 圆角与间距 | 主视图 padding 20、行距 18；语言列距 14；波形/总结圆角 10；波形高度 52 | 主视图 margin 20、行距 18；语言列距 14；波形/总结圆角 10、高度 52 | 源码参数已对齐；不同平台控件模板占用空间仍需看截图 |
+| Hover / Pressed / Disabled / Focused | SwiftUI borderless、bordered 与 borderedProminent 样式使用 macOS 原生状态反馈 | 语言和纠正按钮基于 `DefaultButtonStyle`，默认背景透明、无边框，保留 WinUI hover/pressed/disabled/focus 视觉状态与键盘焦点 | 源码保留平台状态样式；实际焦点环、悬停反馈和触控目标尚未 GUI 验收 |
+
+`TextFillColorTertiaryBrush` 是 WinUI 官方主题资源，用于比 secondary 更弱的次级文字层级：[Microsoft theming guidance](https://learn.microsoft.com/en-us/windows/apps/develop/ui/theming)。
+
+本轮执行 CoreChecks、Release x64 构建及 GitHub PR CI，没有启动窗口。目标附件目录中没有截图文件；先前随消息交付的两张图实际显示邮件撰写/回复界面，不是 Echo，未作为设计参考或复制进仓库。当前没有可用的 Mac/Windows Echo 截图，因此**尚未完成截图视觉对照**，不宣称像素级一致。用户负责视觉评估；等用户检查后再按反馈调整。窗口缩放、键盘/Narrator 和主题对比度等运行态验收也未由本轮 GUI 验证。变更文件哈希、完整验证边界和日志见 [A80 来源底稿](../sources/windows-a80-main-ui-parity-2026-10-10/README.md)。
+
 - 顶栏保留 ECHO、悬浮字幕菜单、设置、主题和置顶，动作数量和位置接近 Mac。A48 将初始窗口从 920×720 DIP 调整为 Mac 理想值 820×650 DIP，最小窗口约束对齐 Mac 的 680×520 DIP，并移除空字幕时常驻的“回到最新”动作；隔离 GUI 在 144 DPI 实测通过，证据见 `docs/sources/windows-a48-main-window-size-2026-10-10.md`。Mac/Windows 截图并排对照仍待完成。
 - 主题默认深色；设置项及主界面循环顺序遵循 Mac 的浅色、深色、跟随系统，选择后立即保存并应用。已显式保存的旧设置继续保留。代码与自动检查见 `docs/sources/windows-a31-theme-parity-2026-10-09.md`；实际系统主题 GUI 对照仍待验。
 - 中央区域优先给字幕；双列原文/译文，保留说话人、时间、纠正入口和日期分隔。
@@ -55,3 +93,29 @@ A49 首次在独立包和临时数据目录启动浮层，实际扩展样式缺�
 - 不依赖颜色单独表达录音、连接或错误状态。
 - 主窗口缩放、窄宽布局、100/150/200% DPI、多个显示器分别验收。
 - UI 截图对照必须注明 Windows 版本、分辨率、DPI、主题和窗口尺寸；未运行应用的静态检查不能标作视觉验收通过。
+
+## A83 主字幕对比度回归（2026-10-10）
+
+静态对照 Mac `macOS/Views/TranscriptViews.swift` 的 Divider `.opacity(0.55)` 与 Windows `MainPage.xaml` 后发现，Windows 曾将透明度设在容纳 ListView、空态与新内容提示的父 Grid 上，整块内容会一起变淡。现改为仅让独立的 1 DIP 顶部分隔线使用 0.55 透明度；CoreChecks 检查父容器无 Opacity、透明度仅作用于细线。该检查是静态 XAML 契约，不替代深浅主题及显示器上的视觉验收。未访问用户字幕、录音、API Key 或截图；未启动 Echo；`macOS/` 未改。
+
+## A84 录音工具栏窄窗布局（2026-10-10）
+
+Mac `EchoMacApp.swift` 用 `ViewThatFits` 在横向空间不足时把连接状态放到录音按钮下方；Windows 原来一直固定在同一行。现增加 760 DIP `AdaptiveTrigger`：窄窗状态置于第二行，宽窗恢复右侧排列，状态内容与原 360 DIP 省略及 UI Automation 名称保持不变。CoreChecks 验证默认窄窗位置和宽窗触发/Setter。源码契约与构建不是运行态缩放验收；未启动 Echo，真实布局仍交由用户查看。
+
+## A85 翻译列状态对齐（2026-10-10）
+
+Mac 在翻译关闭时不创建译文 Text，而让原文列自然铺满可用宽度；Windows 原来始终显示左右两列，未翻译时留下半屏空白。现按当前显示设置折叠译文并扩展原文。录音中读取启动时的活动翻译配置；闲置时读取保存配置，因此录音期间改为“下次生效”不会提前改变当前字幕布局。状态通知与显示属性由原 ViewModel 配置接线驱动，不更改识别、翻译或存档数据。
+
+## A86 Speaker 元信息条件显示（2026-10-10）
+
+Mac `SynchronizedTranscriptView.metadata(for:)` 只在当前显示配置开启说话人区分、且字幕行有非空 speaker 时加入 Speaker 名称。Windows 模板此前总是显示 `Speaker` 字段，即使设置已关闭或旧字幕缺少该字段，也会占据元信息行空间。现在录音中使用会话启动时冻结的 `Config.Speakers`，闲置时使用已保存设置；对应的 Speaker 名称和中点分隔符按字段是否为空显示。ListView 的行加载、数据上下文复用和 Speaker 字段变化都会刷新此显示状态。实现仅改变字幕元信息可见性，不更改 Soniox 请求、speaker 解析或存档数据。
+
+CoreChecks 覆盖活动会话/闲置偏好矩阵、UI 通知、模板默认折叠和空值处理；188 项全过。隔离 worktree 的 Release x64 XAML 构建为 0 警告、0 错误。没有启动应用，真实字体与行高效果仍由用户视觉验收。
+
+## A87 新内容提示避让字幕操作（2026-10-10）
+
+原“有新内容”按钮叠放在字幕 `ListView` 的右下角，可能覆盖右侧的字幕纠正入口。现在字幕 Grid 使用 `*` 字幕行和 `Auto` 提示行：列表与空态位于第一行，提示按钮折叠时不占空间，出现时位于列表下方；按钮仍由原有跟随状态控制并保留 `ScrollToLatest` AutomationId。按钮样式收紧为 12 DIP、28 DIP 最小高，右对齐。此为静态布局和构建修正，未做运行态截图验收。
+
+## A88 总结面板让位与窗口尺寸实测（2026-10-10）
+
+隔离 GUI 实测发现，展开的 AI 总结会占满可伸缩区，把字幕列表压至 0 高；另发现声明式宽度触发器没有在目标窗口切换工具栏。现在摘要内容按剩余高度设上限，最多 220 DIP；录音页至少为字幕保留 120 DIP（较高窗口 140 DIP）。页面尺寸变化时，宽度达到 700 DIP 就采用 Mac 的 20 DIP 内容边距/18 DIP 行距，并让连接状态与录音按钮同排；更窄时采用 16/12 DIP 并换到下一行。CoreChecks 191 项通过，Release x64 零警告/错误。独立合成数据包在 144 DPI 实测 820×650 DIP 和 680×520 DIP；UIA 确认字幕列表分别有 140/120 DIP，最终截图见 [A88 GUI 底稿](../sources/windows-a88-gui-review-2026-10-10/README.md)。Mac 对照截图、浅色/高对比主题及用户最终视觉确认仍待完成。

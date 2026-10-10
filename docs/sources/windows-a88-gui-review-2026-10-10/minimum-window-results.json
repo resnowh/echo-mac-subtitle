@@ -1,0 +1,22 @@
+[
+  {
+    "name": "Main window opens at the Mac ideal 820x650 DIP size",
+    "status": "PASS",
+    "detail": "DPI=144; window=820x650 DIP"
+  },
+  {
+    "name": "No permanent Return to latest action appears with no new subtitles",
+    "status": "PASS",
+    "detail": "ReturnToLatest UIA element present=False"
+  },
+  {
+    "name": "Window resize respects the Mac 680x520 DIP minimum",
+    "status": "PASS",
+    "detail": "window=680x520 DIP after requesting 600x450 DIP"
+  },
+  {
+    "name": "Main window minimum-size screenshot captured",
+    "status": "PASS",
+    "detail": "D:\\ProgramData\\WorkSpace\\EchoWindowsUIParity\\docs\\sources\\windows-a88-gui-review-2026-10-10\\04-fixed-minimum-dark.png"
+  }
+]
