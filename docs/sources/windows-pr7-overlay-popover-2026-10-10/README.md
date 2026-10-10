@@ -6,7 +6,8 @@
 
 - PR #7: `https://github.com/resnowh/echo-mac-subtitle/pull/7`
 - 基线 branch: `feature/windows-overlay-interaction`
-- GitHub head: `fda2aa5db4b44d2f2e38ce581ba450803e963063`; 本地显式 fetch `refs/pull/7/head` 后一致。
+- 修复前 GitHub head: `fda2aa5db4b44d2f2e38ce581ba450803e963063`; 本地显式 fetch `refs/pull/7/head` 后一致。
+- 修复提交：`507d885a3f8ba6b28bc57854efab9cb71bdb1b5c`，已推送至 PR #7，PR 保持 OPEN。
 - PR base: `feature/windows-ui-mac-parity`; PR 未合并。
 - 变更只涉及 Windows 实现、Windows 测试脚本、Windows 文档与数据清单。`macOS/` 未修改。
 
@@ -17,6 +18,8 @@
 - `corechecks.log`：CoreChecks 本地输出，包含完整测试名称与汇总。
 - `smoke-script-ast.log`：PowerShell 解析器验证 UIA smoke 脚本语法的结果。该脚本未运行。
 - `precommit-checks.log`：提交前 `git diff --check` 结果。
+- `pre-push-pr-checks.txt`：修复前 PR #7 头提交的 GitHub 检查状态。
+- `post-push-pr-checks.txt`：修复提交 `507d885a3f8ba6b28bc57854efab9cb71bdb1b5c` 的 GitHub 检查状态，8 项全部通过。
 - `gui-environment-check.json`：只读检查 VM 管理工具与运行中 VM 进程；没有连接或启动 GUI。
 - `icon-glyph-source.md`：微软官方 Segoe MDL2 glyph 对照与本次改正的错误码点。
 - `source-sha256.txt`：提交前 Windows 源码、脚本和本底稿文档的 SHA-256。
