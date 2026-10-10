@@ -11,7 +11,7 @@
 | 区域 | Mac 源码参数/表现 | Windows PR #5 改前 | 当前 Windows 改动/仍有的差异 |
 |---|---|---|---|
 | 顶部品牌与工具栏 | 根视图 `.padding(20)`、纵向间隔 18；ECHO 为 caption bold/Mint，右侧浮层/设置/主题/置顶为 borderless 图标按钮 | 主内容边距 `28,12,28,24`、行距 16；ECHO 12 DIP；工具按钮固定 36×36 并带 QuietButton 内边距 | 根边距调整为 20、主行距 18；保留 Windows 标题栏与 36×36 工具按钮及全部入口，保持现有主题 Mint。WinUI 标题栏/图标视觉继续采用平台样式 |
-| 语言选择 | 两个等宽菜单，列距 14；subheadline semibold/secondary，小箭头 9 pt/tertiary；录音提示 caption2/tertiary，语言下方 Divider opacity .55 | 两个带 Header 的 ComboBox，默认背景、边框、内边距和最小高度 | Button + MenuFlyout；按钮透明、padding 0×3、min-height 30，文字 14 DIP semibold/secondary、箭头 9；选中项有勾；“不翻译”始终在目标列；录音中菜单提示下次生效。保留设置保存、动态名称与 AutomationId |
+| 语言选择 | 两个等宽菜单，列距 14；subheadline semibold/secondary，小箭头 9 pt/tertiary；录音提示 caption2/tertiary，语言下方 Divider opacity .55 | 两个带 Header 的 ComboBox，默认背景、边框、内边距和最小高度 | Button + MenuFlyout；按钮透明、padding 0×3、min-height 30，文字 14 DIP semibold/secondary、箭头 9/tertiary；录音提示改用 tertiary brush；选中项有勾；“不翻译”始终在目标列。保留设置保存、动态名称与 AutomationId |
 | 字幕列表容器 | ScrollView + `LazyVStack(spacing: 0)`；日期头上/下留白 12/4；单条内容上下留白 7，元信息至正文间距 5 | ListView 外 padding `0,16,0,24`；未覆盖 ListViewItem 默认 padding/min-height；数据行 Grid padding `0,8`、行间距 5 | ListView padding `0,8,0,12`，列表项 Padding/Margin 清零、MinHeight=0、背景透明；每行上下 6 DIP、行间距 4。日期头补 12/4 DIP，保留动态高度和虚拟化；无逐字幕背景卡片 |
 | 双栏正文 | HStack 顶部对齐、间距 14；Mac `.font(.body)`、lineSpacing 3；空原文显示省略号，译文留空位 | 两列等宽，间距 14；系统默认正文样式和容器留白 | 两列仍等宽并顶部对齐，间距 14；正文显式 15 DIP，自动换行，空原文显示“…”、空译文保留一行；行间距沿用字体默认；逐字幕底线高 1 DIP、低对比度。正文基线字号和光栅效果待截图核验 |
 | Speaker/时间/语言 | caption.monospacedDigit + secondary；时间格式 HH:mm:ss；语言和纠正状态只在需要时显示 | CaptionTextBlockStyle、secondary；元信息间距 8 | 字号 12 DIP、secondary；时间启用 Tabular numeral；保留语言与“已纠正”条件。元信息横向间距收至 7 DIP |
@@ -21,6 +21,24 @@
 | 波形 | 48 个样本；条宽/间距 3，圆角 2，活动高 `max(2,min(46,3+sample×44))`；容器 52、水平 padding 12、quaternary opacity .35/corner 10 | 48 个样本和 52 高已对齐，但容器用 CardBackgroundFillColorDefaultBrush | 保留 48 点、条宽/间距/高度映射；改为主题化弱表面：深色白色 6% 不透明、浅色黑色 4%、高对比度系统 Window 色；真实合成效果待 GUI 验收 |
 | AI 总结 | 轻量标题与右侧总结菜单；内部状态/内容直接可见，正文 ScrollView 最大高 220；面板 padding 12、quaternary opacity .35、圆角 10 | 默认折叠 Expander；scope ComboBox 和“生成总结”仅在展开后可见；主体卡片填充默认卡片色 | 改为始终可见的轻表面和标题右侧 MenuFlyout（三种总结范围）；保留录音提示、状态、最大高 220 的内容滚动、展开/复制与原 ViewModel 调用；范围选择继续由原索引状态接线 |
 | 颜色、窗口与主题 | 系统深/浅色语义，Mint；窗口 min 680×520、ideal 820×650，主视图 padding 20 | Windows 已有 Echo 深/浅/高对比主题、Accent 资源与 A48 窗口尺寸 | 沿用现有 Echo 和系统语义资源，不改 macOS；补充低强调表面主题资源并为高对比度映射到系统 Window brush。未通过 GUI 核实各状态下对比度 |
+
+### 全局视觉规范与控件状态
+
+这些颜色以 SwiftUI 语义色为准，而不是固定 RGB。Mac 源码没有给主窗口背景写死十六进制值；字体也使用系统语义样式，因此 Windows 数值是可审阅的对应参数，是否在实际像素上接近仍需同主题、同尺寸截图确认。
+
+| 视觉项 | Mac 源码基准 | Windows 当前实现 | 验收边界 |
+|---|---|---|---|
+| 主背景 | `WindowGroup` 的系统窗口表面；主题为 dark/light/system，没有自定义窗口底色 | 深色 `#202222`、浅色 `#FAFBF9`；High Contrast 映射系统 Window brush | Mac 与 Windows 的窗口材质/颜色不能从源码数值直接一一换算，需截图对照 |
+| 次级表面 | 波形和总结使用 `.quaternary.opacity(0.35)`，圆角 10 | `EchoSubtleSurfaceBrush`：深色白色 6%、浅色黑色 4%；High Contrast 使用系统 Window brush | 语义对齐，实际混色与对比度待深浅主题截图验收 |
+| 主文字 | SwiftUI 默认 primary 文本色 | WinUI 系统 primary text brush | 随系统主题；未对比实际显示器像素 |
+| 次级/三级文字 | `.secondary` 用于语言标题、元信息和状态；`.tertiary` 用于箭头与录音中提示 | `TextFillColorSecondaryBrush` / `TextFillColorTertiaryBrush`；A81 将语言箭头和提示改为 tertiary | 语义层级明确；高对比度/焦点场景仍待 GUI 检查 |
+| 品牌强调色 | SwiftUI `.mint`；录音状态、ECHO 标记和活动波形按语义使用 | 深色 `#94D9BD`、浅色 `#27664F`，High Contrast 使用系统 Highlight brush | Mac Mint 为系统语义色；两端 RGB 不保证相同 |
+| 分隔线 | SwiftUI `Divider().opacity(0.55)` | `DividerStrokeColorDefaultBrush`，透明度 0.55 | 需在真实浅/深主题里确认线条强弱 |
+| 字体与字号 | 系统字体；标题/菜单使用 `.headline`、`.subheadline`，正文 `.body` + 行距 3，元信息 `.caption.monospacedDigit()`，录音提示 `.caption2` | 系统 WinUI 字体；语言 14 DIP，正文 15 DIP，元信息/状态 12 DIP，数字 Tabular；正文没有自定义 3 DIP 行距 | SwiftUI 点值与 Windows DIP/字体栅格不能仅靠数值等同，正文行高是待截图验证的差异 |
+| 圆角与间距 | 主视图 padding 20、行距 18；语言列距 14；波形/总结圆角 10；波形高度 52 | 主视图 margin 20、行距 18；语言列距 14；波形/总结圆角 10、高度 52 | 源码参数已对齐；不同平台控件模板占用空间仍需看截图 |
+| Hover / Pressed / Disabled / Focused | SwiftUI borderless、bordered 与 borderedProminent 样式使用 macOS 原生状态反馈 | 语言和纠正按钮基于 `DefaultButtonStyle`，默认背景透明、无边框，保留 WinUI hover/pressed/disabled/focus 视觉状态与键盘焦点 | 源码保留平台状态样式；实际焦点环、悬停反馈和触控目标尚未 GUI 验收 |
+
+`TextFillColorTertiaryBrush` 是 WinUI 官方主题资源，用于比 secondary 更弱的次级文字层级：[Microsoft theming guidance](https://learn.microsoft.com/en-us/windows/apps/develop/ui/theming)。
 
 本轮执行 CoreChecks、Release x64 构建及 GitHub PR CI，没有启动窗口。目标附件目录中没有截图文件；先前随消息交付的两张图实际显示邮件撰写/回复界面，不是 Echo，未作为设计参考或复制进仓库。当前没有可用的 Mac/Windows Echo 截图，因此**尚未完成截图视觉对照**，不宣称像素级一致。用户负责视觉评估；等用户检查后再按反馈调整。窗口缩放、键盘/Narrator 和主题对比度等运行态验收也未由本轮 GUI 验证。变更文件哈希、完整验证边界和日志见 [A80 来源底稿](../sources/windows-a80-main-ui-parity-2026-10-10/README.md)。
 

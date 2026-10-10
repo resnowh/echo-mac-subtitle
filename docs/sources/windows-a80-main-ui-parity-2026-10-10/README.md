@@ -47,3 +47,11 @@ Mac 参考：`origin/main` `ae0359dc90da0ccb5e526a275da1747954a49a4f`
 ## 未完成的视觉验收
 
 目标任务附件目录仅包含目标说明；此前随消息提交的两张图实际是邮件撰写/回复 UI，不含 Echo 主界面，未复制进仓库。当前没有可用的 Mac/Windows Echo 对照截图，因此本底稿证明源代码参数、构建和静态/逻辑接线，**不证明实际窗口视觉一致**。用户明确保留视觉评估，本轮未启动窗口；同字幕内容、主题、窗口尺寸和 DPI 的并排截图验收等待用户反馈。
+
+## A81 Mac 语义色层级复核
+
+- Mac 基线仍为 `origin/main` `ae0359dc90da0ccb5e526a275da1747954a49a4f`；Windows 起始头为 `776df24804c4a0a1c39d45d1077dd5ca8bf9e3bc`。
+- 对照 `TranscriptViews.swift` 中的 `.tertiary`，将 Windows 两个语言菜单箭头及录音中提示改为 `TextFillColorTertiaryBrush`；语言名称和字幕元信息保留 secondary 层级。视觉规范表同时记录系统语义色、当前 Windows HEX 值、字号、间距、圆角及控件状态，并注明源码无法替代截图核验。
+- CoreChecks 184 项通过；Release x64 构建 0 警告、0 错误。日志为 `a81-corechecks.log`、`a81-build.log`，对应文件哈希见 `a81-sha256.txt`。
+- tertiary brush 的官方依据链接与摘要保存在 `a81-microsoft-theme-source.md`。
+- 未启动 Echo/GUI、未连接服务或访问用户数据；`macOS/` 未修改。实际焦点/hover 与深浅主题的屏幕效果继续交由用户视觉验收。

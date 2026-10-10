@@ -113,6 +113,8 @@ Check(visibleAudioMode?.Attribute("AutomationProperties.AutomationId")?.Value ==
 var languageButtons = audioModePageXaml.Descendants(XName.Get("Button", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
     .Where(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value is "SourceLanguageChoice" or "TargetLanguageChoice")
     .ToDictionary(element => element.Attribute(mainPageXamlNamespace + "Name")!.Value);
+var languageNextSessionHint = audioModePageXaml.Descendants(XName.Get("TextBlock", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .FirstOrDefault(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value == "LanguageNextSessionHint");
 string languagePageSource = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "MainPage.xaml.cs"));
 Check(languageButtons.Count == 2
     && languageButtons["SourceLanguageChoice"].Attribute("AutomationProperties.AutomationId")?.Value == "SourceLanguageChoice"
@@ -126,8 +128,11 @@ Check(languageButtons.Count == 2
     && languagePageSource.Contains("{automationIdPrefix}_{(language.Code ?? \"none\")}", StringComparison.Ordinal)
     && languagePageSource.Contains("下次录音生效", StringComparison.Ordinal)
     && languagePageSource.Contains("AutomationProperties.SetName(TargetLanguageChoice", StringComparison.Ordinal)
+    && languageButtons.Values.All(button => button.Descendants(XName.Get("FontIcon", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Any(icon => icon.Attribute("Foreground")?.Value == "{ThemeResource TextFillColorTertiaryBrush}") )
+    && languageNextSessionHint?.Attribute("Foreground")?.Value == "{ThemeResource TextFillColorTertiaryBrush}"
     && !languagePageSource.Contains("TargetLanguageChoice.Visibility =", StringComparison.Ordinal),
-    "top language choices use accessible buttons, retain all language options, and keep the no-translation target visible");
+    "top language choices use accessible buttons, retain all options, keep the no-translation target visible, and use Mac tertiary emphasis for chevrons and recording hint");
 var transcriptList = audioModePageXaml.Descendants(XName.Get("ListView", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
     .FirstOrDefault(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value == "TranscriptList");
 var summaryPanel = audioModePageXaml.Descendants(XName.Get("Grid", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
