@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using System.Runtime.InteropServices;
+using System.Collections.Generic;
 using Windows.Graphics;
 using Windows.UI;
 
@@ -32,8 +33,16 @@ internal sealed class OverlayInteractionWindows : IDisposable
     private Button? moveButton;
     private Button? lockButton;
     private Button? clickThroughButton;
+    private FontIcon? lockIcon;
+    private FontIcon? clickThroughIcon;
     private ToggleSwitch? settingsLockToggle;
     private ToggleSwitch? settingsClickThroughToggle;
+    private ScrollViewer? settingsScrollViewer;
+    private Button? moreSettingsToggle;
+    private StackPanel? advancedSettingsPanel;
+    private bool moreSettingsExpanded;
+    private readonly Dictionary<string, Control> settingsControls = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, TextBlock> sliderValueLabels = new(StringComparer.Ordinal);
     private DesktopSubtitleOverlaySettings? currentSettings;
     private nint toolbarHwnd;
     private nint settingsHwnd;
@@ -43,6 +52,10 @@ internal sealed class OverlayInteractionWindows : IDisposable
     private uint toolbarDpi;
     private int toolbarWidth;
     private int toolbarHeight;
+    private bool settingsPlacementValid;
+    private uint lastSettingsDpi;
+    private NativeRect lastSettingsAnchor;
+    private NativeRect lastSettingsWorkArea;
 
     public OverlayInteractionWindows(
         DispatcherQueue dispatcherQueue,
@@ -73,10 +86,11 @@ internal sealed class OverlayInteractionWindows : IDisposable
         currentSettings = settings;
         EnsureToolbar();
         UpdateToolbarLabels(settings, adjusting);
-        uint dpi = Math.Max(96, GetDpiForWindow(toolbarHwnd));
-        int width = (int)Math.Round(218 * dpi / 96d);
-        int height = (int)Math.Round(46 * dpi / 96d);
-        var monitor = MonitorFromWindow(GetAnchorWindow?.Invoke() ?? toolbarHwnd, 2);
+        nint anchorHwnd = GetAnchorWindow?.Invoke() ?? toolbarHwnd;
+        uint dpi = Math.Max(96, GetDpiForWindow(anchorHwnd));
+        int width = (int)Math.Round(184 * dpi / 96d);
+        int height = (int)Math.Round(40 * dpi / 96d);
+        var monitor = MonitorFromWindow(anchorHwnd, 2);
         var work = GetWorkArea(monitor, anchor);
         int x = Math.Clamp(anchor.X + (anchor.Width - width) / 2, work.Left, Math.Max(work.Left, work.Right - width));
         int y = anchor.Y - height;
@@ -123,7 +137,7 @@ internal sealed class OverlayInteractionWindows : IDisposable
     private void EnsureToolbar()
     {
         if (toolbar is not null) return;
-        toolbar = CreateBorderlessWindow("Echo Subtitle Controls", new SizeInt32(218, 46));
+        toolbar = CreateBorderlessWindow("Echo Subtitle Controls", new SizeInt32(184, 40));
         toolbarHwnd = WinRT.Interop.WindowNative.GetWindowHandle(toolbar);
 
         var surface = new Border
@@ -131,16 +145,18 @@ internal sealed class OverlayInteractionWindows : IDisposable
             Background = new SolidColorBrush(Color.FromArgb(238, 37, 39, 44)),
             BorderBrush = new SolidColorBrush(Color.FromArgb(80, 255, 255, 255)),
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(14),
-            Padding = new Thickness(5)
+            CornerRadius = new CornerRadius(13),
+            Padding = new Thickness(4)
         };
-        var row = new Grid { ColumnSpacing = 3 };
+        var row = new Grid { ColumnSpacing = 2 };
         for (int i = 0; i < 5; i++) row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        moveButton = MakeToolButton("↕", "拖动字幕；先解锁位置", "OverlayMoveHandle");
-        lockButton = MakeToolButton("锁", "锁定或解锁字幕位置", "OverlayPositionLock");
-        clickThroughButton = MakeToolButton("透", "切换点击穿透；此工具栏仍可操作", "OverlayClickThrough");
-        Button settingsButton = MakeToolButton("⚙", "打开悬浮字幕设置", "OverlayOpenSettings");
-        Button closeButton = MakeToolButton("×", "关闭悬浮字幕", "OverlayClose");
+        moveButton = MakeIconButton("\uE76F", "拖动字幕；先解锁位置", "OverlayMoveHandle");
+        lockButton = MakeIconButton("\uE72E", "锁定或解锁字幕位置", "OverlayPositionLock");
+        lockIcon = (FontIcon)lockButton.Content;
+        clickThroughButton = MakeIconButton("\uE962", "切换点击穿透；此工具栏仍可操作", "OverlayClickThrough");
+        clickThroughIcon = (FontIcon)clickThroughButton.Content;
+        Button settingsButton = MakeIconButton("\uE713", "打开悬浮字幕设置", "OverlayOpenSettings");
+        Button closeButton = MakeIconButton("\uE8BB", "关闭悬浮字幕", "OverlayClose");
         Button[] buttons = [moveButton, lockButton, clickThroughButton, settingsButton, closeButton];
         for (int i = 0; i < buttons.Length; i++)
         {
@@ -202,6 +218,9 @@ internal sealed class OverlayInteractionWindows : IDisposable
         EnsureSettingsWindow();
         settingsVisible = true;
         BuildSettings(currentSettings);
+        SynchronizeSettingsControls(currentSettings);
+        SetMoreSettingsExpanded(false);
+        settingsScrollViewer?.ChangeView(0, 0, null);
         PlaceSettingsWindow();
         settingsWindow!.AppWindow.Show(true);
     }
@@ -209,95 +228,143 @@ internal sealed class OverlayInteractionWindows : IDisposable
     private void EnsureSettingsWindow()
     {
         if (settingsWindow is not null) return;
-        settingsWindow = CreateBorderlessWindow("Echo Subtitle Settings", new SizeInt32(390, 620));
+        settingsWindow = CreateBorderlessWindow("Echo Subtitle Settings", new SizeInt32(304, 416));
         settingsHwnd = WinRT.Interop.WindowNative.GetWindowHandle(settingsWindow);
         settingsWindow.AppWindow.Closing += (_, args) =>
         {
             if (disposed) return;
             args.Cancel = true;
+            FlushPendingSettings();
             settingsVisible = false;
+            settingsPlacementValid = false;
             ShowWindow(settingsHwnd, SwHide);
         };
     }
 
     private void BuildSettings(DesktopSubtitleOverlaySettings settings)
     {
+        if (settingsWindow?.Content is not null) return;
         var root = new Border
         {
             Background = new SolidColorBrush(Color.FromArgb(246, 34, 36, 41)),
             BorderBrush = new SolidColorBrush(Color.FromArgb(70, 255, 255, 255)),
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(16),
-            Padding = new Thickness(18)
+            CornerRadius = new CornerRadius(12),
+            Padding = new Thickness(12)
         };
-        var content = new StackPanel { Spacing = 10, MaxWidth = 370 };
-        content.Children.Add(new TextBlock { Text = "悬浮字幕", FontSize = 18 });
-        AddToggle(content, "显示原文", "OverlayShowOriginal", settings.ShowOriginal, value => settings.ShowOriginal = value);
-        AddToggle(content, "显示译文", "OverlayShowTranslation", settings.ShowTranslation, value => settings.ShowTranslation = value);
-        AddSlider(content, "原文字号", "OverlayOriginalFontSize", settings.OriginalFontSize, 16, 48, "pt", value => settings.OriginalFontSize = value);
-        AddSlider(content, "译文字号", "OverlayTranslationFontSize", settings.TranslationFontSize, 14, 44, "pt", value => settings.TranslationFontSize = value);
-        AddSlider(content, "字幕透明度", "OverlayOpacity", settings.Opacity * 100, 35, 100, "%", value => settings.Opacity = value / 100);
-        AddSlider(content, "字幕最大宽度", "OverlayMaximumWidth", settings.WidthFraction * 100, 35, 95, "%", value => settings.WidthFraction = value / 100);
-        AddSlider(content, "定稿保留时间", "OverlayRetention", settings.RetentionSeconds, 1, 15, "秒", value => settings.RetentionSeconds = value);
-        AddSlider(content, "文字阴影", "OverlayShadow", settings.ShadowStrength * 100, 0, 100, "%", value => settings.ShadowStrength = value / 100);
-        AddToggle(content, "锁定位置", "OverlayPositionLocked", settings.PositionLocked, value =>
+        var layout = new Grid { RowSpacing = 8 };
+        layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        layout.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var header = new Grid { ColumnSpacing = 8, VerticalAlignment = VerticalAlignment.Center };
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        header.Children.Add(new TextBlock { Text = "悬浮字幕", FontSize = 16, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+        var closeSettings = MakeIconButton("\uE8BB", "关闭悬浮字幕设置", "OverlaySettingsClose");
+        closeSettings.Click += (_, _) => CloseSettings();
+        Grid.SetColumn(closeSettings, 1);
+        header.Children.Add(closeSettings);
+        layout.Children.Add(header);
+
+        var content = new StackPanel { Spacing = 6 };
+        var visibilityRow = new Grid { ColumnSpacing = 8 };
+        visibilityRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        visibilityRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        AddToggle(visibilityRow, "显示原文", "OverlayShowOriginal", settings.ShowOriginal, value => { if (currentSettings is { } s) s.ShowOriginal = value; }, 0);
+        AddToggle(visibilityRow, "显示译文", "OverlayShowTranslation", settings.ShowTranslation, value => { if (currentSettings is { } s) s.ShowTranslation = value; }, 1);
+        content.Children.Add(visibilityRow);
+        AddSlider(content, "原文字号", "OverlayOriginalFontSize", settings.OriginalFontSize, 16, 48, " pt", value => { if (currentSettings is { } s) s.OriginalFontSize = value; });
+        AddSlider(content, "译文字号", "OverlayTranslationFontSize", settings.TranslationFontSize, 14, 44, " pt", value => { if (currentSettings is { } s) s.TranslationFontSize = value; });
+        AddSlider(content, "字幕透明度", "OverlayOpacity", settings.Opacity * 100, 35, 100, "%", value => { if (currentSettings is { } s) s.Opacity = value / 100; });
+        AddSlider(content, "字幕最大宽度", "OverlayMaximumWidth", settings.WidthFraction * 100, 35, 95, "%", value => { if (currentSettings is { } s) s.WidthFraction = value / 100; });
+
+        var advanced = new StackPanel { Spacing = 6, Visibility = Visibility.Collapsed };
+        advancedSettingsPanel = advanced;
+        AddSlider(advanced, "定稿保留时间", "OverlayRetention", settings.RetentionSeconds, 1, 15, " 秒", value => { if (currentSettings is { } s) s.RetentionSeconds = value; });
+        AddSlider(advanced, "文字阴影", "OverlayShadow", settings.ShadowStrength * 100, 0, 100, "%", value => { if (currentSettings is { } s) s.ShadowStrength = value / 100; });
+        AddToggle(advanced, "锁定位置", "OverlayPositionLocked", settings.PositionLocked, value =>
         {
-            settings.PositionLocked = value;
+            if (currentSettings is not { } current) return;
+            current.PositionLocked = value;
             setAdjusting(!value);
-            UpdateToolbarLabels(settings, !value);
+            UpdateToolbarLabels(current, !value);
         });
-        AddToggle(content, "点击穿透", "OverlayClickThrough", settings.ClickThrough, value => settings.ClickThrough = value);
-        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right };
-        var resetPosition = MakeToolButton("重置字幕位置", "重置字幕位置", "OverlayResetPosition");
+        AddToggle(advanced, "点击穿透", "OverlayClickThrough", settings.ClickThrough, value => { if (currentSettings is { } s) s.ClickThrough = value; });
+        var resetPosition = MakeToolButton("重置位置", "重置字幕位置", "OverlayResetPosition");
         resetPosition.Click += (_, _) =>
         {
-            settings.DisplayId = null;
-            settings.DisplayDeviceName = null;
-            settings.NormalizedX = .5;
-            settings.NormalizedBottom = .09;
-            saveSettings(settings);
+            if (currentSettings is not { } s) return;
+            s.DisplayId = null;
+            s.DisplayDeviceName = null;
+            s.NormalizedX = .5;
+            s.NormalizedBottom = .09;
+            saveSettings(s);
         };
         var defaults = MakeToolButton("恢复默认", "恢复悬浮字幕默认设置", "OverlayRestoreDefaults");
         defaults.Click += (_, _) =>
         {
-            bool enabled = settings.Enabled;
-            settings = currentSettings = new DesktopSubtitleOverlaySettings
-            {
-                Enabled = enabled,
-                DisplayId = settings.DisplayId,
-                DisplayDeviceName = settings.DisplayDeviceName,
-                NormalizedX = settings.NormalizedX,
-                NormalizedBottom = settings.NormalizedBottom
-            };
-            saveSettings(settings);
-            BuildSettings(settings);
+            if (currentSettings is not { } s) return;
+            s.ShowOriginal = true;
+            s.ShowTranslation = true;
+            s.OriginalFontSize = 26;
+            s.TranslationFontSize = 24;
+            s.Opacity = 1;
+            s.WidthFraction = .75;
+            s.RetentionSeconds = 5;
+            s.ShadowStrength = .35;
+            s.ClickThrough = true;
+            s.PositionLocked = true;
+            setAdjusting(false);
+            SynchronizeSettingsControls(s);
+            UpdateToolbarLabels(s, false);
+            SaveLiveChange();
         };
-        actions.Children.Add(resetPosition);
-        actions.Children.Add(defaults);
-        content.Children.Add(actions);
+        var advancedActions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right };
+        advancedActions.Children.Add(resetPosition);
+        advancedActions.Children.Add(defaults);
+        advanced.Children.Add(advancedActions);
+        content.Children.Add(advanced);
+        moreSettingsToggle = MakeToolButton("更多设置", "显示更多悬浮字幕设置", "OverlayMoreSettings");
+        AutomationProperties.SetName(moreSettingsToggle, "显示更多悬浮字幕设置");
+        moreSettingsToggle.Click += (_, _) =>
+        {
+            SetMoreSettingsExpanded(!moreSettingsExpanded);
+        };
+        var scroller = settingsScrollViewer = new ScrollViewer { Content = content, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        AutomationProperties.SetAutomationId(scroller, "OverlaySettingsScrollViewer");
+        Grid.SetRow(scroller, 1);
+        layout.Children.Add(scroller);
+        var footer = new Grid { ColumnSpacing = 8 };
+        footer.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        footer.Children.Add(moreSettingsToggle);
         var done = MakeToolButton("完成", "关闭悬浮字幕设置", "OverlaySettingsDone");
-        done.HorizontalAlignment = HorizontalAlignment.Right;
-        done.Click += (_, _) => { settingsVisible = false; ShowWindow(settingsHwnd, SwHide); };
-        content.Children.Add(done);
-        root.Child = new ScrollViewer { Content = content, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        done.Click += (_, _) => CloseSettings();
+        Grid.SetColumn(done, 1);
+        footer.Children.Add(done);
+        Grid.SetRow(footer, 2);
+        layout.Children.Add(footer);
+        root.Child = layout;
         root.KeyDown += (_, args) =>
         {
             if (args.Key == Windows.System.VirtualKey.Escape)
             {
                 args.Handled = true;
-                settingsVisible = false;
-                ShowWindow(settingsHwnd, SwHide);
+                CloseSettings();
             }
         };
         settingsWindow!.Content = root;
         UpdateSettingsPositionFromAnchor();
     }
 
-    private void AddToggle(StackPanel content, string label, string automationId, bool initial, Action<bool> update)
+    private void AddToggle(Panel content, string label, string automationId, bool initial, Action<bool> update, int? column = null)
     {
-        var control = new ToggleSwitch { Header = label, IsOn = initial, HorizontalAlignment = HorizontalAlignment.Stretch };
+        var control = new ToggleSwitch { Header = label, IsOn = initial, HorizontalAlignment = HorizontalAlignment.Stretch, MinHeight = 32, OnContent = "开", OffContent = "关" };
         AutomationProperties.SetName(control, label);
         AutomationProperties.SetAutomationId(control, automationId);
+        settingsControls[automationId] = control;
+        if (column is { } col) Grid.SetColumn(control, col);
         if (automationId == "OverlayPositionLocked") settingsLockToggle = control;
         if (automationId == "OverlayClickThrough") settingsClickThroughToggle = control;
         control.Toggled += (_, _) =>
@@ -309,28 +376,82 @@ internal sealed class OverlayInteractionWindows : IDisposable
         content.Children.Add(control);
     }
 
-    private void AddSlider(StackPanel content, string label, string automationId, double initial,
+    private void AddSlider(Panel content, string label, string automationId, double initial,
         double min, double max, string suffix, Action<double> update)
     {
-        var row = new StackPanel { Spacing = 2 };
-        var valueText = new TextBlock { Text = $"{label} · {initial:0}{suffix}", FontSize = 12, Opacity = .82 };
-        var slider = new Slider { Minimum = min, Maximum = max, Value = initial, StepFrequency = 1 };
+        var row = new Grid { RowSpacing = 1 };
+        row.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        row.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var valueText = new TextBlock { Text = $"{label} · {initial:0}{suffix}", FontSize = 12, Opacity = .86 };
+        var slider = new Slider { Minimum = min, Maximum = max, Value = initial, StepFrequency = 1, MinHeight = 28, Margin = new Thickness(0) };
         AutomationProperties.SetName(slider, label);
         AutomationProperties.SetAutomationId(slider, automationId);
+        settingsControls[automationId] = slider;
+        sliderValueLabels[automationId] = valueText;
         slider.ValueChanged += (_, args) =>
         {
+            if (synchronizingSettingsUi) return;
             valueText.Text = $"{label} · {args.NewValue:0}{suffix}";
             update(args.NewValue);
             SaveLiveChange();
         };
         row.Children.Add(valueText);
+        Grid.SetRow(slider, 1);
         row.Children.Add(slider);
         content.Children.Add(row);
+    }
+
+    private void SynchronizeSettingsControls(DesktopSubtitleOverlaySettings settings)
+    {
+        synchronizingSettingsUi = true;
+        SetSlider("OverlayOriginalFontSize", settings.OriginalFontSize);
+        SetSlider("OverlayTranslationFontSize", settings.TranslationFontSize);
+        SetSlider("OverlayOpacity", settings.Opacity * 100);
+        SetSlider("OverlayMaximumWidth", settings.WidthFraction * 100);
+        SetSlider("OverlayRetention", settings.RetentionSeconds);
+        SetSlider("OverlayShadow", settings.ShadowStrength * 100);
+        if (settingsControls.GetValueOrDefault("OverlayShowOriginal") is ToggleSwitch original) original.IsOn = settings.ShowOriginal;
+        if (settingsControls.GetValueOrDefault("OverlayShowTranslation") is ToggleSwitch translation) translation.IsOn = settings.ShowTranslation;
+        if (settingsLockToggle is not null) settingsLockToggle.IsOn = settings.PositionLocked;
+        if (settingsClickThroughToggle is not null) settingsClickThroughToggle.IsOn = settings.ClickThrough;
+        synchronizingSettingsUi = false;
+    }
+
+    private void SetSlider(string id, double value)
+    {
+        if (settingsControls.GetValueOrDefault(id) is Slider slider) slider.Value = value;
+        if (sliderValueLabels.GetValueOrDefault(id) is TextBlock label)
+        {
+            string suffix = id switch { "OverlayOriginalFontSize" or "OverlayTranslationFontSize" => " pt", "OverlayRetention" => " 秒", "OverlayOpacity" or "OverlayMaximumWidth" or "OverlayShadow" => "%", _ => string.Empty };
+            string title = id switch { "OverlayOriginalFontSize" => "原文字号", "OverlayTranslationFontSize" => "译文字号", "OverlayOpacity" => "字幕透明度", "OverlayMaximumWidth" => "字幕最大宽度", "OverlayRetention" => "定稿保留时间", _ => "文字阴影" };
+            label.Text = $"{title} · {value:0}{suffix}";
+        }
+    }
+
+    private void CloseSettings()
+    {
+        FlushPendingSettings();
+        settingsVisible = false;
+        settingsPlacementValid = false;
+        ShowWindow(settingsHwnd, SwHide);
+    }
+
+    private void SetMoreSettingsExpanded(bool expanded)
+    {
+        moreSettingsExpanded = expanded;
+        if (advancedSettingsPanel is not null)
+            advancedSettingsPanel.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
+        if (moreSettingsToggle is not null)
+        {
+            moreSettingsToggle.Content = expanded ? "收起设置" : "更多设置";
+            AutomationProperties.SetName(moreSettingsToggle, expanded ? "收起更多悬浮字幕设置" : "显示更多悬浮字幕设置");
+        }
     }
 
     private void SaveLiveChange()
     {
         if (currentSettings is null) return;
+        UpdateToolbarLabels(currentSettings, !currentSettings.PositionLocked);
         saveSettingsPreview?.Invoke(currentSettings);
         persistTimer.Stop();
         persistTimer.Start();
@@ -363,21 +484,33 @@ internal sealed class OverlayInteractionWindows : IDisposable
     public void UpdateSettingsPosition(RectInt32 anchorRect)
     {
         if (settingsHwnd == 0 || !settingsVisible) return;
-        var overlayMonitor = MonitorFromWindow(GetAnchorWindow?.Invoke() ?? settingsHwnd, 2);
+        nint anchorHwnd = toolbarHwnd != 0 && IsWindowVisible(toolbarHwnd)
+            ? toolbarHwnd
+            : GetAnchorWindow?.Invoke() ?? settingsHwnd;
+        var overlayMonitor = MonitorFromWindow(anchorHwnd, 2);
+        if (toolbarHwnd != 0 && IsWindowVisible(toolbarHwnd) && GetWindowRect(toolbarHwnd, out NativeRect toolbarBounds))
+            anchorRect = new RectInt32(toolbarBounds.Left, toolbarBounds.Top, toolbarBounds.Right - toolbarBounds.Left, toolbarBounds.Bottom - toolbarBounds.Top);
         var work = GetWorkArea(overlayMonitor, anchorRect);
-        SizeInt32 desired = ScaleSize(settingsHwnd, 390, 620);
-        int width = Math.Min(desired.Width, work.Right - work.Left);
-        int height = Math.Min(desired.Height, work.Bottom - work.Top);
+        uint dpi = Math.Max(96, GetDpiForWindow(anchorHwnd));
+        if (settingsPlacementValid && dpi == lastSettingsDpi
+            && SameRect(lastSettingsAnchor, new NativeRect { Left = anchorRect.X, Top = anchorRect.Y, Right = anchorRect.X + anchorRect.Width, Bottom = anchorRect.Y + anchorRect.Height })
+            && SameRect(lastSettingsWorkArea, work)) return;
+        SizeInt32 desired = new((int)Math.Round(304 * dpi / 96d), (int)Math.Round(416 * dpi / 96d));
+        OverlayPixelRect placement = OverlayPopoverLayout.Place(
+            new OverlayPixelRect(anchorRect.X, anchorRect.Y, anchorRect.Width, anchorRect.Height),
+            new OverlayPixelRect(work.Left, work.Top, work.Right - work.Left, work.Bottom - work.Top),
+            desired.Width, desired.Height, (int)Math.Round(8 * dpi / 96d));
         var appWindow = settingsWindow!.AppWindow;
         if (!GetWindowRect(settingsHwnd, out NativeRect currentSize)
-            || currentSize.Right - currentSize.Left != width || currentSize.Bottom - currentSize.Top != height)
-            appWindow.Resize(new SizeInt32(width, height));
-        int x = Math.Clamp(anchorRect.X + anchorRect.Width - width, work.Left, Math.Max(work.Left, work.Right - width));
-        int y = anchorRect.Y - height - toolbarHeight - 6;
-        if (y < work.Top) y = Math.Min(anchorRect.Y + anchorRect.Height + toolbarHeight + 6, work.Bottom - height);
+            || currentSize.Right - currentSize.Left != placement.Width || currentSize.Bottom - currentSize.Top != placement.Height)
+            appWindow.Resize(new SizeInt32(placement.Width, placement.Height));
         if (!GetWindowRect(settingsHwnd, out NativeRect current)
-            || current.Left != x || current.Top != y)
-            SetWindowPos(settingsHwnd, HwndTopMost, x, y, width, height, SwpNoActivate);
+            || current.Left != placement.X || current.Top != placement.Y)
+            SetWindowPos(settingsHwnd, HwndTopMost, placement.X, placement.Y, placement.Width, placement.Height, SwpNoActivate);
+        lastSettingsAnchor = new NativeRect { Left = anchorRect.X, Top = anchorRect.Y, Right = anchorRect.X + anchorRect.Width, Bottom = anchorRect.Y + anchorRect.Height };
+        lastSettingsWorkArea = work;
+        lastSettingsDpi = dpi;
+        settingsPlacementValid = true;
     }
 
     public Func<nint>? GetAnchorWindow { get; set; }
@@ -388,10 +521,12 @@ internal sealed class OverlayInteractionWindows : IDisposable
         if (moveButton is null) return;
         moveButton.IsEnabled = !settings.PositionLocked;
         AutomationProperties.SetName(moveButton, settings.PositionLocked ? "移动字幕；请先解锁位置" : "拖动字幕到新位置");
-        lockButton!.Content = settings.PositionLocked ? "锁" : "开锁";
+        lockIcon!.Glyph = settings.PositionLocked ? "\uE72E" : "\uE785";
         AutomationProperties.SetName(lockButton, settings.PositionLocked ? "解锁位置" : "锁定位置");
-        clickThroughButton!.Content = settings.ClickThrough ? "✓透" : "透";
+        ToolTipService.SetToolTip(lockButton, settings.PositionLocked ? "解锁字幕位置" : "锁定字幕位置");
+        clickThroughIcon!.Glyph = settings.ClickThrough ? "\uE962" : "\uE8B0";
         AutomationProperties.SetName(clickThroughButton, settings.ClickThrough ? "关闭点击穿透" : "开启点击穿透");
+        ToolTipService.SetToolTip(clickThroughButton, settings.ClickThrough ? "关闭点击穿透；底层应用将不再接收字幕区域点击" : "开启点击穿透；工具栏仍可操作");
         synchronizingSettingsUi = true;
         if (settingsLockToggle is not null) settingsLockToggle.IsOn = settings.PositionLocked;
         if (settingsClickThroughToggle is not null) settingsClickThroughToggle.IsOn = settings.ClickThrough;
@@ -416,6 +551,27 @@ internal sealed class OverlayInteractionWindows : IDisposable
         return window;
     }
 
+    private static Button MakeIconButton(string glyph, string accessibleName, string automationId)
+    {
+        var button = new Button
+        {
+            Content = new FontIcon { Glyph = glyph, FontSize = 14, FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Segoe MDL2 Assets") },
+            Width = 30,
+            Height = 30,
+            MinWidth = 30,
+            MinHeight = 30,
+            Padding = new Thickness(0),
+            Background = new SolidColorBrush(Color.FromArgb(12, 255, 255, 255)),
+            Foreground = new SolidColorBrush(Colors.White),
+            BorderThickness = new Thickness(0),
+            CornerRadius = new CornerRadius(8)
+        };
+        AutomationProperties.SetName(button, accessibleName);
+        AutomationProperties.SetAutomationId(button, automationId);
+        ToolTipService.SetToolTip(button, accessibleName);
+        return button;
+    }
+
     private static Button MakeToolButton(string text, string accessibleName, string automationId)
     {
         var button = new Button
@@ -434,6 +590,9 @@ internal sealed class OverlayInteractionWindows : IDisposable
         AutomationProperties.SetAutomationId(button, automationId);
         return button;
     }
+
+    private static bool SameRect(NativeRect left, NativeRect right) =>
+        left.Left == right.Left && left.Top == right.Top && left.Right == right.Right && left.Bottom == right.Bottom;
 
     private static bool IsPointInside(nint hwnd, int x, int y) => hwnd != 0
         && IsWindowVisible(hwnd)

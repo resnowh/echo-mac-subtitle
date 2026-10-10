@@ -1,0 +1,6 @@
+{
+  "HypervisorPresent": true,
+  "GetVmAvailable": false,
+  "VmrunAvailable": false,
+  "RunningVmProcesses": []
+}

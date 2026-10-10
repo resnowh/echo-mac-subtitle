@@ -228,6 +228,15 @@ CoreChecks 检查字幕行加载时读取统一显示状态、并在 ViewModel �
 - **基线**：先检查 PR #5 (`b52f68e`) 与 PR #6 (`d5832dc`)，两者均开放且当时 CI 全绿；新分支 `feature/windows-overlay-interaction` 从 PR #6 实际 HEAD `d5832dc` 快进切出。隔离目录为 `%LOCALAPPDATA%\Temp\Echo-WindowsOverlayInteraction`。没有改 `macOS/`，没有接触已运行的 Echo。
 - **实现**：保留透明 Win2D/Direct2D 字幕 HWND；加入独立 WinUI 工具条/设置 HWND、90ms 光标轮询、锁/穿透分离、设置实时预览与延时保存，以及主窗口紧急恢复菜单。没有全局鼠标 Hook。详见 [悬浮字幕交互设计](overlay-interaction.md)。
 - **自动化验证**：隔离 Release x64 构建 0 警告、0 错误；CoreChecks 193 项通过，其中新增断言检查主菜单仅保留开关/恢复、工具栏和设置控件 AutomationId、字幕穿透状态和窗口分层接线。
-- **真实 GUI 验收**：使用独立 MSIX 身份 `A92F3721-1586-4D09-9A92-79E7B8C95131`、临时包数据、PID `84096` 和合成中英字幕；一次完整交互实测通过工具栏与设置控件、字号/透明度/宽度/保留时长/阴影持久化、点击穿透样式与下层 HWND 命中、解锁拖动、重新锁定、主窗应急恢复、主窗最小化及 3 次关闭重开且只有一个字幕 HWND。另一次悬停检查通过“鼠标移出后工具条隐藏”。测试没有连接麦克风、Soniox 或 DeepSeek，设置中的 API Key 为空。最后一次诊断重跑遇到 UIA 元素过期和拖动坐标不稳定，原始结果在 [A92 GUI JSON](../sources/windows-a92-overlay-controls-2026-10-10/ui-interaction-results.json)；窗口捕获把透明背景合成为黑色，未作为视觉证据，也没有截取全桌面。交互结果不是稳定、可重复的自动化全绿结论。
+- **GUI 记录校正**：当时的一次全流程通过只有控制台摘要，没有保存原始 JSON；另一次 hover 检查单独通过。扩展复跑遇到 UIA 元素过期和拖动坐标不稳，原始结果在 [A92 GUI JSON](../sources/windows-a92-overlay-controls-2026-10-10/ui-interaction-results.json)，其中 6 项均失败。故 A92 只能描述为“曾有一次未留原始回执的控制台通过记录，后续复跑失败”，不能称作可重复 GUI 通过。
 - **未验场景**：本机只有一个显示器，第二屏切换、异 DPI 切换、任务栏位置变化、Narrator、GPU 长时间运行/资源泄漏及真实会议字幕仍未验收。不能把单屏窗口移动测试描述成多屏验收。
 - **边界**：仅使用本地代码与合成数据；不启用录音、不访问 API Key、不调用 Soniox/DeepSeek。真实第二显示器、DPI 热切换、Narrator 和长时间资源检查若无法在本机执行，应列为待验。
+
+## A93 悬浮字幕紧凑设置面板与锚点修复（2026-10-10）
+
+- **修改**：工具栏调整为 184×40 DIP、统一 30×30 DIP 图标按钮；设置面板调整为 304×416 DIP，固定标题/底栏、中部有界滚动区，常用项默认可见，保留时间/阴影/锁定/穿透/位置重置/默认值收纳到“更多设置”。默认值修改复用原控件，避免重建导致滚动位置或设置窗闪动。Escape、完成和窗口关闭会先 flush 延迟写入。
+- **定位**：设置面板使用工具栏 HWND 作为锚点；`OverlayPopoverLayout.Place` 先比较上下可用空间，空间不足再试左右，夹在 monitor work area 内并在短屏幕收缩。位置缓存以锚点矩形、工作区和 DPI 为键，稳定 hover 时不重复 resize/SetWindowPos。
+- **自动化验证**：Release x64 构建成功，0 警告/0 错误；CoreChecks 195 项通过，新增屏幕四边、负坐标、短工作区和 100/125/150/200% DPI 布局检查。`windows/ui-overlay-interaction-smoke.ps1` 已更新为检查常用/折叠高级设置结构，PowerShell AST 解析通过，GUI 脚本未执行。
+- **真实 GUI 边界**：遵照不控制用户鼠标的要求，没有启动应用、调用 UIA、移动指针或截图。当前没有确认的独立 VM：Hyper-V 可见性标志为 true，但没有 `Get-VM`/`vmrun` 命令或运行中 VM 进程。因此全屏面板显示、控件实际边界、鼠标 hover、键盘焦点、透明合成和交互状态尚未验收；该限制不能由 CoreChecks 代替。
+- **数据底稿**：[A93 来源目录](../sources/windows-pr7-overlay-popover-2026-10-10/README.md) 保存 PR/基线查询摘要、构建/CoreChecks日志、脚本 AST 结果、源文件 SHA-256 和 GUI 环境核查结果；A92 原失败 JSON 保持原样。
+- **影响范围**：只改 Windows 代码、Windows 文档与 smoke 脚本；没有启动识别会话、访问真实字幕/存档/API Key、连接 Soniox/DeepSeek，也没有修改 `macOS/`。

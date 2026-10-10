@@ -123,10 +123,16 @@ try {
     Invoke-Control 'OverlayOpenSettings' $toolbarHwnd
     $settingsWindow = Wait-VisibleWindow 'Echo Subtitle Settings'
     $settingsHwnd = [string]$settingsWindow.hwnd
-    $requiredSettings = @('OverlayShowOriginal', 'OverlayShowTranslation', 'OverlayOriginalFontSize', 'OverlayTranslationFontSize', 'OverlayOpacity', 'OverlayMaximumWidth', 'OverlayRetention', 'OverlayShadow', 'OverlayPositionLocked', 'OverlayClickThrough', 'OverlayResetPosition', 'OverlayRestoreDefaults')
-    foreach ($control in $requiredSettings) {
+    $commonSettings = @('OverlayShowOriginal', 'OverlayShowTranslation', 'OverlayOriginalFontSize', 'OverlayTranslationFontSize', 'OverlayOpacity', 'OverlayMaximumWidth', 'OverlayMoreSettings')
+    foreach ($control in $commonSettings) {
         $match = Search-Ui $control $settingsHwnd
-        Add-Result "Settings control $control is visible to UI Automation" ($match.matchCount -gt 0) "matches=$($match.matchCount)"
+        Add-Result "Common setting $control is visible to UI Automation" ($match.matchCount -gt 0) "matches=$($match.matchCount)"
+    }
+    Invoke-Control 'OverlayMoreSettings' $settingsHwnd
+    $advancedSettings = @('OverlayRetention', 'OverlayShadow', 'OverlayPositionLocked', 'OverlayClickThrough', 'OverlayResetPosition', 'OverlayRestoreDefaults')
+    foreach ($control in $advancedSettings) {
+        $match = Search-Ui $control $settingsHwnd
+        Add-Result "Advanced setting $control is visible after expanding More settings" ($match.matchCount -gt 0) "matches=$($match.matchCount)"
     }
     Invoke-Control 'OverlayRestoreDefaults' $settingsHwnd
     Start-Sleep -Milliseconds 500

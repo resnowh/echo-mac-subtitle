@@ -438,6 +438,51 @@ Check(interactionSource.Contains("OverlayMoveHandle", StringComparison.Ordinal)
     && interactionSource.Contains("OverlayResetPosition", StringComparison.Ordinal)
     && interactionSource.Contains("OverlayRestoreDefaults", StringComparison.Ordinal),
     "floating toolbar and its own settings window expose named controls for all requested adjustments");
+var topEdgePopover = OverlayPopoverLayout.Place(
+    new OverlayPixelRect(1710, 24, 184, 40), new OverlayPixelRect(0, 0, 1920, 1040), 456, 624, 12);
+var bottomEdgePopover = OverlayPopoverLayout.Place(
+    new OverlayPixelRect(72, 970, 184, 40), new OverlayPixelRect(0, 0, 1920, 1040), 456, 624, 12);
+var compactWorkAreaPopover = OverlayPopoverLayout.Place(
+    new OverlayPixelRect(350, 220, 48, 28), new OverlayPixelRect(20, 40, 380, 220), 456, 624, 12);
+var sidePopover = OverlayPopoverLayout.Place(
+    new OverlayPixelRect(40, 230, 184, 40), new OverlayPixelRect(0, 0, 1000, 500), 304, 416, 8);
+var leftSidePopover = OverlayPopoverLayout.Place(
+    new OverlayPixelRect(808, 230, 184, 40), new OverlayPixelRect(0, 0, 1000, 500), 304, 416, 8);
+var negativeOriginPopover = OverlayPopoverLayout.Place(
+    new OverlayPixelRect(-1880, 32, 184, 40), new OverlayPixelRect(-1920, 0, 1920, 1080), 304, 416, 8);
+var dpiPlacementCases = new[] { 96, 120, 144, 192 }.Select(dpi =>
+{
+    int scale(int dip) => (int)Math.Round(dip * dpi / 96d);
+    return OverlayPopoverLayout.Place(
+        new OverlayPixelRect(0, 32, scale(184), scale(40)),
+        new OverlayPixelRect(0, 0, scale(1920), scale(1040)),
+        scale(304), scale(416), scale(8));
+}).ToArray();
+Check(topEdgePopover.X >= 0 && topEdgePopover.Y >= 0 && topEdgePopover.Right <= 1920 && topEdgePopover.Bottom <= 1040
+    && bottomEdgePopover.X >= 0 && bottomEdgePopover.Y >= 0 && bottomEdgePopover.Right <= 1920 && bottomEdgePopover.Bottom <= 1040
+    && compactWorkAreaPopover.X >= 20 && compactWorkAreaPopover.Y >= 40
+    && compactWorkAreaPopover.Right <= 400 && compactWorkAreaPopover.Bottom <= 260
+    && compactWorkAreaPopover.Height < 624
+    && sidePopover.X >= 232 && sidePopover.Y >= 0 && sidePopover.Right <= 1000 && sidePopover.Bottom <= 500
+    && sidePopover.Height == 416
+    && leftSidePopover.X >= 0 && leftSidePopover.Right <= 800 && leftSidePopover.Bottom <= 500
+    && negativeOriginPopover.X >= -1920 && negativeOriginPopover.Y >= 0
+    && negativeOriginPopover.Right <= 0 && negativeOriginPopover.Bottom <= 1080
+    && dpiPlacementCases.Length == 4 && dpiPlacementCases.Select((placement, index) =>
+    {
+        int dpi = new[] { 96, 120, 144, 192 }[index];
+        return placement.X >= 0 && placement.Y >= 0
+            && placement.Right <= (int)Math.Round(1920 * dpi / 96d)
+            && placement.Bottom <= (int)Math.Round(1040 * dpi / 96d);
+    }).All(valid => valid),
+    "overlay popover placement stays in the work area at all edges, short heights, and 100/125/150/200 percent scale");
+Check(interactionSource.Contains("OverlayMoreSettings", StringComparison.Ordinal)
+    && interactionSource.Contains("GridLength(1, GridUnitType.Star)", StringComparison.Ordinal)
+    && interactionSource.Contains("settingsPlacementValid", StringComparison.Ordinal)
+    && interactionSource.Contains("toolbarBounds", StringComparison.Ordinal)
+    && interactionSource.Contains("304 * dpi / 96d", StringComparison.Ordinal)
+    && interactionSource.Contains("416 * dpi / 96d", StringComparison.Ordinal),
+    "compact settings keep a bounded scrolling body and cache stable monitor/DPI placement");
 Check(nativeOverlaySource.Contains("hoverTimer.Interval = TimeSpan.FromMilliseconds(90)", StringComparison.Ordinal)
     && nativeOverlaySource.Contains("bool transparent = settings.ClickThrough", StringComparison.Ordinal)
     && nativeOverlaySource.Contains("interactionWindows.ContainsPoint", StringComparison.Ordinal)
