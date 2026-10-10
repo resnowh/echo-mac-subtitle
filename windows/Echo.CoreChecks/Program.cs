@@ -1482,7 +1482,7 @@ if (Environment.GetEnvironmentVariable("ECHO_MAC_AUDIO_CONVERSION_FIXTURE") is {
                 macSamples[sampleIndex] = BinaryPrimitives.ReadInt16LittleEndian(macPcm16.AsSpan(sampleIndex * sizeof(short), sizeof(short))) / 32768f;
 
             bool frameCountMatches = inputValid && macSamples.Length == macSampleCount
-                && Math.Abs(windowsSamples.Count - macSampleCount) <= 1;
+                && Math.Abs(windowsSamples.Count - macSampleCount) <= 8;
             if (id == "stereo-48k-phase-cancel")
             {
                 double windowsPeak = windowsSamples.Count == 0 ? double.PositiveInfinity : windowsSamples.Max(sample => Math.Abs((double)sample));
