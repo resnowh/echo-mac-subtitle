@@ -650,6 +650,12 @@ public sealed partial class MainPage : Page
         NewContentButton.Visibility = Visibility.Collapsed;
     }
     private async void Summary_Click(object sender, RoutedEventArgs e) => await ViewModel.SummarizeAsync(SummaryScope.SelectedIndex);
+    private async void SummaryMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuFlyoutItem { Tag: string value } || !int.TryParse(value, out int scope) || scope is < 0 or > 2) return;
+        SummaryScope.SelectedIndex = scope;
+        await ViewModel.SummarizeAsync(scope);
+    }
     private void SummaryExpand_Click(object sender, RoutedEventArgs e)
     {
         isSummaryExpanded = !isSummaryExpanded;

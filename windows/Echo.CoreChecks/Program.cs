@@ -130,18 +130,61 @@ Check(languageButtons.Count == 2
     "top language choices use accessible buttons, retain all language options, and keep the no-translation target visible");
 var transcriptList = audioModePageXaml.Descendants(XName.Get("ListView", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
     .FirstOrDefault(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value == "TranscriptList");
+var summaryPanel = audioModePageXaml.Descendants(XName.Get("Grid", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .FirstOrDefault(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value == "SummarySection");
 var correctionButton = audioModePageXaml.Descendants(XName.Get("Button", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
     .FirstOrDefault(element => element.Attribute("Click")?.Value == "Correction_Click");
+var dateHeading = audioModePageXaml.Descendants(XName.Get("TextBlock", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .FirstOrDefault(element => element.Attribute("Text")?.Value.Contains("DateSeparatorLabel", StringComparison.Ordinal) == true);
+var timeLabel = audioModePageXaml.Descendants(XName.Get("TextBlock", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .FirstOrDefault(element => element.Attribute("Text")?.Value.Contains("TimeLabel", StringComparison.Ordinal) == true);
 Check(transcriptList?.Element(XName.Get("ListView.ItemContainerStyle", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))?
         .Elements(XName.Get("Style", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
         .Elements(XName.Get("Setter", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
         .Any(element => element.Attribute("Property")?.Value == "Padding" && element.Attribute("Value")?.Value == "0") == true
     && correctionButton?.Attribute("Style")?.Value == "{StaticResource SubtitleActionButtonStyle}"
     && correctionButton.Descendants(XName.Get("FontIcon", "http://schemas.microsoft.com/winfx/2006/xaml/presentation")).Any()
-    && audioModePageXaml.Descendants(XName.Get("Expander", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
-        .Any(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value is null && element.Attribute("AutomationProperties.AutomationId")?.Value == "SummarySection"
-            && element.Attribute("Background")?.Value == "Transparent"),
-    "transcript rows remove container padding, correction is a quiet icon action, and the summary header uses a transparent surface");
+    && summaryPanel?.Attribute("AutomationProperties.AutomationId")?.Value == "SummarySection"
+    && summaryPanel.Parent is XElement summaryBorder
+    && summaryBorder.Name == XName.Get("Border", "http://schemas.microsoft.com/winfx/2006/xaml/presentation")
+    && summaryBorder.Attribute("Background")?.Value == "{ThemeResource EchoSubtleSurfaceBrush}"
+    && audioModePageXaml.Descendants(XName.Get("MenuFlyoutItem", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Count(element => element.Attribute("Click")?.Value == "SummaryMenuItem_Click") == 3
+    && dateHeading?.Attribute("Margin")?.Value == "0,12,0,4"
+    && timeLabel?.Attribute("Typography.NumeralAlignment")?.Value == "Tabular",
+    "transcript rows remove container padding, preserve Mac date spacing and tabular time, use a quiet correction action and a low-emphasis summary surface");
+var recordingPanel = audioModePageXaml.Descendants(XName.Get("Grid", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .FirstOrDefault(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value == "RecordingPanel");
+var archiveButton = audioModePageXaml.Descendants(XName.Get("Button", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .FirstOrDefault(element => element.Attribute("AutomationProperties.AutomationId")?.Value == "ArchiveMenu");
+var archiveRow = archiveButton?.Parent as XElement;
+var waveformBorder = audioModePageXaml.Descendants(XName.Get("Border", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .FirstOrDefault(element => element.Elements(XName.Get("StackPanel", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Any(panel => panel.Attribute(mainPageXamlNamespace + "Name")?.Value == "WaveformBars"));
+Check(recordingPanel?.Attribute("Margin")?.Value == "20"
+    && recordingPanel.Attribute("RowSpacing")?.Value == "18"
+    && archiveRow?.Element(XName.Get("Grid.ColumnDefinitions", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))?
+        .Elements(XName.Get("ColumnDefinition", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .FirstOrDefault()?.Attribute("Width")?.Value == "*"
+    && archiveButton?.Attribute("HorizontalAlignment")?.Value == "Stretch"
+    && waveformBorder?.Attribute("Background")?.Value == "{ThemeResource EchoSubtleSurfaceBrush}"
+    && File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "MainPage.xaml.cs"))
+        .Contains("await ViewModel.SummarizeAsync(scope)", StringComparison.Ordinal),
+    "main spacing, expanding archive selection, quiet waveform surface and summary scope actions follow the Mac layout contract");
+var appResources = XDocument.Load(Path.Combine(AppContext.BaseDirectory, "Fixtures", "App.xaml"));
+var darkTheme = appResources.Descendants(XName.Get("ResourceDictionary", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .FirstOrDefault(element => element.Attribute(mainPageXamlNamespace + "Key")?.Value == "Dark");
+var lightTheme = appResources.Descendants(XName.Get("ResourceDictionary", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .FirstOrDefault(element => element.Attribute(mainPageXamlNamespace + "Key")?.Value == "Light");
+var highContrastTheme = appResources.Descendants(XName.Get("ResourceDictionary", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .FirstOrDefault(element => element.Attribute(mainPageXamlNamespace + "Key")?.Value == "HighContrast");
+Check(darkTheme?.Elements(XName.Get("SolidColorBrush", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Any(element => element.Attribute(mainPageXamlNamespace + "Key")?.Value == "EchoSubtleSurfaceBrush" && element.Attribute("Opacity")?.Value == "0.06") == true
+    && lightTheme?.Elements(XName.Get("SolidColorBrush", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Any(element => element.Attribute(mainPageXamlNamespace + "Key")?.Value == "EchoSubtleSurfaceBrush" && element.Attribute("Opacity")?.Value == "0.04") == true
+    && highContrastTheme?.Elements(XName.Get("StaticResource", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Any(element => element.Attribute(mainPageXamlNamespace + "Key")?.Value == "EchoSubtleSurfaceBrush" && element.Attribute("ResourceKey")?.Value == "SystemColorWindowColorBrush") == true,
+    "low-emphasis background remains theme-aware and falls back to a system brush in High Contrast");
 string correctionEditorSource = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "MainPage.xaml.cs"));
 Check(correctionEditorSource.Contains("var historyExpander = new Expander { Header = \"识别稿与修改前版本\"", StringComparison.Ordinal)
     && correctionEditorSource.Contains("SetAutomationId(historyExpander, \"CorrectionHistory\")", StringComparison.Ordinal)

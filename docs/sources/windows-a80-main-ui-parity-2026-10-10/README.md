@@ -6,6 +6,8 @@ Windows 分支：`feature/windows-ui-mac-parity`
 
 起始提交：PR #5 head `b52f68efafd7fd1b0d1671ded4fc3f37c9a701e7`
 
+Windows 改动已先提交为 `f3326a06aab1541789b3c212f36bb455cc030c16`；本目录与后续改动随当前分支 head 一并提交。
+
 Mac 参考：`origin/main` `ae0359dc90da0ccb5e526a275da1747954a49a4f`
 
 ## 源码依据
@@ -16,25 +18,30 @@ Mac 参考：`origin/main` `ae0359dc90da0ccb5e526a275da1747954a49a4f`
 - 静态和逻辑回归：`windows/Echo.CoreChecks/Program.cs`
 - 对照参数和源文件 SHA-256：本目录 `source-sha256.txt`
 
-参考参数摘要：Mac 双列语言菜单之间留白 14 DIP；字幕双列也用 14 DIP 列距，字幕垂直留白 7 DIP，元信息到正文 5 DIP，正文行间距 3；音源控件最小宽 148 DIP，录音按钮最小宽 126 DIP；波形 48 条、宽 3 DIP、条间距 3 DIP、容器高 52 DIP；总结表面圆角 10、内边距 12、四级背景色 35% 不透明。对应依据是上述 SwiftUI 当前实现，没有从非相关附件推导设计。
+参考参数摘要：Mac 主视图 padding 20、纵向 spacing 18；双列语言菜单间距 14 DIP；字幕 LazyVStack spacing 0、行垂直留白 7 DIP、元信息/正文 spacing 5、正文行间距 3；日期头上下 12/4 DIP；时间数字为 monospacedDigit。录音控制 HStack spacing 10，音源最小宽 148、录音按钮最小宽 126；存档工具栏 spacing10，存档最大宽260，Spacer 将导出/更多推至右侧；波形48条、宽/间距3、活动高3+样本×44并裁切至46、容器高52、水平padding12；总结面板 padding12、圆角10、四级背景色35%不透明、摘要滚动最大高220。对应依据是上述 SwiftUI 当前实现。
 
 ## Windows 修改
 
 - 顶部识别语言和翻译目标改为 Button + MenuFlyout，动态显示当前语言和勾选项；“不翻译”保留在目标位。录音中菜单注明下次录音生效，原设置对象和保存流程不变。
 - 音频来源改成轻量菜单，但保留隐藏的 `Mode` 状态选择器及原 `AudioMode_SelectionChanged`，选择后继续走同一实时切换/持久化逻辑；保留三种模式、设备切换及原 AutomationId。
-- 字幕列表项清掉 WinUI 容器的默认边距/内边距；每行上下留白 6 DIP，正文 15 DIP，元信息 12 DIP。纠正变成低强调铅笔按钮，保留基于字幕 ID 的 AutomationId。
-- 底部常用按钮收紧到至少 32 DIP 高，录音按钮最小宽 126 DIP；停止录音用系统危险色语义资源。总结头部采用透明表面，同时保留范围、状态、复制/展开和现有生成逻辑。
-- 沿用当前 Echo 主题字典、窗口尺寸、无障碍名称和波形 48 点/52 DIP 尺寸；未改 `macOS/`。
+- 主内容 margin 调为20 DIP、主行距18 DIP；语言两列间距14。菜单按钮透明、min-height30、padding 0×3，动态显示当前选择和勾选，AutomationId 按来源/目标区分。
+- 字幕容器 padding/margin/min-height 清零；日期头上下12/4 DIP，每行上下6 DIP、元信息/正文间距4 DIP，正文15 DIP、元信息12 DIP且时间使用 Tabular numeral；纠正为低强调铅笔按钮，保留逐字幕 AutomationId。
+- 录音控制最小宽148/126 DIP，开始/停止高32/34 DIP，保留 Mint/危险色语义。存档行首列弹性占宽，标题左靠、导出/更多右靠。未改录音、存档或总结业务处理。
+- 波形保留48点 RMS 与52 DIP尺寸，背景改为弱表面：深色白色6%不透明、浅色黑色4%、高对比度使用系统 Window 色。AI 总结改为padding12/圆角10的轻表面，标题右侧菜单含三种总结范围；保留状态、220 DIP滚动、展开/复制与原 ViewModel 调用。
+- 沿用 Echo Accent、窗口尺寸和无障碍语义；未改 `macOS/`。Tabular numeral 使用 WinUI `Typography.NumeralAlignment`，[Microsoft 文档](https://learn.microsoft.com/en-us/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.documents.typography.numeralalignment?view=windows-app-sdk-1.8)。
+
+变更文件：`windows/Echo.Windows/MainPage.xaml`、`MainPage.xaml.cs`、`App.xaml`；`windows/Echo.CoreChecks/Program.cs`、`Echo.CoreChecks.csproj`；`docs/windows/ui-parity.md`、`testing.md`、`mac-parity-matrix.md`；`docs/roadmap/数据清单.md`；以及本目录中的原始日志、哈希和说明。
 
 ## 验证
 
 原始输出保存在 `corechecks.log` 和 `build.log`。
 
-- `dotnet run --project windows/Echo.CoreChecks/Echo.CoreChecks.csproj -c Release --no-build`：182 项通过。新增断言覆盖语言菜单接线、目标不翻译常驻、录音提示、三种音频模式热切换、列表容器 padding、纠正图标和总结表面。
-- `dotnet build windows/Echo.Windows/Echo.Windows.csproj -c Release -p:Platform=x64 --no-restore -p:PublishReadyToRun=false`：成功，0 警告、0 错误。此前带默认发布设置的同一 Release x64 构建也成功，0 警告、0 错误。
+- `dotnet run --project windows/Echo.CoreChecks/Echo.CoreChecks.csproj -c Release`：184 项通过。新增断言覆盖语言菜单、目标不翻译常驻、录音提示、三态音源实时切换、字幕容器/行参数/日期留白/tabular数字、纠正入口、存档右对齐、深浅/高对比表面资源和总结范围菜单。
+- `dotnet build windows/Echo.Windows/Echo.Windows.csproj -c Release -p:Platform=x64 --no-restore -p:PublishReadyToRun=false`：成功，0 警告、0 错误。该构建涵盖 WinUI XAML 编译，没有启动 GUI。
+- PR #6 初始提交 `f3326a0` 的 Actions 8 项全部通过；本次追加更改已本机验证，推送新提交后应以新 head 的远端检查为准。
 - `git diff --check`：通过。
 - 没有启动 Echo 或 GUI、没有点击录音/访问用户存档、没有请求云服务、没有读取或保存真实音频。
 
 ## 未完成的视觉验收
 
-目标消息里的两张附件经本机查看是邮件撰写/回复 UI，不含 Echo 主界面；出于隐私也没有将其复制到仓库。当前没有可用的 Mac/Windows Echo 对照截图，因此本底稿只证明源代码参数、构建和静态/逻辑接线，**不证明实际窗口视觉一致**。用户明确保留视觉评估，本轮未启动窗口；Mac/Windows 相同字幕内容、主题、窗口尺寸和 DPI 的并排截图验收等待用户反馈。
+目标任务附件目录仅包含目标说明；此前随消息提交的两张图实际是邮件撰写/回复 UI，不含 Echo 主界面，未复制进仓库。当前没有可用的 Mac/Windows Echo 对照截图，因此本底稿证明源代码参数、构建和静态/逻辑接线，**不证明实际窗口视觉一致**。用户明确保留视觉评估，本轮未启动窗口；同字幕内容、主题、窗口尺寸和 DPI 的并排截图验收等待用户反馈。

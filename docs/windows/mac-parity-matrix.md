@@ -2,12 +2,19 @@
 
 ## A80 主界面信息层级更新（2026-10-10）
 
-| 区域 | Mac 基准 | Windows 当前实现 | 验证状态 |
-|---|---|---|---|
-| 识别/翻译语言 | 两个无边框菜单，当前选择、次要文字和小箭头；关闭翻译显示“不翻译” | Button + MenuFlyout，选中项勾选；目标选项一直可见；录音中给出下次生效提示；保存走原设置对象 | CoreChecks 菜单契约通过，真实 GUI/键盘/Narrator 未验 |
-| 字幕 | 双列顶部对齐，行距 7 DIP、正文行间距 3；纠正为轻量文字图标动作 | 双列等宽、14 DIP 列距；列表容器无默认额外内边距，行上下 6 DIP，正文 15 DIP，元信息 12 DIP，纠正使用轻量铅笔按钮 | CoreChecks 与 Release 构建通过；真实视觉、缩放/高对比度未验 |
-| 底部录音与总结 | 三组底栏，32/34 点级轻量控制；弱化总结背景和提示 | 紧凑音源菜单和工具按钮，保留开始/停止、设备切换、状态、存档/导出/更多、52 DIP 波形；总结区域透明轻量头部 | CoreChecks 与 Release 构建通过；窄窗口 GUI 未验 |
-| 截图对照 | 由相同数据和窗口环境验证实际呈现 | 本轮未启动应用；现有用户附件不是 Echo 界面 | 尚未完成 Mac/Windows 并排截图视觉验收；不能宣称像素一致 |
+| 区域 | Mac 基准 | PR #5 改前 | A80 Windows 当前 | 验证状态 |
+|---|---|---|---|---|
+| 顶部品牌/工具栏 | 内容 padding 20、纵向 spacing 18；caption bold Mint 品牌；borderless 图标按钮 | 主面板 margin `28,12,28,24`、row spacing 16；36×36 QuietButton | margin 20、row spacing 18；保留 36×36 Windows 图标入口 | 源码参数和 CoreChecks 通过；未做画面对比 |
+| 语言选择 | 两列间隔 14；subheadline semibold/secondary，小箭头 9 pt tertiary；录音提示下方显示；divider opacity .55 | 两个有 Header 的默认 ComboBox | 透明 Button + MenuFlyout；min-height 30、padding 0×3；当前选择、勾选、“不翻译”常驻和下次录音提示；保留设置保存与 AutomationId | 静态接线通过；菜单展开和键盘/Narrator 未实测 |
+| 日期/字幕列表 | LazyVStack 间距 0；日期标签 top/bottom 12/4 | ListView padding `0,16,0,24`，默认 ListViewItem padding/min-height 与行模板叠加 | ListView padding `0,8,0,12`；容器 padding/margin 0、min-height 0、透明；日期 margin `0,12,0,4` | CoreChecks/构建通过；长列表抖动/滚动仍未 GUI 验证 |
+| Speaker/时间戳 | caption.monospacedDigit、secondary；HH:mm:ss | CaptionTextBlockStyle、secondary | 12 DIP secondary，Tabular numeral；语言与纠正状态条件显示 | 静态 XAML/构建通过；字体实际效果未测 |
+| 双栏正文/分隔线 | 两列顶部对齐、间距14；body、lineSpacing3；纵向 padding7；低对比度 Divider | 双列间距14；正文和默认列表容器留白较松 | 双列等宽、间距14、正文15 DIP、自动换行；行上下6、行间距4；1 DIP 分隔线 opacity .55 | 参数和静态契约通过；截图、真实 DPI/主题仍未验 |
+| 纠正操作 | 元信息行右侧 Pencil + 文字，borderless/secondary | 普通按钮 padding `8,2`、min-height 28 | 透明按钮 padding `4,2`、min-height30；12 DIP 铅笔/文字，保留逐字幕 AutomationId 和焦点状态 | CoreChecks/构建通过；焦点可见态未 GUI 检查 |
+| 录音控制 | gap10；音源宽148；录音按钮宽126；空闲 Mint、录音 red；8点状态圆点 | 三态 ComboBox、默认 WinUI 高度/边框 | 轻量三态菜单保留实时路由；开始/停止高32/34、宽126，语义危险色；状态截断 | CoreChecks、构建及 CI 通过；设备/高 DPI 未测 |
+| 存档工具栏 | gap10；存档最大260，Spacer 将导出/更多推右 | Auto/Auto/Auto/*，操作靠左 | */Auto/Auto，存档伸展且内容左对齐，导出/更多右靠 | XAML 布局契约通过；窄窗口实际换行未测 |
+| 波形 | 48 samples，宽/间距3、圆角2，高52、pad12、quaternary opacity .35 | 48点与52高匹配，默认 CardBackgroundFill | 保留真实48点映射，低强调主题表面深色6%/浅色4%/HC系统色 | CoreChecks/构建通过；真实声卡和合成对照未测 |
+| AI 总结 | 轻量面板，pad12、圆角10、quaternary opacity .35；标题右侧总结菜单；正文最大高220 | 默认折叠 Expander，scope ComboBox 与生成按钮隐藏在内容区；卡片默认填充 | 主题低强调表面，标题右侧菜单直接提供三种总结范围；状态、结果滚动、展开/复制保留 | CoreChecks/构建通过；主题截图和内容挤压未测 |
+| 截图对照 | 需要同数据、同窗口/DPI/主题看实际呈现 | 当前用户附件无法用作 Echo 参考 | 本轮未启动应用；附件图是邮件界面 | 尚未完成 Mac/Windows 并排截图视觉验收；不声称像素一致 |
 
 核验日期：2026-10-10
 macOS 基线：`origin/main`，`ae0359dc90da0ccb5e526a275da1747954a49a4f`

@@ -6,11 +6,23 @@
 
 ### A80 主界面 Mac 信息层级收敛（2026-10-10）
 
-基于 PR #5 最新头 `b52f68efafd7fd1b0d1671ded4fc3f37c9a701e7`，参考 Mac `origin/main` `ae0359dc90da0ccb5e526a275da1747954a49a4f` 的 SwiftUI 控件参数，独立分支 `feature/windows-ui-mac-parity` 将顶部识别/目标语言改为轻量按钮菜单，选中项带勾；“不翻译”始终显示。录音期间选项菜单注明修改下次录音生效，菜单仍通过原配置和会话切换逻辑保存。音频来源改成轻量菜单，三种模式仍调用原实时切换流程，开始/停止录音与热键、设备和状态功能保留。
+基于 PR #5 最新头 `b52f68efafd7fd1b0d1671ded4fc3f37c9a701e7`，参考 Mac `origin/main` `ae0359dc90da0ccb5e526a275da1747954a49a4f` 的 SwiftUI 实现。下表记录参数来源、改前差异与当前改动；Mac 实际绘制效果仍以用户视觉验收为准。
 
-字幕区保留 Mac 的双列等宽与 14 DIP 列距，清除 WinUI 列表容器默认内边距；行内上下留白从 8 降为 6 DIP、信息与正文间距从 5 降为 4 DIP，正文固定 15 DIP，时间/说话人等元信息为 12 DIP。“纠正”改为右侧低强调铅笔按钮并保留逐字幕 AutomationId。底部录音/存档操作改为 32 DIP 紧凑按钮，录音时停止按钮使用系统危险色；总结标题改成透明轻量表面并保留原总结范围、状态、复制和展开能力。Mac 的窗口尺寸、48 点/52 DIP 波形、主题资源和高对比度语义继续沿用。
+| 区域 | Mac 源码参数/表现 | Windows PR #5 改前 | 当前 Windows 改动/仍有的差异 |
+|---|---|---|---|
+| 顶部品牌与工具栏 | 根视图 `.padding(20)`、纵向间隔 18；ECHO 为 caption bold/Mint，右侧浮层/设置/主题/置顶为 borderless 图标按钮 | 主内容边距 `28,12,28,24`、行距 16；ECHO 12 DIP；工具按钮固定 36×36 并带 QuietButton 内边距 | 根边距调整为 20、主行距 18；保留 Windows 标题栏与 36×36 工具按钮及全部入口，保持现有主题 Mint。WinUI 标题栏/图标视觉继续采用平台样式 |
+| 语言选择 | 两个等宽菜单，列距 14；subheadline semibold/secondary，小箭头 9 pt/tertiary；录音提示 caption2/tertiary，语言下方 Divider opacity .55 | 两个带 Header 的 ComboBox，默认背景、边框、内边距和最小高度 | Button + MenuFlyout；按钮透明、padding 0×3、min-height 30，文字 14 DIP semibold/secondary、箭头 9；选中项有勾；“不翻译”始终在目标列；录音中菜单提示下次生效。保留设置保存、动态名称与 AutomationId |
+| 字幕列表容器 | ScrollView + `LazyVStack(spacing: 0)`；日期头上/下留白 12/4；单条内容上下留白 7，元信息至正文间距 5 | ListView 外 padding `0,16,0,24`；未覆盖 ListViewItem 默认 padding/min-height；数据行 Grid padding `0,8`、行间距 5 | ListView padding `0,8,0,12`，列表项 Padding/Margin 清零、MinHeight=0、背景透明；每行上下 6 DIP、行间距 4。日期头补 12/4 DIP，保留动态高度和虚拟化；无逐字幕背景卡片 |
+| 双栏正文 | HStack 顶部对齐、间距 14；Mac `.font(.body)`、lineSpacing 3；空原文显示省略号，译文留空位 | 两列等宽，间距 14；系统默认正文样式和容器留白 | 两列仍等宽并顶部对齐，间距 14；正文显式 15 DIP，自动换行，行间距沿用字体默认；逐字幕底线高 1 DIP、上下外观低对比度。正文基线字号与字体光栅效果待截图核验 |
+| Speaker/时间/语言 | caption.monospacedDigit + secondary；时间格式 HH:mm:ss；语言和纠正状态只在需要时显示 | CaptionTextBlockStyle、secondary；元信息间距 8 | 字号 12 DIP、secondary；时间启用 Tabular numeral；保留语言与“已纠正”条件。元信息横向间距收至 7 DIP |
+| 纠正操作 | Pencil +“纠正/查看校对”，borderless，caption 色，与元信息同行右对齐 | 每行普通 Button，padding `8,2`、min-height 28，WinUI 默认按钮状态可见 | 透明背景、padding `4,2`、min-width 0、min-height 30；12 DIP 铅笔与文字，右对齐；继承 DefaultButtonStyle 以保留 hover/focus 键盘反馈与逐字幕 AutomationId |
+| 录音控制 | HStack 间距 10；音源菜单最小宽 148；录音按钮最小宽 126，borderedProminent，录音时红色、空闲 Mint；状态圆点 8、文字间距 7 | 三态 ComboBox 和开始/停止按钮列；WinUI 默认按钮高度/填充，状态最大宽 360 | 轻量三态菜单复用原 Mode 事件，min-width 148；开始/停止 min-width 126、高 32/34；开始沿用 Echo Mint，停止用系统 Critical brush；状态仍为 8 DIP 圆点并限制 360 DIP 文本 |
+| 存档工具栏 | HStack 间距 10；存档菜单最大宽 260，Spacer 将导出和更多推至右侧 | 四列 Auto/Auto/Auto/*，存档宽限 240；导出、更多实际靠左排列 | 改为 */Auto/Auto；存档按钮横向 Stretch、内容左对齐，导出/更多靠右；三个操作原 AutomationId 和业务处理保留 |
+| 波形 | 48 个样本；条宽/间距 3，圆角 2，活动高 `max(2,min(46,3+sample×44))`；容器 52、水平 padding 12、quaternary opacity .35/corner 10 | 48 个样本和 52 高已对齐，但容器用 CardBackgroundFillColorDefaultBrush | 保留 48 点、条宽/间距/高度映射；改为主题化弱表面：深色白色 6% 不透明、浅色黑色 4%、高对比度系统 Window 色；真实合成效果待 GUI 验收 |
+| AI 总结 | 轻量标题与右侧总结菜单；内部状态/内容直接可见，正文 ScrollView 最大高 220；面板 padding 12、quaternary opacity .35、圆角 10 | 默认折叠 Expander；scope ComboBox 和“生成总结”仅在展开后可见；主体卡片填充默认卡片色 | 改为始终可见的轻表面和标题右侧 MenuFlyout（三种总结范围）；保留录音提示、状态、最大高 220 的内容滚动、展开/复制与原 ViewModel 调用；范围选择继续由原索引状态接线 |
+| 颜色、窗口与主题 | 系统深/浅色语义，Mint；窗口 min 680×520、ideal 820×650，主视图 padding 20 | Windows 已有 Echo 深/浅/高对比主题、Accent 资源与 A48 窗口尺寸 | 沿用现有 Echo 和系统语义资源，不改 macOS；补充低强调表面主题资源并为高对比度映射到系统 Window brush。未通过 GUI 核实各状态下对比度 |
 
-本轮只做了 CoreChecks 静态 UI 契约与 Release x64 构建，没有启动窗口。当前用户提供的两个附件图实际显示邮件撰写/回复界面，不是 Echo，未作为设计参考或复制进仓库；没有可用的 Mac/Windows Echo 截图，因此**尚未完成截图视觉对照**，也不宣称像素级一致。需要用户在方便时按相同字幕内容、窗口尺寸、主题和 DPI 进行视觉验收，再根据反馈调整。变更文件哈希、完整验证边界和运行日志索引见 [A80 来源底稿](../sources/windows-a80-main-ui-parity-2026-10-10/README.md)。
+本轮执行 CoreChecks、Release x64 构建及 GitHub PR CI，没有启动窗口。目标附件目录中没有截图文件；先前随消息交付的两张图实际显示邮件撰写/回复界面，不是 Echo，未作为设计参考或复制进仓库。当前没有可用的 Mac/Windows Echo 截图，因此**尚未完成截图视觉对照**，不宣称像素级一致。用户负责视觉评估；等用户检查后再按反馈调整。窗口缩放、键盘/Narrator 和主题对比度等运行态验收也未由本轮 GUI 验证。变更文件哈希、完整验证边界和日志见 [A80 来源底稿](../sources/windows-a80-main-ui-parity-2026-10-10/README.md)。
 
 - 顶栏保留 ECHO、悬浮字幕菜单、设置、主题和置顶，动作数量和位置接近 Mac。A48 将初始窗口从 920×720 DIP 调整为 Mac 理想值 820×650 DIP，最小窗口约束对齐 Mac 的 680×520 DIP，并移除空字幕时常驻的“回到最新”动作；隔离 GUI 在 144 DPI 实测通过，证据见 `docs/sources/windows-a48-main-window-size-2026-10-10.md`。Mac/Windows 截图并排对照仍待完成。
 - 主题默认深色；设置项及主界面循环顺序遵循 Mac 的浅色、深色、跟随系统，选择后立即保存并应用。已显式保存的旧设置继续保留。代码与自动检查见 `docs/sources/windows-a31-theme-parity-2026-10-09.md`；实际系统主题 GUI 对照仍待验。
