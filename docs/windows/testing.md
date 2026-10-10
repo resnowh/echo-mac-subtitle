@@ -140,4 +140,8 @@ Mac `SpeechViewModel` 在麦克风安装后 1.2 秒无原始回调时，以 450m
 
 ## A78：分段会话端到端生产对拍（2026-10-10）
 
-Mac CI 从 `SpeechViewModel.swift` 抽取未修改的生产 `handleSonioxMessage` 和 `autoFinalizeIfNeeded`，用确定性时钟处理 9 个合成响应/timer 事件。Windows 使用生产 `TokenAssembler` 和 `MainPageViewModel` 调用的同一个 `TranscriptSegmentationRuntime`；逐事件比较 Mac 输出与 Windows 结果的最终字幕边界、双语文本、起止与现实时间、speaker、language 和定稿次数。覆盖译文迟到、静音等译文、空响应刷新静音计时、长段 89.999/90 秒边界和 endpoint。Mac harness 编译并生成 9 个事件快照；使用保存的 Mac 原始 artifact，本机 177 项 CoreChecks 全部通过，9 个事件逐项一致，Release x64 构建 0 警告、0 错误。首个 Windows Actions 检查因已释放 JSON 文档的测试读取缺陷失败，已修复并在本机复测；修复提交后的 Actions 待确认。它不代表真实墙钟 timer、音频或 Soniox 网络验收。固定输入、原始 Mac harness、artifact、日志与哈希见 [A78 来源底稿](../sources/windows-a78-segmentation-session-parity-2026-10-10/README.md)。
+Mac CI 从 `SpeechViewModel.swift` 抽取未修改的生产 `handleSonioxMessage` 和 `autoFinalizeIfNeeded`，用确定性时钟处理 9 个合成响应/timer 事件。Windows 使用生产 `TokenAssembler` 和 `MainPageViewModel` 调用的同一个 `TranscriptSegmentationRuntime`；逐事件比较 Mac 输出与 Windows 结果的最终字幕边界、双语文本、起止与现实时间、speaker、language 和定稿次数。覆盖译文迟到、静音等译文、空响应刷新静音计时、长段 89.999/90 秒边界和 endpoint。Mac harness 编译并生成 9 个事件快照；使用保存的 Mac 原始 artifact，本机 177 项 CoreChecks 全部通过，9 个事件逐项一致，Release x64 构建 0 警告、0 错误。修复测试读取生命周期后，提交 `0bb6bd0` 的 Actions run `38010496387` 中 Mac 工件生成、Windows CoreChecks/Release x64 与 Archive 往返全部通过。它不代表真实墙钟 timer、音频或 Soniox 网络验收。固定输入、原始 Mac harness、artifact、日志与哈希见 [A78 来源底稿](../sources/windows-a78-segmentation-session-parity-2026-10-10/README.md)。
+
+## A79：Mac/Windows 生产音频转换对拍（2026-10-10）
+
+固定 float32 输入覆盖 48 kHz mono、44.1 kHz stereo downmix、150 ms 起音和反相双声道。Mac CI 从 `macOS/Audio/AudioCapture.swift` 提取未修改的生产 `MacMicrophoneCapture.convert`，用 16 kHz mono interleaved PCM16 产出参考；Windows 下载工件，用同一字节输入调用生产 `AudioCapture.ToMono16k`。比较输出帧数、最佳延迟、相关性、RMS 级别和相消静音。不同重采样滤波器不要求字节相同，阈值和边缘滤波容差记录于 [A79 来源底稿](../sources/windows-a79-audio-conversion-parity-2026-10-10/README.md)。本机 Windows CoreChecks 177 项通过；Mac/Windows 交叉验证和 Release 构建待 Actions run 验证。此测试不代表真实设备时钟、WASAPI 欠载或长会话硬件验收。

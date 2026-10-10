@@ -26,7 +26,7 @@ Mac 侧复用 production handler 和 auto-finalizer；测试适配器只注入�
 - 当前 workflow SHA-256：`5CA3187E9AF217ADC85C0EE7453EDEABF2D3A046E5C3B978654AF87E169609A6`。
 - Mac CI run `38010148281`（push，提交 `e2c1f9a`）生成并上传生产会话 artifact；Mac 抽取 harness 编译及 9 个事件均通过。下载的原始 JSON 保存在 `mac-production-output/mac-segmentation-session.json`，SHA-256：`E2C9A5DC6CD0729FB92D14631FB7C31C18CDFEBA93F6628C750A8311389E069E`；artifact 内记录 source commit `e2c1f9a8aae285fa6fcac119ca85a8d46a767de6` 和上述 Mac 源码哈希。
 - 使用该原始 Mac artifact 在 Windows 本机重跑 CoreChecks：177 项通过；日志 `core-checks-mac-artifact.log` SHA-256：`B1FFEE246C099F12C6AC24BC110378D911DD18B44FF9B09480E6585A5B89A125`。其中 9 个逐事件快照全部匹配，比较最终行数、双语文本、起止时间、现实时间、speaker、language、定稿数及触发时刻。
-- 首次 Windows Actions run `38010148281` 在同一环境读取 Mac JSON 时发现测试代码保留了已释放 `JsonDocument` 的元素；已改为克隆快照元素，防止文档释放后访问。修复后本机复测全绿；修复提交后的 Actions 结果待确认。
+- 首次 Windows Actions run `38010148281` 在同一环境读取 Mac JSON 时发现测试代码保留了已释放 `JsonDocument` 的元素；已改为克隆快照元素，防止文档释放后访问。修复后本机复测全绿；提交 `0bb6bd0` 的 Actions run `38010496387` 中 Mac 工件生成、Windows CoreChecks/Release x64 和 Mac Archive 往返均通过。
 - 同一提交 PR 的 Windows 构建 run `38010152583` 和 macOS 无签名打包检查 run `38010152551` 均通过；这些检查不包含失败的 CoreChecks 步骤。
 
 ## 尚未覆盖

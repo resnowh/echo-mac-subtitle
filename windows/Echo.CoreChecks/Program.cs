@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Diagnostics;
@@ -1432,6 +1433,81 @@ List<float> ReadNormalized(ISampleProvider input)
     while ((read = normalized.Read(frame.AsSpan())) > 0) samples.AddRange(frame.AsSpan(0, read).ToArray());
     return samples;
 }
+if (Environment.GetEnvironmentVariable("ECHO_MAC_AUDIO_CONVERSION_FIXTURE") is { Length: > 0 } macAudioConversionPath)
+{
+    using var inputDocument = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "audio-conversion-inputs.json")));
+    using var macAudioDocument = JsonDocument.Parse(File.ReadAllText(macAudioConversionPath));
+    JsonElement inputCases = inputDocument.RootElement.GetProperty("cases");
+    JsonElement macAudioRoot = macAudioDocument.RootElement;
+    string? macAudioCommit = macAudioRoot.GetProperty("sourceCommit").GetString();
+    string? macAudioCaptureHash = macAudioRoot.GetProperty("audioCaptureSourceSHA256").GetString();
+    string? macSpeechViewModelHash = macAudioRoot.GetProperty("speechViewModelSourceSHA256").GetString();
+    JsonElement macAudioCases = macAudioRoot.GetProperty("cases");
+    bool macAudioMetadataValid = macAudioRoot.GetProperty("converter").GetString() == "AVAudioConverter"
+        && macAudioCommit is { Length: > 0 } and not "unknown"
+        && macAudioCaptureHash is { Length: 64 } && macAudioCaptureHash.All(Uri.IsHexDigit)
+        && macSpeechViewModelHash is { Length: 64 } && macSpeechViewModelHash.All(Uri.IsHexDigit)
+        && inputDocument.RootElement.GetProperty("format").GetString() == "f32le-interleaved"
+        && macAudioCases.GetArrayLength() == inputCases.GetArrayLength();
+    Check(macAudioMetadataValid, "Mac audio conversion output identifies the production AVAudioConverter baseline and matching source fixture");
+    if (macAudioMetadataValid)
+    {
+        foreach (JsonElement macAudioCase in macAudioCases.EnumerateArray())
+        {
+            string id = macAudioCase.GetProperty("id").GetString()!;
+            JsonElement inputCase = default;
+            foreach (JsonElement candidate in inputCases.EnumerateArray())
+            {
+                if (candidate.GetProperty("id").GetString() != id) continue;
+                inputCase = candidate;
+                break;
+            }
+            if (inputCase.ValueKind != JsonValueKind.Object)
+            {
+                Check(false, $"Mac audio conversion fixture contains known source input \"{id}\"");
+                continue;
+            }
+            byte[] sourceBytes = Convert.FromBase64String(inputCase.GetProperty("inputBase64").GetString()!);
+            int sampleRate = inputCase.GetProperty("sampleRate").GetInt32();
+            int channels = inputCase.GetProperty("channels").GetInt32();
+            int frameCount = inputCase.GetProperty("frameCount").GetInt32();
+            bool inputValid = sourceBytes.Length == frameCount * channels * sizeof(float);
+            byte[] macPcm16 = Convert.FromBase64String(macAudioCase.GetProperty("pcm16Base64").GetString()!);
+            int macSampleCount = macAudioCase.GetProperty("sampleCount").GetInt32();
+            var windowsSamples = inputValid
+                ? ReadNormalized(new FixtureFloatSampleProvider(sourceBytes, sampleRate, channels))
+                : [];
+            float[] macSamples = new float[macPcm16.Length / sizeof(short)];
+            for (int sampleIndex = 0; sampleIndex < macSamples.Length; sampleIndex++)
+                macSamples[sampleIndex] = BinaryPrimitives.ReadInt16LittleEndian(macPcm16.AsSpan(sampleIndex * sizeof(short), sizeof(short))) / 32768f;
+
+            bool frameCountMatches = inputValid && macSamples.Length == macSampleCount
+                && Math.Abs(windowsSamples.Count - macSampleCount) <= 1;
+            if (id == "stereo-48k-phase-cancel")
+            {
+                double windowsPeak = windowsSamples.Count == 0 ? double.PositiveInfinity : windowsSamples.Max(sample => Math.Abs((double)sample));
+                double macPeak = macSamples.Length == 0 ? double.PositiveInfinity : macSamples.Max(sample => Math.Abs((double)sample));
+                Check(frameCountMatches && windowsPeak < 0.002 && macPeak < 0.002,
+                    $"Mac/Windows PCM conversion \"{id}\": both production converters average opposite-phase stereo to silence");
+                continue;
+            }
+
+            (int lag, double correlation, double rmsDifference) = CompareConvertedPcm(macSamples, windowsSamples);
+            bool conversionMatches = frameCountMatches && Math.Abs(lag) <= 4
+                && correlation >= 0.995 && rmsDifference <= 0.03;
+            if (id == "mono-48k-delayed-523hz")
+            {
+                int windowsOnset = windowsSamples.FindIndex(sample => sample > 0.05f);
+                int macOnset = Array.FindIndex(macSamples, sample => sample > 0.05f);
+                conversionMatches &= windowsOnset >= 2396 && windowsOnset <= 2406
+                    && Math.Abs(windowsOnset - macOnset) <= 3;
+            }
+            Console.WriteLine($"Mac/Windows audio case {id}: Mac={macSampleCount}, Windows={windowsSamples.Count}, bestLag={lag}, correlation={correlation:F6}, relativeRmsDifference={rmsDifference:P3}");
+            Check(conversionMatches,
+                $"Mac/Windows PCM conversion \"{id}\" matches frame count, timing, waveform correlation, and level tolerance");
+        }
+    }
+}
 var normalized441 = ReadNormalized(new FiniteToneSampleProvider(44100, 2, 1.0, 0));
 var normalized480 = ReadNormalized(new FiniteToneSampleProvider(48000, 1, 1.0, 0));
 Console.WriteLine($"A03 synthetic resample samples: 44.1 kHz stereo={normalized441.Count}, 48 kHz mono={normalized480.Count}");
@@ -1776,6 +1852,43 @@ if (args.Contains("--audio"))
 }
 Console.WriteLine($"Completed {passed} checks. No cloud calls; no audio was saved.");
 
+(int Lag, double Correlation, double RelativeRmsDifference) CompareConvertedPcm(float[] reference, IReadOnlyList<float> actual)
+{
+    int usableCount = Math.Min(reference.Length, actual.Count) - 272;
+    if (usableCount <= 0) return (int.MaxValue, double.NegativeInfinity, double.PositiveInfinity);
+    int start = 128;
+    int bestLag = 0;
+    double bestCorrelation = double.NegativeInfinity;
+    for (int lag = -8; lag <= 8; lag++)
+    {
+        double dot = 0, referenceEnergy = 0, actualEnergy = 0;
+        for (int index = start; index < start + usableCount; index++)
+        {
+            int actualIndex = index + lag;
+            if ((uint)actualIndex >= (uint)actual.Count) continue;
+            double left = reference[index], right = actual[actualIndex];
+            dot += left * right;
+            referenceEnergy += left * left;
+            actualEnergy += right * right;
+        }
+        double correlation = referenceEnergy <= 0 || actualEnergy <= 0 ? double.NegativeInfinity
+            : dot / Math.Sqrt(referenceEnergy * actualEnergy);
+        if (correlation > bestCorrelation) { bestCorrelation = correlation; bestLag = lag; }
+    }
+    double referenceRms = 0, actualRms = 0;
+    for (int index = start; index < start + usableCount; index++)
+    {
+        double left = reference[index], right = actual[index + bestLag];
+        referenceRms += left * left;
+        actualRms += right * right;
+    }
+    referenceRms = Math.Sqrt(referenceRms / usableCount);
+    actualRms = Math.Sqrt(actualRms / usableCount);
+    double relativeRmsDifference = referenceRms <= 0 ? double.PositiveInfinity
+        : Math.Abs(referenceRms - actualRms) / referenceRms;
+    return (bestLag, bestCorrelation, relativeRmsDifference);
+}
+
 sealed class FiniteToneSampleProvider(int sampleRate, int channels, double durationSeconds, double leadingSilenceSeconds) : ISampleProvider
 {
     private readonly int totalSamples = (int)Math.Round(sampleRate * channels * durationSeconds);
@@ -1791,6 +1904,23 @@ sealed class FiniteToneSampleProvider(int sampleRate, int channels, double durat
             buffer[i] = sourceFrame / (double)sampleRate < leadingSilenceSeconds ? 0 : 0.25f;
         }
         position += available;
+        return available;
+    }
+}
+
+sealed class FixtureFloatSampleProvider(byte[] interleavedFloatBytes, int sampleRate, int channels) : ISampleProvider
+{
+    private int samplePosition;
+    private readonly int totalSamples = interleavedFloatBytes.Length / sizeof(float);
+    public WaveFormat WaveFormat { get; } = WaveFormat.CreateIeeeFloatWaveFormat(sampleRate, channels);
+    public int Read(float[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
+    public int Read(Span<float> buffer)
+    {
+        int available = Math.Min(buffer.Length, totalSamples - samplePosition);
+        for (int index = 0; index < available; index++)
+            buffer[index] = BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(
+                interleavedFloatBytes.AsSpan((samplePosition + index) * sizeof(float), sizeof(float))));
+        samplePosition += available;
         return available;
     }
 }
