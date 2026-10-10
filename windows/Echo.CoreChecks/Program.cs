@@ -274,12 +274,20 @@ var startRecordingControl = mainPageXaml.Descendants(presentationNamespace + "Bu
     .Single(element => element.Attribute("AutomationProperties.AutomationId")?.Value == "StartRecording");
 var stopRecordingControl = mainPageXaml.Descendants(presentationNamespace + "Button")
     .Single(element => element.Attribute("AutomationProperties.AutomationId")?.Value == "StopRecording");
+var stopRecordingStyle = mainPageXaml.Descendants(presentationNamespace + "Style")
+    .Single(element => element.Attribute(xamlNamespace + "Key")?.Value == "StopRecordingButtonStyle");
 var archiveListControl = mainPageXaml.Descendants(presentationNamespace + "ListView")
     .Single(element => element.Attribute("AutomationProperties.AutomationId")?.Value == "ArchiveList");
 var recordingStatusControl = mainPageXaml.Descendants(presentationNamespace + "TextBlock")
     .Single(element => element.Attribute("AutomationProperties.AutomationId")?.Value == "Status");
 Check(startRecordingControl.Attribute("AutomationProperties.Name")?.Value == "开始录音"
     && stopRecordingControl.Attribute("AutomationProperties.Name")?.Value == "停止录音"
+    && startRecordingControl.Attribute("MinWidth")?.Value == "126"
+    && startRecordingControl.Attribute("MinHeight")?.Value == "34"
+    && stopRecordingStyle.Elements(presentationNamespace + "Setter")
+        .Any(element => element.Attribute("Property")?.Value == "MinWidth" && element.Attribute("Value")?.Value == "126")
+    && stopRecordingStyle.Elements(presentationNamespace + "Setter")
+        .Any(element => element.Attribute("Property")?.Value == "MinHeight" && element.Attribute("Value")?.Value == "34")
     && archiveListControl.Attribute("AutomationProperties.Name")?.Value == "本地存档"
     && recordingStatusControl.Attribute("AutomationProperties.Name")?.Value.Contains("AccessibleText('录音状态', ViewModel.Status)", StringComparison.Ordinal) == true
     && recordingStatusControl.Attribute("AutomationProperties.LiveSetting")?.Value == "Polite",

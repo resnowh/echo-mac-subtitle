@@ -6,6 +6,10 @@
 
 PR #6 当前代码 head `7056cdc25039a136c7adf0b3cce714e1fd1d0f07` 的8项 Actions 检查全部成功：Windows CI（含 CoreChecks、Release x64 与 Mac Archive 回读）、Mac CI 和 unsigned package preflight。本轮尊重用户明确的 GUI 使用安排，没有启动已安装或隔离的 Echo、没有做 UIA 或截图比较。目标任务附件目录无图片；此前两张图已检查为邮件界面，不能支持 Echo 视觉判断。Mac/Windows 实际截图并排验收尚未完成。详情、原始输出及源哈希见 [A80 底稿](../sources/windows-a80-main-ui-parity-2026-10-10/README.md)。
 
+## A82 录音状态按钮尺寸回归（2026-10-10）
+
+Mac 使用同一个切换按钮承载开始和停止录音。Windows 开始按钮此前继承 32 DIP 的通用工具栏最小高度，而停止按钮为 34 DIP；现将开始按钮明确设为 34 DIP，并让 CoreChecks 比较两种状态的最小宽度 126 DIP 与高度 34 DIP。CoreChecks 184 项通过，Release x64 构建 0 警告、0 错误。没有启动 GUI；控件实际布局和焦点仍待用户视觉验收。日志与哈希见 [A80/A82 底稿](../sources/windows-a80-main-ui-parity-2026-10-10/README.md)。
+
 ## 基线
 
 - Mac 来源：`origin/main` `ae0359dc90da0ccb5e526a275da1747954a49a4f`。

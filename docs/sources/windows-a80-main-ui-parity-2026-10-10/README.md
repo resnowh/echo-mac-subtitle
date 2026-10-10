@@ -26,7 +26,7 @@ Mac 参考：`origin/main` `ae0359dc90da0ccb5e526a275da1747954a49a4f`
 - 音频来源改成轻量菜单，但保留隐藏的 `Mode` 状态选择器及原 `AudioMode_SelectionChanged`，选择后继续走同一实时切换/持久化逻辑；保留三种模式、设备切换及原 AutomationId。
 - 主内容 margin 调为20 DIP、主行距18 DIP；语言两列间距14。菜单按钮透明、min-height30、padding 0×3，动态显示当前选择和勾选，AutomationId 按来源/目标区分。
 - 字幕容器 padding/margin/min-height 清零；日期头上下12/4 DIP，每行上下6 DIP、元信息/正文间距4 DIP，正文15 DIP、元信息12 DIP且时间使用 Tabular numeral；空原文显示Mac相同省略号，空译文保留一行；纠正为低强调铅笔按钮，保留逐字幕 AutomationId。
-- 录音控制最小宽148/126 DIP，开始/停止高32/34 DIP，保留 Mint/危险色语义。存档行首列弹性占宽，标题左靠、导出/更多右靠。未改录音、存档或总结业务处理。
+- 录音控制最小宽148/126 DIP，A80 最初开始/停止高度为32/34；A82 将两者统一为34 DIP，保留 Mint/危险色语义。存档行首列弹性占宽，标题左靠、导出/更多右靠。未改录音、存档或总结业务处理。
 - 波形保留48点 RMS 与52 DIP尺寸，背景改为弱表面：深色白色6%不透明、浅色黑色4%、高对比度使用系统 Window 色。AI 总结改为padding12/圆角10的轻表面，标题右侧菜单含三种总结范围；保留状态、220 DIP滚动、展开/复制与原 ViewModel 调用。
 - 沿用 Echo Accent、窗口尺寸和无障碍语义；未改 `macOS/`。Tabular numeral 使用 WinUI `Typography.NumeralAlignment`，[Microsoft 文档](https://learn.microsoft.com/en-us/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.documents.typography.numeralalignment?view=windows-app-sdk-1.8)。
 
@@ -55,3 +55,10 @@ Mac 参考：`origin/main` `ae0359dc90da0ccb5e526a275da1747954a49a4f`
 - CoreChecks 184 项通过；Release x64 构建 0 警告、0 错误。日志为 `a81-corechecks.log`、`a81-build.log`，对应文件哈希见 `a81-sha256.txt`。
 - tertiary brush 的官方依据链接与摘要保存在 `a81-microsoft-theme-source.md`。
 - 未启动 Echo/GUI、未连接服务或访问用户数据；`macOS/` 未修改。实际焦点/hover 与深浅主题的屏幕效果继续交由用户视觉验收。
+
+## A82 录音按钮高度统一
+
+- Mac 基线 `ae0359dc90da0ccb5e526a275da1747954a49a4f` 在 `EchoMacApp.swift` 使用一个录音切换按钮，最小宽度 126；开始与停止共享相同的原生控件高度。
+- Windows 起始提交 `a2e8f0308b1813d84c9aa33a10d8e703e69fa9b9` 中开始按钮继承通用工具栏 32 DIP 最小高度，停止按钮为 34 DIP。开始按钮现显式设为 34 DIP；CoreChecks 同时断言开始/停止宽 126 DIP、高 34 DIP，避免两种状态跳动。
+- CoreChecks 184 项通过，Release x64 构建 0 警告、0 错误。原始日志 `a82-corechecks.log`、`a82-build.log`，源码及日志哈希 `a82-sha256.txt`。
+- 本次未启动 GUI；实际的控件边界、键盘焦点和截图验收仍由用户反馈。`macOS/` 未修改。
