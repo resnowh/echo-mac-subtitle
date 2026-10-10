@@ -10,7 +10,7 @@
 | Speaker/时间戳 | caption.monospacedDigit、secondary；HH:mm:ss | CaptionTextBlockStyle、secondary | 12 DIP secondary，Tabular numeral；语言与纠正状态条件显示 | 静态 XAML/构建通过；字体实际效果未测 |
 | 双栏正文/分隔线 | 两列顶部对齐、间距14；body、lineSpacing3；纵向 padding7；低对比度 Divider | 双列间距14；正文和默认列表容器留白较松 | 双列等宽、间距14、正文15 DIP、自动换行；行上下6、行间距4；1 DIP 分隔线 opacity .55 | 参数和静态契约通过；截图、真实 DPI/主题仍未验 |
 | 纠正操作 | 元信息行右侧 Pencil + 文字，borderless/secondary | 普通按钮 padding `8,2`、min-height 28 | 透明按钮 padding `4,2`、min-height30；12 DIP 铅笔/文字，保留逐字幕 AutomationId 和焦点状态 | CoreChecks/构建通过；焦点可见态未 GUI 检查 |
-| 录音控制 | gap10；音源宽148；同一切换按钮宽126；空闲 Mint、录音 red；8点状态圆点 | 三态 ComboBox、默认 WinUI 高度/边框 | 轻量三态菜单保留实时路由；A82 将开始/停止统一为高34、宽126，语义危险色；状态截断 | CoreChecks、构建及当前 PR CI 通过；设备/高 DPI 未测 |
+| 录音控制 | gap10；音源宽148；同一切换按钮宽126；空闲 Mint、录音 red；8点状态圆点；ViewThatFits 空间不足时换行 | 三态 ComboBox、默认 WinUI 高度/边框、状态固定横排 | 轻量三态菜单保留实时路由；A82 开始/停止统一高34、宽126；A84 窗宽小于760 DIP 时将连接状态移到按钮组下方 | CoreChecks/构建及 PR CI 验证；运行态缩放仍待 GUI 目测 |
 | 存档工具栏 | gap10；存档最大260，Spacer 将导出/更多推右 | Auto/Auto/Auto/*，操作靠左 | */Auto/Auto，存档伸展且内容左对齐，导出/更多右靠 | XAML 布局契约通过；窄窗口实际换行未测 |
 | 波形 | 48 samples，宽/间距3、圆角2，高52、pad12、quaternary opacity .35 | 48点与52高匹配，默认 CardBackgroundFill | 保留真实48点映射，低强调主题表面深色6%/浅色4%/HC系统色 | CoreChecks/构建通过；真实声卡和合成对照未测 |
 | AI 总结 | 轻量面板，pad12、圆角10、quaternary opacity .35；标题右侧总结菜单；正文最大高220 | 默认折叠 Expander，scope ComboBox 与生成按钮隐藏在内容区；卡片默认填充 | 主题低强调表面，标题右侧菜单直接提供三种总结范围；状态、结果滚动、展开/复制保留 | CoreChecks/构建通过；主题截图和内容挤压未测 |
@@ -79,3 +79,7 @@ Windows 来源：当前 PR 分支 `feature/windows-mac-parity`；其历史迁移
 ## A83 主字幕对比度回归（2026-10-10）
 
 静态对照 Mac `macOS/Views/TranscriptViews.swift` 的 Divider `.opacity(0.55)` 与 Windows `MainPage.xaml` 后发现，Windows 曾将透明度设在容纳 ListView、空态与新内容提示的父 Grid 上，整块内容会一起变淡。现改为仅让独立的 1 DIP 顶部分隔线使用 0.55 透明度；CoreChecks 检查父容器无 Opacity、透明度仅作用于细线。该检查是静态 XAML 契约，不替代深浅主题及显示器上的视觉验收。未访问用户字幕、录音、API Key 或截图；未启动 Echo；`macOS/` 未改。
+
+## A84 录音工具栏窄窗布局（2026-10-10）
+
+Mac `EchoMacApp.swift` 用 `ViewThatFits` 在横向空间不足时把连接状态放到录音按钮下方；Windows 原来一直固定在同一行。现增加 760 DIP `AdaptiveTrigger`：窄窗状态置于第二行，宽窗恢复右侧排列，状态内容与原 360 DIP 省略及 UI Automation 名称保持不变。CoreChecks 验证默认窄窗位置和宽窗触发/Setter。源码契约与构建不是运行态缩放验收；未启动 Echo，真实布局仍交由用户查看。

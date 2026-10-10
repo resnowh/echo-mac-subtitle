@@ -284,6 +284,12 @@ var stopRecordingControl = mainPageXaml.Descendants(presentationNamespace + "But
     .Single(element => element.Attribute("AutomationProperties.AutomationId")?.Value == "StopRecording");
 var stopRecordingStyle = mainPageXaml.Descendants(presentationNamespace + "Style")
     .Single(element => element.Attribute(xamlNamespace + "Key")?.Value == "StopRecordingButtonStyle");
+var recordingToolbar = mainPageXaml.Descendants(presentationNamespace + "Grid")
+    .Single(element => element.Attribute(xamlNamespace + "Name")?.Value == "RecordingToolbar");
+var responsiveRecordingState = recordingToolbar.Descendants(presentationNamespace + "VisualState")
+    .Single(element => element.Attribute(xamlNamespace + "Name")?.Value == "RecordingToolbarWide");
+var connectionStatus = recordingToolbar.Descendants(presentationNamespace + "StackPanel")
+    .Single(element => element.Attribute(xamlNamespace + "Name")?.Value == "ConnectionStatusControl");
 var archiveListControl = mainPageXaml.Descendants(presentationNamespace + "ListView")
     .Single(element => element.Attribute("AutomationProperties.AutomationId")?.Value == "ArchiveList");
 var recordingStatusControl = mainPageXaml.Descendants(presentationNamespace + "TextBlock")
@@ -296,6 +302,14 @@ Check(startRecordingControl.Attribute("AutomationProperties.Name")?.Value == "�
         .Any(element => element.Attribute("Property")?.Value == "MinWidth" && element.Attribute("Value")?.Value == "126")
     && stopRecordingStyle.Elements(presentationNamespace + "Setter")
         .Any(element => element.Attribute("Property")?.Value == "MinHeight" && element.Attribute("Value")?.Value == "34")
+    && connectionStatus.Attribute("Grid.Row")?.Value == "1"
+    && connectionStatus.Attribute("Grid.ColumnSpan")?.Value == "4"
+    && responsiveRecordingState.Descendants(presentationNamespace + "AdaptiveTrigger")
+        .Any(element => element.Attribute("MinWindowWidth")?.Value == "760")
+    && responsiveRecordingState.Elements(presentationNamespace + "VisualState.Setters")
+        .Elements(presentationNamespace + "Setter")
+        .Any(element => element.Attribute("Target")?.Value == "ConnectionStatusControl.(Grid.Row)"
+            && element.Attribute("Value")?.Value == "0")
     && archiveListControl.Attribute("AutomationProperties.Name")?.Value == "本地存档"
     && recordingStatusControl.Attribute("AutomationProperties.Name")?.Value.Contains("AccessibleText('录音状态', ViewModel.Status)", StringComparison.Ordinal) == true
     && recordingStatusControl.Attribute("AutomationProperties.LiveSetting")?.Value == "Polite",

@@ -68,3 +68,9 @@ Mac 参考：`origin/main` `ae0359dc90da0ccb5e526a275da1747954a49a4f`
 - Mac `TranscriptViews.swift` 对行间 Divider 单独使用 opacity 0.55；Windows 原先把相同值设在整块字幕区域 Grid，造成正文、元信息、空态和浮动提示一并变淡。现由独立的 1 DIP 顶部分隔线承接该透明度。
 - A83 CoreChecks 为 185 项，通过；Release x64 构建 0 警告、0 错误。最终 CoreChecks 与 Release x64 构建分别将产物写入系统临时目录 `Echo-A83-20261010`，原始输出为 `a83-isolated-corechecks.log` 与 `a83-isolated-build.log`；首次把测试输出放进项目目录时发现 SDK 会把旧 `bin` 夹具当源码，`Echo.CoreChecks.csproj` 已明确排除 `bin/**/*.cs`。普通本机输出亦保留在 `a83-corechecks.log` 与 `a83-build.log`，源码/文档/日志 SHA-256 见 `a83-sha256.txt`。
 - 这是源码级与构建验证。没有启动 GUI，因此实际主题混色和对比度仍交由用户视觉验收；没有更改 `macOS/`。
+
+## A84 录音工具栏响应式布局（2026-10-10）
+
+- Mac `EchoMacApp.swift` 的 `ViewThatFits` 会在状态文本不能与录音控件同行时切换为纵向排列；Windows 新增 `AdaptiveTrigger MinWindowWidth=760`，状态默认位于按钮组下方，宽窗时由 VisualState 放回右侧。音频模式、开始/停止和切设备按钮不移动；连接文字仍保留 360 DIP 截断、AutomationId 与 Polite live region。
+- CoreChecks 185 项全通过；Release x64 构建 0 警告、0 错误。两个过程使用 `$TEMP/Echo-A84-20261010` 下独立输出；原始日志见 `a84-corechecks.log` 和 `a84-build.log`。
+- 没有启动 GUI，因此没有验证 680/760/820 DIP 下的真实布局绘制或用户字体环境；该视觉检查由用户完成。Mac 源码仅作只读基准。
