@@ -1,0 +1,50 @@
+[
+  {
+    "name": "Recording page available",
+    "status": "PASS"
+  },
+  {
+    "name": "Stop hidden before recording",
+    "status": "PASS"
+  },
+  {
+    "name": "Default source is computer audio",
+    "status": "PASS"
+  },
+  {
+    "name": "Source language displays its label",
+    "status": "PASS"
+  },
+  {
+    "name": "Target language displays its label",
+    "status": "PASS"
+  },
+  {
+    "name": "Open settings",
+    "status": "PASS"
+  },
+  {
+    "name": "Open AI services category",
+    "status": "PASS"
+  },
+  {
+    "name": "Key entry available",
+    "status": "PASS"
+  },
+  {
+    "name": "Service model is fixed by current Mac parity",
+    "status": "PASS"
+  },
+  {
+    "name": "Return to recording",
+    "status": "PASS"
+  },
+  {
+    "name": "Export menu available",
+    "status": "PASS"
+  },
+  {
+    "name": "Transcript list available",
+    "status": "PASS"
+  }
+]

@@ -1,0 +1,126 @@
+# Windows A18 MSIX 预览打包与签名检查底稿
+
+日期：2026-09-30
+目标：为当前 Windows Release x64 代码生成可复核的 MSIX 预览产物；不安装或启动应用。
+
+## 构建与打包
+
+- OS：Windows 11 build 10.0.26200；WinApp CLI 0.6.1。
+- Release x64 构建命令：`BuildAndRun.ps1 Echo.Windows.csproj -SkipRun -ExtraArgs '/p:Configuration=Release'`。
+- 构建结果：成功，0 错误、10 条既有 NAudio 弃用警告；`-SkipRun` 生效。
+- 打包命令：`winapp package .\bin\x64\Release\net10.0-windows10.0.26100.0\win-x64\AppX --output ..\artifacts\Echo-Windows-x64-20260930.msix --cert ..\artifacts\Echo-preview.pfx`。
+- 产物：`windows/artifacts/Echo-Windows-x64-20260930.msix`，122,703,308 bytes，SHA-256：`DFC905972FC2F164EB59706B07C4D5F0DBCE444869FB83B4214C55FB21FBF5EE`。
+
+## 签名与包清单
+
+- 包内存在 `AppxSignature.p7x`；WinApp CLI 报告 package signed 和 package creation completed。
+- MSIX 清单 Identity：`B7582E49-F75A-4EFA-950C-C6754B9E496E`；版本 `1.0.0.0`；架构 `x64`；Publisher `CN=AppPublisher`。
+- 签名者 `CN=AppPublisher`，证书 thumbprint `ADDF31C7C19756CF27C37A6D72FBC5FAA3D95B69`，与清单 Publisher 匹配。
+- Windows `Get-AuthenticodeSignature` 返回 `UnknownError`，说明证书链终止于不受信任的根。该结果不能作为当前机器或其他机器已信任此发布者的证据。
+
+## A17 当前候选包
+
+2026-09-30 为 A17 的 Archive/SRT 兼容改动重新构建并另存新包，未覆盖上面的旧候选：
+
+- 路径：`windows/artifacts/Echo-Windows-x64-a17-20260930.msix`
+- 大小：122,703,308 bytes
+- SHA-256：`7C6313A7BE226365215D9E5A9B246515FB21F0CF4341B546E7E350209946FB35`
+- Identity/版本/架构/Publisher：与上一包相同（`B7582E49-F75A-4EFA-950C-C6754B9E496E` / `1.0.0.0` / `x64` / `CN=AppPublisher`）。
+- 签名者 thumbprint 仍为 `ADDF31C7C19756CF27C37A6D72FBC5FAA3D95B69`，包内有 `AppxSignature.p7x`；Windows 状态仍为 `UnknownError`，原因仍是不受信任根。
+
+## A20 过期打包尝试
+
+2026-09-30 曾从遗留的 `AppX` 子目录打包并签名 `Echo-Windows-x64-a20-20260930.msix`（122,702,982 bytes，SHA-256 `98EE9197668E2617BEBE0D9F2E08713D6B9338F49AE72643B94BDD9192C28BAD`）。复核发现这个子目录上次生成于 2026-09-29，其 `Echo.Windows.dll` 与当日最新 Release 输出哈希不同。**此包已判为过期，不可用于分发或安装**，文件只保留在忽略目录中作为审计记录。
+
+尽管该文件有测试证书签名且 `Get-AuthenticodeSignature` 能读取签名者，它没有通过当前构建 DLL 对拍，所以签名不能证明代码新鲜度。
+
+## A21 当前候选包
+
+MSIX 版本从 `1.0.0.0` 递增到 `1.0.1.0`，并以 Release 输出为主、合并 AppX 资源的方式生成新包：
+
+- 路径：`windows/artifacts/Echo-Windows-x64-a21-20260930.msix`
+- 大小：108,210,625 bytes
+- SHA-256：`5FA2DAB7D945C3D5D06CBB62D40D26BB45010A5BC4C797BA9E2C2C96EE195C51`
+- 清单：Identity `B7582E49-F75A-4EFA-950C-C6754B9E496E`，版本 `1.0.1.0`，架构 `x64`，Publisher `CN=AppPublisher`。
+- SignTool 成功签名；签名者 thumbprint `ADDF31C7C19756CF27C37A6D72FBC5FAA3D95B69` 与清单 Publisher 匹配。Windows `Get-AuthenticodeSignature` 为 `UnknownError`，因为证书链终止于不受信任根。
+- 使用 MakeAppx 解包后，`Echo.Windows.exe` 与 `Echo.Windows.dll` 均与最新 Release 输出 SHA-256 一致。
+- 打包时 Release 输出来自 `3e74f1b83dc3f67a670783fb16b7be0b7e9d881c` 对应代码；包版本 `1.0.1.0` 当时刚在工作区递增、尚未提交，随后会与打包脚本一起入库。此候选包已通过解包与二进制对拍，仍应优先用已提交版脚本再生成一份可追溯包。
+
+## A22 候选包与打包脚本验证
+
+使用 `windows/package-preview.ps1` 重做 A21；脚本从 Release 输出覆盖遗留 AppX 目录中的旧载荷，检查清单与签名者一致，签名后再次解包并核对程序文件：
+
+- 路径：`windows/artifacts/Echo-Windows-x64-a22-20260930.msix`
+- 大小：108,210,624 bytes
+- SHA-256：`46D4014438F1989CC7E663FFFC8B3608BCB25F2EB2D5C7606CBA77C7836DF1D4`
+- 清单：Identity `B7582E49-F75A-4EFA-950C-C6754B9E496E`，版本 `1.0.1.0`，架构 `x64`，Publisher `CN=AppPublisher`。
+- 打包及签名命令均成功；脚本签名后解包核验，exe/dll 与 Release 输出 SHA-256 相同。签名者 thumbprint `ADDF31C7C19756CF27C37A6D72FBC5FAA3D95B69`。Windows 信任状态仍为 `UnknownError`（不受信任根）。
+- 本包生成时应用源代码来自 `3e74f1b83dc3f67a670783fb16b7be0b7e9d881c`；包版本递增与打包脚本改动在当前提交中保存。它是测试候选，不是可信发布包。
+
+### A22 后台安装/升级尝试
+
+- 升级前检测到当前用户已有开发注册包 `1.0.0.0`，状态 `Ok`，安装目录位于仓库 Release/AppX 目录；应用本地数据目录存在。
+- 在 `%LOCALAPPDATA%\EchoWindowsUpgradeBackups` 创建了升级前数据备份。仅核对相对路径及文件大小清单：19 个文件、233,115 bytes，备份清单匹配；没有打开文件内容。备份保留在本机，不进入仓库。
+- 对 A22 执行 `Add-AppxPackage -Path ...` 失败，HRESULT `0x800B0109`：签名证书链终止于不受信任根。未改变证书信任存储；现有 `1.0.0.0` 包仍处于 `Ok` 状态。应用未启动。
+- 下一步只有在当前 Windows 用户明确允许信任该预览证书后，才能继续后台安装/升级验证；这仍不能代替干净机器测试或生产签名。
+
+## A23 历史候选包（后由 A24 更新）
+
+在 A21 原子写入代码已完成 Windows Release 构建后，使用已提交的 `windows/package-preview.ps1` 生成独立包。A22 ACL 用例只改动 CoreChecks 和文档，不进入应用包载荷。
+
+- 路径：`windows/artifacts/Echo-Windows-x64-a23-20260930.msix`
+- 大小：108,211,047 bytes
+- SHA-256：`FB4CA0D77A49065AD1475A9061082EDB91C4952EC995EB1F49BD6C1BA1FD6DFE`
+- 清单：Identity `B7582E49-F75A-4EFA-950C-C6754B9E496E`，版本 `1.0.1.0`，架构 `x64`，Publisher `CN=AppPublisher`。
+- SignTool 成功签名；thumbprint `ADDF31C7C19756CF27C37A6D72FBC5FAA3D95B69` 与 Publisher 匹配。签名状态仍为 `UnknownError`，因为测试证书链不受信任。
+- 脚本解包核验 `Echo.Windows.exe` 和 `Echo.Windows.dll`，两者 SHA-256 均与 Release 构建输出匹配。
+- 此候选没有安装、导入或信任证书，也没有启动 Echo。A23 安装/升级仍等待当前用户对测试证书信任的答复。
+
+## A24 候选包（包含 A15 无障碍语义修正）
+
+使用 A15 变更后的 Windows Release x64 输出再次运行 `windows/package-preview.ps1`。A24 替代 A23 成为最新候选；包身份版本仍为 `1.0.1.0`，用于同一尚未安装的预览升级路径。
+
+- 路径：`windows/artifacts/Echo-Windows-x64-a24-20260930.msix`
+- 大小：108,211,492 bytes
+- SHA-256：`B5048EF49BAC8EAE319E5022483E45F50E000E26112340BD37A0BCA705263948`
+- 清单：Identity `B7582E49-F75A-4EFA-950C-C6754B9E496E`，版本 `1.0.1.0`，架构 `x64`，Publisher `CN=AppPublisher`。
+- 签名成功；签名者 thumbprint `ADDF31C7C19756CF27C37A6D72FBC5FAA3D95B69`。信任状态仍为 `UnknownError`（自签名证书链不受信任）。
+- 打包脚本在打包前和签名后解包阶段都确认 `Echo.Windows.exe`、`Echo.Windows.dll` 与 Release 输出哈希匹配。
+- A24 未安装、未导入/信任证书、未启动应用；真实安装升级仍待当前用户回应证书信任提示。
+
+## A25 当前本机候选包（2026-10-09）
+
+为包含 A17 双向存档检查和 A15 动态控件 AutomationId 修复的当前源码，将 MSIX 身份版本升至 `1.0.2.0`，随后通过 WinUI 开发脚本的 `-SkipRun` 构建，并用 `windows/package-preview.ps1` 打包、签名和解包核验。构建过程启用了 Microsoft.WindowsAppSDK.Analyzers；没有启动 Echo。
+
+- 路径：`windows/artifacts/Echo-Windows-x64-a25-20261009.msix`（本地忽略文件，不上传仓库）
+- 大小：108,214,409 bytes；SHA-256：`741CB4EFE600DA42CD923421823C8DEDBCCCDACD8D869B07CF316BF466589BED`
+- 清单：Identity `B7582E49-F75A-4EFA-950C-C6754B9E496E`，版本 `1.0.2.0`，架构 `x64`，Publisher `CN=AppPublisher`。
+- Release `Echo.Windows.exe`：294,400 bytes，SHA-256 `EC8B0F47DA34AEC4EF497DEE2ACBA8BE1642ED914FB4146D5C54569CA94A1F53`。
+- Release `Echo.Windows.dll`：351,232 bytes，SHA-256 `9F488F2C6FB382AD89192FED80E02D1C0AB25EC45ADC6D749108E7D83FD19347`。
+- 打包脚本签名前后解包，并确认 exe、dll 均与 Release 输出哈希一致；签名者 thumbprint `ADDF31C7C19756CF27C37A6D72FBC5FAA3D95B69` 与 Publisher 一致。
+- Release 构建通过，0 错误、10 条既有 NAudio `CS0618` 弃用警告。证书由本机 CurrentUser\My 提供私钥，证书有效期到 2027-09-16；Windows 对包返回 `UnknownError`，因为根不受信任。
+- 本轮未安装包、未导入或信任证书、未启动应用。A25 是本机测试签名候选，不满足公众可信签名、可信时间戳、干净机器安装升级或发布验收。
+
+## A26 当前本机候选包（2026-10-09）
+
+为包含 NAudio `WasapiRecorder` 输入/回环迁移的当前源码，将 MSIX 身份版本升至 `1.0.3.0`。使用 `BuildAndRun.ps1 -SkipRun`（Microsoft.WindowsAppSDK.Analyzers 已启用）生成 Release x64 输出，再调用 `windows/package-preview.ps1` 打包、签名、解包并对拍程序载荷；没有安装、改动信任存储或启动 Echo。
+
+- 路径：`windows/artifacts/Echo-Windows-x64-a26-20261009.msix`（本地忽略文件，不上传仓库）
+- 大小：108,214,565 bytes；SHA-256：`2DE451A59719B800DEC34E963894F06AC2227FDBEEC69618C50F8B4B7D2775A7`
+- 清单：Identity `B7582E49-F75A-4EFA-950C-C6754B9E496E`，版本 `1.0.3.0`，架构 `x64`，Publisher `CN=AppPublisher`。
+- Release `Echo.Windows.exe`：294,400 bytes，SHA-256 `3EE17DBA391B58AAA5810561ACBF07F9DBBEDDA8391D2E0D449A0947C5A446AE`。
+- Release `Echo.Windows.dll`：351,232 bytes，SHA-256 `8A24AE688E1835896001F059895E5868C275CECC666D0A28B4F501C8EB6B130A`。
+- 脚本签名前后解包核验 exe、dll 与 Release 输出哈希一致；签名者 thumbprint `ADDF31C7C19756CF27C37A6D72FBC5FAA3D95B69` 与 Publisher 匹配。`Get-AuthenticodeSignature` 为 `UnknownError`，因为本机自签名根不受信任。
+- CoreChecks 52 项通过；analyzer 启用的 Release x64 构建 0 警告、0 错误。未启用 `--audio`，未使用声卡、云服务或用户存档。
+- A26 仍是本机测试签名包，不满足公众可信签名、可信时间戳、干净机器安装/升级/回退或正式发布验收。
+
+## 边界与未完成验收
+
+- 使用的是已有本地测试证书，不是正式个人/组织代码签名证书；本轮没有安装/信任该证书，没有安装或启动 MSIX，也未修改系统证书信任存储。
+- 没有可信时间戳；正式分发前必须用长期有效的发布身份重新签名并带可信时间戳。
+- 未在干净机器安装、升级、启动、填写 API Key、读取旧档或卸载回退。A18 仍未通过。
+- 旧版、A17/A20/A21/A22/A23/A24/A25/A26 预览包与 PFX 均保留在 `windows/artifacts` 忽略目录，不提交到 Git；A20 已明确作废，A26 为最新本机候选，哈希及可复核元数据写入本底稿。
+
+## 数据留存
+
+本机保留自签名 MSIX 原始文件；仓库保留构建命令、结果、清单/签名元数据和 SHA-256。未包含 PFX 私钥、密码、API Key、录音或云端响应。

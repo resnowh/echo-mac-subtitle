@@ -1,0 +1,6 @@
+HEAD b867dbf4505ceca5bb876d986265e641fcfbd726
+origin/main ae0359dc90da0ccb5e526a275da1747954a49a4f
+origin/feature/windows-mac-parity b867dbf4505ceca5bb876d986265e641fcfbd726
+origin/feature/windows-mac-parity...HEAD 0	0
+origin/main...HEAD 0	79
+PR https://github.com/resnowh/echo-mac-subtitle/pull/5 state=OPEN mergeState=CLEAN

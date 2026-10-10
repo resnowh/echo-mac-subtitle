@@ -1,0 +1,8 @@
+Local HEAD before A71: 13ce6094a4c8c7e790065c5cb5aaeb44dff0a435
+origin/main: ae0359dc90da0ccb5e526a275da1747954a49a4f
+origin/feature/windows-preview: d500bbb21bc9bfa4d811c614576f38c0476efc50
+origin/feature/windows-mac-parity: 13ce6094a4c8c7e790065c5cb5aaeb44dff0a435
+PR #5 head: 13ce6094a4c8c7e790065c5cb5aaeb44dff0a435
+PR #5 state: OPEN
+PR #5 merge state: CLEAN
+PR URL: https://github.com/resnowh/echo-mac-subtitle/pull/5
