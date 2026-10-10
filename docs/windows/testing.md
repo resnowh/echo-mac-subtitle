@@ -228,5 +228,6 @@ CoreChecks 检查字幕行加载时读取统一显示状态、并在 ViewModel �
 - **基线**：先检查 PR #5 (`b52f68e`) 与 PR #6 (`d5832dc`)，两者均开放且当时 CI 全绿；新分支 `feature/windows-overlay-interaction` 从 PR #6 实际 HEAD `d5832dc` 快进切出。隔离目录为 `%LOCALAPPDATA%\Temp\Echo-WindowsOverlayInteraction`。没有改 `macOS/`，没有接触已运行的 Echo。
 - **实现**：保留透明 Win2D/Direct2D 字幕 HWND；加入独立 WinUI 工具条/设置 HWND、90ms 光标轮询、锁/穿透分离、设置实时预览与延时保存，以及主窗口紧急恢复菜单。没有全局鼠标 Hook。详见 [悬浮字幕交互设计](overlay-interaction.md)。
 - **自动化验证**：隔离 Release x64 构建 0 警告、0 错误；CoreChecks 193 项通过，其中新增断言检查主菜单仅保留开关/恢复、工具栏和设置控件 AutomationId、字幕穿透状态和窗口分层接线。
-- **真实 GUI 状态**：本节初稿记录时尚未运行新的隔离包 UIA/鼠标验收；悬停、拖动、锁定、设置预览、穿透下层命中、恢复、最小化、关闭重开、双屏与 DPI 均不能据此声称通过。后续实际测试结果必须追加原始 JSON、截图、包身份、PID 与清理记录。
+- **真实 GUI 验收**：使用独立 MSIX 身份 `A92F3721-1586-4D09-9A92-79E7B8C95131`、临时包数据、PID `84096` 和合成中英字幕；一次完整交互实测通过工具栏与设置控件、字号/透明度/宽度/保留时长/阴影持久化、点击穿透样式与下层 HWND 命中、解锁拖动、重新锁定、主窗应急恢复、主窗最小化及 3 次关闭重开且只有一个字幕 HWND。另一次悬停检查通过“鼠标移出后工具条隐藏”。测试没有连接麦克风、Soniox 或 DeepSeek，设置中的 API Key 为空。最后一次诊断重跑遇到 UIA 元素过期和拖动坐标不稳定，原始结果在 [A92 GUI JSON](../sources/windows-a92-overlay-controls-2026-10-10/ui-interaction-results.json)；窗口捕获把透明背景合成为黑色，未作为视觉证据，也没有截取全桌面。交互结果不是稳定、可重复的自动化全绿结论。
+- **未验场景**：本机只有一个显示器，第二屏切换、异 DPI 切换、任务栏位置变化、Narrator、GPU 长时间运行/资源泄漏及真实会议字幕仍未验收。不能把单屏窗口移动测试描述成多屏验收。
 - **边界**：仅使用本地代码与合成数据；不启用录音、不访问 API Key、不调用 Soniox/DeepSeek。真实第二显示器、DPI 热切换、Narrator 和长时间资源检查若无法在本机执行，应列为待验。

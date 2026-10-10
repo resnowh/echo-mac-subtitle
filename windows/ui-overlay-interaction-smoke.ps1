@@ -43,8 +43,7 @@ public static class EchoA92WindowApi {
 }
 
 $results = [System.Collections.Generic.List[object]]::new()
-$screenshots = Join-Path (Split-Path -Parent $ResultsPath) 'screenshots'
-New-Item -ItemType Directory -Path (Split-Path -Parent $ResultsPath), $screenshots -Force | Out-Null
+New-Item -ItemType Directory -Path (Split-Path -Parent $ResultsPath) -Force | Out-Null
 function Add-Result([string]$Name, [bool]$Passed, [string]$Detail = '') {
     $results.Add([pscustomobject]@{ name = $Name; status = $(if ($Passed) { 'PASS' } else { 'FAIL' }); detail = $Detail })
 }
@@ -62,6 +61,9 @@ function Search-Ui([string]$Selector, [string]$Window = '') {
     catch { throw "UIA search '$Selector' returned invalid JSON: $json" }
 }
 function Invoke-Control([string]$Selector, [string]$Window) {
+    if ($Selector -in @('OverlaySettingsDone', 'OverlayRestoreDefaults')) {
+        Invoke-Ui @('scroll-into-view', $Selector, '-w', $Window) | Out-Null
+    }
     Invoke-Ui @('invoke', $Selector, '-w', $Window) | Out-Null
 }
 function Get-Windows {
@@ -76,6 +78,15 @@ function Wait-VisibleWindow([string]$TitleOrClass, [int]$TimeoutMs = 4000) {
     } while ([DateTime]::UtcNow -lt $until)
     throw "Visible window '$TitleOrClass' did not appear."
 }
+function Wait-UiControl([string]$Selector, [string]$Window, [int]$TimeoutMs = 3000) {
+    $until = [DateTime]::UtcNow.AddMilliseconds($TimeoutMs)
+    do {
+        $match = Search-Ui $Selector $Window
+        if ($match.matchCount -gt 0) { return }
+        Start-Sleep -Milliseconds 100
+    } while ([DateTime]::UtcNow -lt $until)
+    throw "UI Automation control '$Selector' did not appear in window $Window."
+}
 function Read-Settings {
     $file = Join-Path $DataRoot 'settings.json'
     if (-not (Test-Path -LiteralPath $file)) { throw "Isolated settings were not persisted: $file" }
@@ -85,9 +96,16 @@ function Read-Settings {
 try {
     $main = Wait-VisibleWindow 'Echo'
     $mainHwnd = [string]$main.hwnd
-    Invoke-Control 'SubtitleOverlayMenu' $mainHwnd
-    Invoke-Control 'ToggleSubtitleOverlay' $mainHwnd
-    $overlay = Wait-VisibleWindow 'Echo.Windows.NativeSubtitleOverlay.1'
+    $overlay = Get-Windows | Where-Object {
+        $_.processId -eq $AppPid -and $_.className -eq 'Echo.Windows.NativeSubtitleOverlay.1' -and
+        [EchoA92WindowApi]::IsWindowVisible([IntPtr]::new([long]$_.hwnd))
+    } | Select-Object -First 1
+    if (-not $overlay) {
+        Invoke-Control 'SubtitleOverlayMenu' $mainHwnd
+        Wait-UiControl 'ToggleSubtitleOverlay' $mainHwnd
+        Invoke-Control 'ToggleSubtitleOverlay' $mainHwnd
+        $overlay = Wait-VisibleWindow 'Echo.Windows.NativeSubtitleOverlay.1'
+    }
     $overlayHwnd = [IntPtr]::new([long]$overlay.hwnd)
     $overlayRect = New-Object EchoA92WindowApi+RECT
     if (-not [EchoA92WindowApi]::GetWindowRect($overlayHwnd, [ref]$overlayRect)) { throw 'Could not read native caption window bounds.' }
@@ -102,8 +120,6 @@ try {
         $match = Search-Ui $control $toolbarHwnd
         Add-Result "Toolbar control $control is visible to UI Automation" ($match.matchCount -gt 0) "matches=$($match.matchCount)"
     }
-    Invoke-Ui @('screenshot', '-a', "$AppPid", '--capture-screen', '-o', (Join-Path $screenshots 'overlay-toolbar.png')) | Out-Null
-
     Invoke-Control 'OverlayOpenSettings' $toolbarHwnd
     $settingsWindow = Wait-VisibleWindow 'Echo Subtitle Settings'
     $settingsHwnd = [string]$settingsWindow.hwnd
@@ -112,6 +128,8 @@ try {
         $match = Search-Ui $control $settingsHwnd
         Add-Result "Settings control $control is visible to UI Automation" ($match.matchCount -gt 0) "matches=$($match.matchCount)"
     }
+    Invoke-Control 'OverlayRestoreDefaults' $settingsHwnd
+    Start-Sleep -Milliseconds 500
     Invoke-Ui @('set-value', 'OverlayOriginalFontSize', '32', '-w', $settingsHwnd) | Out-Null
     Invoke-Ui @('set-value', 'OverlayTranslationFontSize', '29', '-w', $settingsHwnd) | Out-Null
     Invoke-Ui @('set-value', 'OverlayOpacity', '82', '-w', $settingsHwnd) | Out-Null
@@ -130,8 +148,11 @@ try {
         [math]::Abs([double]$saved.subtitleOverlay.shadowStrength - .65) -lt .02 -and
         $saved.subtitleOverlay.showTranslation -eq $false
     ) ("settingsPath=$((Join-Path $DataRoot 'settings.json'))")
-    Invoke-Ui @('screenshot', '-a', "$AppPid", '--capture-screen', '-o', (Join-Path $screenshots 'overlay-settings.png')) | Out-Null
     Invoke-Control 'OverlaySettingsDone' $settingsHwnd
+    [EchoA92WindowApi]::SetCursorPos($centerX, $centerY) | Out-Null
+    Start-Sleep -Milliseconds 250
+    $toolbar = Wait-VisibleWindow 'Echo Subtitle Controls'
+    $toolbarHwnd = [string]$toolbar.hwnd
 
     # The lock and pass-through controls remain available from the visible toolbar.
     $beforeStyle = [EchoA92WindowApi]::GetWindowLongPtr($overlayHwnd, -20).ToInt64()
@@ -173,6 +194,7 @@ try {
     Invoke-Control 'OverlayClickThrough' $toolbarHwnd
     Start-Sleep -Milliseconds 400
     Invoke-Control 'SubtitleOverlayMenu' ([string]$main.hwnd)
+    Wait-UiControl 'RestoreSubtitleOverlayControls' ([string]$main.hwnd)
     Invoke-Control 'RestoreSubtitleOverlayControls' ([string]$main.hwnd)
     Start-Sleep -Milliseconds 500
     $recovered = Read-Settings
@@ -199,6 +221,7 @@ try {
         Start-Sleep -Milliseconds 180
         $hidden = -not [EchoA92WindowApi]::IsWindowVisible($overlayHwnd)
         Invoke-Control 'SubtitleOverlayMenu' ([string]$main.hwnd)
+        Wait-UiControl 'ToggleSubtitleOverlay' ([string]$main.hwnd)
         Invoke-Control 'ToggleSubtitleOverlay' ([string]$main.hwnd)
         Start-Sleep -Milliseconds 250
         Add-Result "Close/reopen cycle $cycle preserves one native overlay" ($hidden -and (Get-Windows | Where-Object { $_.processId -eq $AppPid -and $_.className -eq 'Echo.Windows.NativeSubtitleOverlay.1' }).Count -eq 1) 'Overlay HWND count checked.'
