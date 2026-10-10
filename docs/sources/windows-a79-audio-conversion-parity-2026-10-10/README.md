@@ -2,31 +2,29 @@
 
 日期：2026-10-10
 
-## 范围与约束
+## 范围与输入
 
-对照 Mac `macOS/Audio/AudioCapture.swift` 中 `MacMicrophoneCapture.convert` 与 Windows `AudioCapture.ToMono16k` 实际使用的 NAudio/WDL 重采样路径。Mac 应用源码不修改；Mac CI 从源码提取原始 `convert` 方法到独立测试 harness，并为固定的 float32 PCM 输入生成 Mac PCM16 输出。Windows 使用同一份字节级输入和生产转换方法对照 Mac 工件。
+对照 Mac `macOS/Audio/AudioCapture.swift` 的生产 `MacMicrophoneCapture.convert` 与 Windows `AudioCapture.ToMono16k`。Mac 应用源码保持未修改；CI 从 Mac 源码抽取生产方法生成独立 Swift harness，以固定 float32 PCM 输入输出 16 kHz、单声道 PCM16 little-endian 参考。Windows 对同一输入调用生产转换器。没有真实录音、用户 Echo 进程或云服务参与。
 
-合成输入包含 48 kHz 单声道 440 Hz、44.1 kHz 双声道不等幅 660 Hz、含 150 ms 前置静音的 48 kHz 单声道 523 Hz，以及 48 kHz 反相立体声抵消。数据不含语音、录音或用户内容。
+固定合成输入有四组：48 kHz mono 440 Hz；44.1 kHz stereo 660 Hz（左右声道幅度不同）；48 kHz mono 523 Hz 且延迟 150 ms 起音；48 kHz 997 Hz 反相 stereo。原始输入 fixture 在 `windows/Echo.CoreChecks/Fixtures/audio-conversion-inputs.json`，SHA-256 `AB56DBCAB16A61CE5ADEEF2E826AA2D170DE3C1ED7CE6E0982851B3D027B5170`。
 
-## 比较合同
+## Mac 基线发现与修复
 
-Mac 使用目标格式 16 kHz、单声道、交错 PCM signed 16-bit little-endian，与应用目标格式一致；Mac 生产方法以 1,024 帧输入块和同一个持续 converter 处理流。Windows 使用生产 `AudioCapture.ToMono16k` 输出浮点采样。比较包含输出帧数（容差 8 帧，即 0.5 ms）、最佳相对偏移（±4 帧）、边缘滤波区域以外的相关系数（至少 0.995）、相对 RMS 幅度差（至多 3%）、延迟起点（约 2,400 帧）和反相双声道静音。
+首次生产对拍的 Windows CoreChecks Actions run `38011642331` 暴露了真实行为差异：Mac 转 mono 时保留第一个输入声道，Windows 原实现平均所有声道。44.1 kHz stereo 例中 Mac RMS 为 `0.127276`，Windows 平均实现与 Mac 的相对 RMS 差异达 `122.020%`；反相双声道的 Mac 输出 RMS 为 `0.212119`，表明 Mac 没有把两声道相消。此原始 Mac 输出保存在 `failed-run-38011642331/mac-audio-conversion.json`，SHA-256 `9FECB77BBC80B96AD13D51F17877F9D9543CD5051A2FC7C6CE91C02DFC195BED`。
 
-重采样器由 AVFoundation 与 WDL 分别实现，滤波系数和边缘采样不要求逐字节相同；有限流的 converter priming/tail 也可能带来数个输出帧差异，因此帧数限差为半毫秒。合同对齐时间、声道折叠、幅度与信号形态。Mac 实际输出和详细差异数据由 CI artifact 归档；阈值只有在 CI 运行完成后才视为已验证。
+Windows `ToMono16k` 现对多声道输入取首声道，再以 WDL 重采样；CoreChecks 另外断言不等幅 stereo 选左声道，且右声道反相不会抵消左声道信号。比较时把 Windows 样本按生产 PCM16 输出规则量化，并以 0.1 帧步进做最佳时序对齐，降低 AVFoundation/WDL 不同滤波器群延迟对波形相关系数的影响。接受条件为总帧数差不超过 8 帧（0.5 ms）、最佳偏移不超过 4 帧、相关系数至少 0.995、相对 RMS 差异不超过 3%；延迟起音另检查 150 ms 时间位置。该对齐改善了测量精度，不放宽转换结果的幅度合同。
 
-## 来源与重现
+## 当前本机验证
 
-- 输入：`windows/Echo.CoreChecks/Fixtures/audio-conversion-inputs.json`；确定性生成器：`windows/MacParityChecks/generate_audio_conversion_inputs.py`。
-- Mac harness 模板：`windows/MacParityChecks/AudioConversionParityChecks.swift`；`windows/MacParityChecks/generate_audio_conversion_harness.py` 将 `MacMicrophoneCapture.convert` 原方法体提取到模板，不复制或改写转换逻辑。Mac 录音以 1,024 帧回调重用同一个 AVAudioConverter，harness 也以相同大小分块处理。
-- Windows 对照：`windows/Echo.CoreChecks/Program.cs` 通过 `ECHO_MAC_AUDIO_CONVERSION_FIXTURE` 读取 Mac PCM16 artifact，并调用生产 `AudioCapture.ToMono16k`。
-- GitHub Actions：`.github/workflows/windows-ci.yml` 的 `generate-mac-audio-conversion-fixture` 任务生成 Mac 生产输出；Windows `build-and-check` 下载工件并执行四种信号对照。
-- fixture `audio-conversion-inputs.json` SHA-256：`AB56DBCAB16A61CE5ADEEF2E826AA2D170DE3C1ED7CE6E0982851B3D027B5170`。
-- 输入生成器 `generate_audio_conversion_inputs.py` SHA-256：`95F334CB9D7CD61EDA52D05DD7026B6084E7913856F8EDEEB15AFA01A9DCDCA5`。
-- 抽取器 `generate_audio_conversion_harness.py` SHA-256：`D96DB3AC3C841B87DDBEAA20D4BF57F65020707614D4B1C753130ED44F587D35`；Mac harness 模板 SHA-256：`D226474F9FE3AA7419A792F0D106EC24608F2F66811317A876895D2478B9E174`。
-- 抽取后的原始 harness 保存在 `mac-production-conversion-harness.swift`，SHA-256：`03D6FA55D22EDEC32136146B5800600BA426B73B22B7351F66AAF3B6545939F6`。
-- Windows CoreChecks 修改后 `Program.cs` SHA-256：`FD09B7916E43573CFF22D8BB1F1D5DAD0E0D814CE01AB6102308974AED6E0FE6`；workflow SHA-256：`437A39F0DA7DC77C9BEF18398295D030859B76A174B89A5BA26DE677AF5F6CC6`。
-- 本机 CoreChecks：177 项通过，完整日志 `windows-corechecks.log` SHA-256：`62F71C86383B491DE350250ADB659A9F0EB3F497D256F83C382520A2F919B7B9`。Release x64 构建 0 警告、0 错误，日志 `release-build.log` SHA-256：`C9F14472D9C6089BC7259011CD375B8728ECC28450B7F4EB7E5616D043A39207`。
+使用上次失败 Actions 保存的 Mac 生产 artifact 对照当前 Windows 生产实现：184 项 CoreChecks 全部通过。四组 Windows 输出均为 16,000 帧，Mac 为 15,994 帧；最佳分数偏移分别为 1.2、1.2、1.2、1.3 帧；相关系数分别为 0.999970、0.999951、0.999955、0.999864；RMS 差异为 0.251%、0.640%、0.354%、1.698%。常规本机 CoreChecks 179 项通过。Release x64 构建成功，0 警告、0 错误。完整日志保存在本目录。
 
-## 验证状态
+## 来源、哈希与复现
 
-首次 Actions run `38011310648` 成功编译并运行 AVAudioConverter harness，但 Windows CoreChecks 显示单次输入 buffer 的 Mac 结果少 6 帧；调查发现测试 harness 没有模拟 Mac 每 1,024 帧复用 converter 的实际生命周期。已修正 harness 为分块流式转换，并将输出长度限差记录为 8 帧（0.5 ms）；修复后的 Actions 待验证。本机 Windows CoreChecks 177 项通过，Release x64 构建 0 警告/错误；Windows 主机没有 Swift 编译器。没有真实音频设备、用户 Echo 窗口或云端服务参与。转换样本对拍不能证明真实设备时钟同步、WASAPI 欠载/拔插和双路长时间稳定性。
+- Mac 参考方法：`macOS/Audio/AudioCapture.swift`；抽取器 `windows/MacParityChecks/generate_audio_conversion_harness.py` SHA-256 `D96DB3AC3C841B87DDBEAA20D4BF57F65020707614D4B1C753130ED44F587D35`。
+- 确定性输入生成器 `windows/MacParityChecks/generate_audio_conversion_inputs.py` SHA-256 `95F334CB9D7CD61EDA52D05DD7026B6084E7913856F8EDEEB15AFA01A9DCDCA5`；Swift harness 模板 SHA-256 `D226474F9FE3AA7419A792F0D106EC24608F2F66811317A876895D2478B9E174`。
+- 抽取的 Mac 生产 harness `mac-production-conversion-harness.swift` SHA-256 `03D6FA55D22EDEC32136146B5800600BA426B73B22B7351F66AAF3B6545939F6`。
+- Windows `AudioCapture.cs` SHA-256 `79F576CF207CD28C43531A8316256A91B9386E64255E4344CF8E1FE86AF6B5D2`；CoreChecks `Program.cs` SHA-256 `B18D4CB856EB455B15DF92B550ADAC1B5AD6E2ADA378AAF30C8AA5798857BF64`；workflow SHA-256 `437A39F0DA7DC77C9BEF18398295D030859B76A174B89A5BA26DE677AF5F6CC6`。
+- 常规 CoreChecks 日志 SHA-256 `7A09CB826CA3CCD5A23805012E72A5135F7753026C5E8D45FEFF0B2A9926F0EF`；Mac artifact 对拍日志 SHA-256 `D1390F89010A149D2A8B8C83DCE51CAF6A06AACA08A1DC3F357436A3449ACFB7`；Release 构建日志 SHA-256 `37913F2385FA347676276B0757A73CE6942B26B7DFA96F1C22C140C3616EB260`。
+- GitHub Actions 使用 `.github/workflows/windows-ci.yml` 的 `generate-mac-audio-conversion-fixture` macOS job 和 Windows `build-and-check`；新提交的 CI 运行尚待完成。旧的失败 artifact 保留为差异证据。
+
+该验证只证明固定合成输入下的转换行为和输出接近程度；不代表真实设备时钟同步、WASAPI 欠载/热拔插、长时间双路稳定性或实际 Soniox 网络会话已验收。Windows 主机没有 Swift 编译器，Mac harness 由 GitHub macOS runner 编译。

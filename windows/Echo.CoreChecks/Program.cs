@@ -1433,6 +1433,26 @@ List<float> ReadNormalized(ISampleProvider input)
     while ((read = normalized.Read(frame.AsSpan())) > 0) samples.AddRange(frame.AsSpan(0, read).ToArray());
     return samples;
 }
+using var audioConversionInputDocument = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "audio-conversion-inputs.json")));
+JsonElement audioConversionInputs = audioConversionInputDocument.RootElement.GetProperty("cases");
+JsonElement stereoDownmixInput = audioConversionInputs.EnumerateArray().Single(item => item.GetProperty("id").GetString() == "stereo-44k-downmix");
+byte[] stereoDownmixBytes = Convert.FromBase64String(stereoDownmixInput.GetProperty("inputBase64").GetString()!);
+var windowsStereoDownmix = ReadNormalized(new FixtureFloatSampleProvider(stereoDownmixBytes,
+    stereoDownmixInput.GetProperty("sampleRate").GetInt32(), stereoDownmixInput.GetProperty("channels").GetInt32()));
+JsonElement phaseCancelInput = audioConversionInputs.EnumerateArray().Single(item => item.GetProperty("id").GetString() == "stereo-48k-phase-cancel");
+byte[] phaseCancelBytes = Convert.FromBase64String(phaseCancelInput.GetProperty("inputBase64").GetString()!);
+var windowsPhaseCancel = ReadNormalized(new FixtureFloatSampleProvider(phaseCancelBytes,
+    phaseCancelInput.GetProperty("sampleRate").GetInt32(), phaseCancelInput.GetProperty("channels").GetInt32()));
+double StereoRms(IReadOnlyList<float> samples)
+{
+    int start = Math.Min(128, samples.Count / 2), end = samples.Count - start;
+    return Math.Sqrt(samples.Skip(start).Take(end - start).Average(sample => sample * sample));
+}
+Check(Math.Abs(StereoRms(windowsStereoDownmix) - 0.18 / Math.Sqrt(2)) < 0.002
+    && windowsStereoDownmix.Max(sample => Math.Abs(sample)) <= 0.181,
+    "Mac-compatible mono conversion selects the first (left) channel instead of averaging stereo");
+Check(Math.Abs(StereoRms(windowsPhaseCancel) - 0.3 / Math.Sqrt(2)) < 0.003,
+    "Mac-compatible mono conversion preserves the first stereo channel even when the right channel is phase-inverted");
 if (Environment.GetEnvironmentVariable("ECHO_MAC_AUDIO_CONVERSION_FIXTURE") is { Length: > 0 } macAudioConversionPath)
 {
     using var inputDocument = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "audio-conversion-inputs.json")));
@@ -1483,16 +1503,7 @@ if (Environment.GetEnvironmentVariable("ECHO_MAC_AUDIO_CONVERSION_FIXTURE") is {
 
             bool frameCountMatches = inputValid && macSamples.Length == macSampleCount
                 && Math.Abs(windowsSamples.Count - macSampleCount) <= 8;
-            if (id == "stereo-48k-phase-cancel")
-            {
-                double windowsPeak = windowsSamples.Count == 0 ? double.PositiveInfinity : windowsSamples.Max(sample => Math.Abs((double)sample));
-                double macPeak = macSamples.Length == 0 ? double.PositiveInfinity : macSamples.Max(sample => Math.Abs((double)sample));
-                Check(frameCountMatches && windowsPeak < 0.002 && macPeak < 0.002,
-                    $"Mac/Windows PCM conversion \"{id}\": both production converters average opposite-phase stereo to silence");
-                continue;
-            }
-
-            (int lag, double correlation, double rmsDifference) = CompareConvertedPcm(macSamples, windowsSamples);
+            (double lag, double correlation, double rmsDifference) = CompareConvertedPcm(macSamples, windowsSamples);
             bool conversionMatches = frameCountMatches && Math.Abs(lag) <= 4
                 && correlation >= 0.995 && rmsDifference <= 0.03;
             if (id == "mono-48k-delayed-523hz")
@@ -1852,33 +1863,43 @@ if (args.Contains("--audio"))
 }
 Console.WriteLine($"Completed {passed} checks. No cloud calls; no audio was saved.");
 
-(int Lag, double Correlation, double RelativeRmsDifference) CompareConvertedPcm(float[] reference, IReadOnlyList<float> actual)
+(double Lag, double Correlation, double RelativeRmsDifference) CompareConvertedPcm(float[] reference, IReadOnlyList<float> actual)
 {
     int usableCount = Math.Min(reference.Length, actual.Count) - 272;
-    if (usableCount <= 0) return (int.MaxValue, double.NegativeInfinity, double.PositiveInfinity);
+    if (usableCount <= 0) return (double.PositiveInfinity, double.NegativeInfinity, double.PositiveInfinity);
     int start = 128;
-    int bestLag = 0;
+    int bestLagTenths = 0;
     double bestCorrelation = double.NegativeInfinity;
-    for (int lag = -8; lag <= 8; lag++)
+    for (int lagTenths = -80; lagTenths <= 80; lagTenths++)
     {
         double dot = 0, referenceEnergy = 0, actualEnergy = 0;
         for (int index = start; index < start + usableCount; index++)
         {
-            int actualIndex = index + lag;
-            if ((uint)actualIndex >= (uint)actual.Count) continue;
-            double left = reference[index], right = actual[actualIndex];
+            double actualPosition = index + lagTenths / 10.0;
+            int actualIndex = (int)Math.Floor(actualPosition);
+            if (actualIndex < 0 || actualIndex + 1 >= actual.Count) continue;
+            double fraction = actualPosition - actualIndex;
+            double left = reference[index];
+            double right = Pcm16WireValue(actual[actualIndex]) * (1 - fraction)
+                + Pcm16WireValue(actual[actualIndex + 1]) * fraction;
             dot += left * right;
             referenceEnergy += left * left;
             actualEnergy += right * right;
         }
         double correlation = referenceEnergy <= 0 || actualEnergy <= 0 ? double.NegativeInfinity
             : dot / Math.Sqrt(referenceEnergy * actualEnergy);
-        if (correlation > bestCorrelation) { bestCorrelation = correlation; bestLag = lag; }
+        if (correlation > bestCorrelation) { bestCorrelation = correlation; bestLagTenths = lagTenths; }
     }
+    double bestLag = bestLagTenths / 10.0;
     double referenceRms = 0, actualRms = 0;
     for (int index = start; index < start + usableCount; index++)
     {
-        double left = reference[index], right = actual[index + bestLag];
+        double actualPosition = index + bestLag;
+        int actualIndex = (int)Math.Floor(actualPosition);
+        double fraction = actualPosition - actualIndex;
+        double right = Pcm16WireValue(actual[actualIndex]) * (1 - fraction)
+            + Pcm16WireValue(actual[actualIndex + 1]) * fraction;
+        double left = reference[index];
         referenceRms += left * left;
         actualRms += right * right;
     }
@@ -1888,6 +1909,8 @@ Console.WriteLine($"Completed {passed} checks. No cloud calls; no audio was save
         : Math.Abs(referenceRms - actualRms) / referenceRms;
     return (bestLag, bestCorrelation, relativeRmsDifference);
 }
+
+double Pcm16WireValue(float sample) => (short)(Math.Clamp(sample, -1f, 1f) * short.MaxValue) / 32768.0;
 
 sealed class FiniteToneSampleProvider(int sampleRate, int channels, double durationSeconds, double leadingSilenceSeconds) : ISampleProvider
 {

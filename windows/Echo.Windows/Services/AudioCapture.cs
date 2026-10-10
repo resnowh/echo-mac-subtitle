@@ -109,8 +109,7 @@ public sealed class AudioCapture : ISpeechSessionCapture
     }
     public static ISampleProvider ToMono16k(ISampleProvider sample)
     {
-        if (sample.WaveFormat.Channels == 2) sample = new StereoToMonoSampleProvider(sample);
-        else if (sample.WaveFormat.Channels != 1) sample = new AverageChannels(sample);
+        if (sample.WaveFormat.Channels > 1) sample = new FirstChannelSampleProvider(sample);
         return new WdlResamplingSampleProvider(sample, 16000);
     }
     public void Start(int mode, string? outputId, string? inputId)
@@ -466,21 +465,23 @@ public sealed class AudioCapture : ISpeechSessionCapture
             return validOutputFrames;
         }
     }
-    private sealed class AverageChannels(ISampleProvider input) : ISampleProvider
+    private sealed class FirstChannelSampleProvider(ISampleProvider input) : ISampleProvider
     {
         public WaveFormat WaveFormat { get; } = WaveFormat.CreateIeeeFloatWaveFormat(input.WaveFormat.SampleRate, 1);
+        private readonly int channels = input.WaveFormat.Channels;
         public int Read(Span<float> buffer)
         {
-            var data = new float[buffer.Length]; int read = Read(data, 0, data.Length);
-            data.AsSpan(0, read).CopyTo(buffer); return read;
+            float[] scratch = ArrayPool<float>.Shared.Rent(checked(buffer.Length * channels));
+            try
+            {
+                int samplesRead = input.Read(scratch.AsSpan(0, buffer.Length * channels));
+                int framesRead = samplesRead / channels;
+                for (int frame = 0; frame < framesRead; frame++) buffer[frame] = scratch[frame * channels];
+                return framesRead;
+            }
+            finally { ArrayPool<float>.Shared.Return(scratch); }
         }
-        public int Read(float[] buffer, int offset, int count)
-        {
-            int channels = input.WaveFormat.Channels;
-            var scratch = new float[count * channels]; int frames = input.Read(scratch.AsSpan()) / channels;
-            for (int i = 0; i < frames; i++) { float sum = 0; for (int c = 0; c < channels; c++) sum += scratch[i * channels + c]; buffer[offset + i] = sum / channels; }
-            return frames;
-        }
+        public int Read(float[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
     }
 }
 
