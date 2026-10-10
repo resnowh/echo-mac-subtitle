@@ -241,3 +241,12 @@ CoreChecks 检查字幕行加载时读取统一显示状态、并在 ViewModel �
 - **真实 GUI 边界**：遵照不控制用户鼠标的要求，没有启动应用、调用 UIA、移动指针或截图。当前没有确认的独立 VM：Hyper-V 可见性标志为 true，但没有 `Get-VM`/`vmrun` 命令或运行中 VM 进程。因此全屏面板显示、控件实际边界、鼠标 hover、键盘焦点、透明合成和交互状态尚未验收；该限制不能由 CoreChecks 代替。
 - **数据底稿**：[A93 来源目录](../sources/windows-pr7-overlay-popover-2026-10-10/README.md) 保存 PR/基线查询摘要、构建/CoreChecks日志、脚本 AST 结果、源文件 SHA-256 和 GUI 环境核查结果；A92 原失败 JSON 保持原样。
 - **影响范围**：只改 Windows 代码、Windows 文档与 smoke 脚本；没有启动识别会话、访问真实字幕/存档/API Key、连接 Soniox/DeepSeek，也没有修改 `macOS/`。
+
+## A94 当前目标与暂停进度（2026-10-10）
+
+- **当前目标**：继续修复 PR #7 的 Windows 悬浮字幕设置面板与工具栏，让用户从浮层内完成日常设置、位置控制和关闭；保持普通固定双语字幕交互，不启动或重建识别会话。
+- **暂停位置**：P0 的工具栏/紧凑面板实现与静态/自动化几何检查已提交；P1/P2 的实际交互和稳定性验收尚未完成。工作已按用户要求暂停，不继续实现或启动 GUI。
+- **现有验证**：Release x64 构建 0 警告、0 错误；CoreChecks 195 项通过；UI smoke PowerShell AST 解析通过但脚本未执行。暂停前 PR #7 head `d4afdf717d7f4b7539f6d397051f38f78676f851` 上 GitHub Actions 8 项检查全部通过。该提交之后的本进度文档提交会触发新的 CI；需以 GitHub 后续结果为准。
+- **恢复时待办**：先 fetch 并核对 PR #7 最新 head；在独立测试桌面/VM 中运行隔离身份、临时数据目录和合成字幕的真实 GUI 验收，重点检查面板完整边界、hover/焦点/键盘、字号/透明度/宽度实时预览、锁定/穿透恢复、拖动和关闭重开；然后验证第二显示器、异 DPI/显示器热切换、任务栏变化及长时间 HWND/GPU 资源稳定性。无法测试的项目逐项保留为未验，不以 CoreChecks 替代 GUI 证据。
+- **环境与范围**：当前没有确认可用的独立 GUI VM；遵守用户要求，本轮未控制用户鼠标、未启动 Echo、未运行 UIA 或截图。未启动录音或访问真实字幕、存档、API Key、Soniox/DeepSeek；未修改 `macOS/`。没有合并 PR。
+- **远端位置**：分支 `feature/windows-overlay-interaction`，现有 PR [#7](https://github.com/resnowh/echo-mac-subtitle/pull/7) 仍为 OPEN，基线 `feature/windows-ui-mac-parity`。暂停进度的文档提交会记录在此 PR。
