@@ -167,3 +167,12 @@ Mac `EchoMacApp.swift` 用 `ViewThatFits` 在横向空间不足时把连接状�
 ## A85 翻译列布局回归（2026-10-10）
 
 CoreChecks 检查字幕行加载时读取统一显示状态、并在 ViewModel 通知后更新已实现的 ListView 项；原文 ColumnSpan 与译文 Visibility 随状态切换。检查 ViewModel 在录音时采用活动会话配置、闲置时采用保存配置；目标语言菜单和设置保存会刷新布局属性。这是静态 XAML/C# 契约；当前/下次会话切换、各主题渲染仍待 GUI 验收。
+
+## A86 Speaker 元信息显示回归（2026-10-10）
+
+以 Mac `SynchronizedTranscriptView.metadata(for:)` 对照 Windows `MainPage.xaml`：录音中使用会话开始时的 speaker 设置，闲置时使用保存设置；字段为空时 Speaker 和中点分隔符收起。为避开 WinUI DataTemplate 对嵌套静态方法参数的代码生成缺陷，已实现行的可见性由 `Loaded/Unloaded/DataContextChanged` 路径更新；Speaker 字段变化时刷新当前虚拟化行，避免容器复用保留旧状态。
+
+- 隔离 worktree CoreChecks：最终源码 188 项通过；合成检查无云请求、未保存音频。最终日志 `a86-corechecks-final5.log`。
+- 隔离 worktree Windows Release x64：最终 UI/XAML 源码构建成功，0 警告、0 错误；日志 `a86-build-final4.log`。
+- `git diff --check` 通过。无 GUI、UIA 或截图运行；目标附件为无关邮件截图，当前仍无可用 Echo Mac/Windows 对照图。视觉、键盘/Narrator、浅/深/高对比和 125/150/200% DPI 运行态验收未完成。
+- 早期隔离尝试的外置 MSBuild 中间目录会重复包含生成源码；另一次模板函数绑定会触发编译器错误。两类失败及最终成功原始日志保存在 [A86 来源底稿](../sources/windows-ui-refinement-2026-10-10/README.md)，最后采用独立 worktree 的常规构建目录完成验证。

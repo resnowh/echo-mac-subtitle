@@ -7,7 +7,7 @@
 | 顶部品牌/工具栏 | 内容 padding 20、纵向 spacing 18；caption bold Mint 品牌；borderless 图标按钮 | 主面板 margin `28,12,28,24`、row spacing 16；36×36 QuietButton | margin 20、row spacing 18；保留 36×36 Windows 图标入口 | 源码参数和 CoreChecks 通过；未做画面对比 |
 | 语言选择 | 两列间隔 14；subheadline semibold/secondary，小箭头 9 pt tertiary；录音提示下方显示；divider opacity .55 | 两个有 Header 的默认 ComboBox | 透明 Button + MenuFlyout；min-height 30、padding 0×3；当前选择、勾选、“不翻译”常驻和下次录音提示；保留设置保存与 AutomationId | 静态接线通过；菜单展开和键盘/Narrator 未实测 |
 | 日期/字幕列表 | LazyVStack 间距 0；日期标签 top/bottom 12/4；仅 Divider opacity .55 | ListView padding `0,16,0,24`，默认 ListViewItem padding/min-height 与行模板叠加；曾将 opacity 设在整块容器 | ListView padding `0,8,0,12`；容器 padding/margin 0、min-height 0、透明；日期 margin `0,12,0,4`；A83 将 .55 仅施于 1 DIP 顶部分隔线 | CoreChecks/构建通过；真实像素、长列表抖动/滚动仍未 GUI 验证 |
-| Speaker/时间戳 | caption.monospacedDigit、secondary；HH:mm:ss | CaptionTextBlockStyle、secondary | 12 DIP secondary，Tabular numeral；语言与纠正状态条件显示 | 静态 XAML/构建通过；字体实际效果未测 |
+| Speaker/时间戳 | 仅在当前显示配置启用 speaker 且行内标签非空时显示 Speaker；时间始终显示，次级 caption/等宽数字 | 12 DIP secondary，Tabular numeral；A86 令 Speaker 与分隔点跟随当前活动/保存配置及非空字段 | CoreChecks 与 Release x64 编译通过；字体和实际间距仍待截图验收 |
 | 双栏正文/分隔线 | 翻译开启时双栏顶部对齐、间距14；关闭时原文占整行；body、lineSpacing3、padding7；低对比度 Divider | 双栏固定平分，未翻译时右侧空白 | 开翻译等宽双栏；关翻译折叠译文、原文 Grid.ColumnSpan=2；间距14、正文15 DIP、自动换行；行上下6；1 DIP 分隔线 .55 | CoreChecks/构建通过；当前会话/下次会话切换行为由静态契约验证，GUI 像素仍待看 |
 | 纠正操作 | 元信息行右侧 Pencil + 文字，borderless/secondary | 普通按钮 padding `8,2`、min-height 28 | 透明按钮 padding `4,2`、min-height30；12 DIP 铅笔/文字，保留逐字幕 AutomationId 和焦点状态 | CoreChecks/构建通过；焦点可见态未 GUI 检查 |
 | 录音控制 | gap10；音源宽148；同一切换按钮宽126；空闲 Mint、录音 red；8点状态圆点；ViewThatFits 空间不足时换行 | 三态 ComboBox、默认 WinUI 高度/边框、状态固定横排 | 轻量三态菜单保留实时路由；A82 开始/停止统一高34、宽126；A84 窗宽小于760 DIP 时将连接状态移到按钮组下方 | CoreChecks/构建及 PR CI 验证；运行态缩放仍待 GUI 目测 |
@@ -87,3 +87,7 @@ Mac `EchoMacApp.swift` 用 `ViewThatFits` 在横向空间不足时把连接状�
 ## A85 翻译关闭时的字幕宽度
 
 Mac SwiftUI 仅在启用翻译时构建译文列。Windows 现在在翻译关闭时将译文 TextBlock 收起并使原文跨双列；活动录音仍使用会话开始时的翻译状态，避免将下次会话设置套到当前结果。
+
+## A86 Speaker 元信息条件显示（2026-10-10）
+
+Windows 字幕元信息现在与 Mac `metadata(for:)` 一致：录音时遵循本次会话启动时冻结的 speaker 设置；闲置时遵循已保存设置。Speaker 名称和分隔点仅在该行有非空标签时显示。虚拟化行的 DataContextChanged 和 Speaker 字段变化会更新状态。最终源码 188 项 CoreChecks 与隔离 Release x64（0 警告、0 错误）通过。没有启动 GUI；真实 UI 排版、键盘/Narrator 和主题/DPI 对照仍待用户视觉验收。

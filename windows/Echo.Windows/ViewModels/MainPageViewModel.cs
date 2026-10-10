@@ -27,6 +27,7 @@ public partial class MainPageViewModel : ObservableObject
     private SpeechSession? session;
     private Segment? segment;
     private bool activeTranslationEnabled;
+    private bool activeSpeakerDiarizationEnabled;
     private TokenAssembler? assembler;
     private readonly DispatcherQueueTimer checkpoint;
     private readonly DispatcherQueueTimer segmentationTimer;
@@ -58,6 +59,7 @@ public partial class MainPageViewModel : ObservableObject
     public DesktopSubtitleOverlayFeed SubtitleOverlayFeed { get; } = new();
     public bool HasEntries => Entries.Count > 0;
     public bool IsTranslationColumnVisible => IsRecording ? activeTranslationEnabled : Config.Translate;
+    public bool IsSpeakerMetadataVisible => TranscriptPresentationPolicy.SpeakerMetadataVisible(IsRecording, activeSpeakerDiarizationEnabled, Config.Speakers);
     public int ActiveAudioMode { get; private set; } = 1;
     public string? ActiveOutputId { get; private set; }
     public string? ActiveInputId { get; private set; }
@@ -81,12 +83,12 @@ public partial class MainPageViewModel : ObservableObject
     public bool CanSplitCompletedSegment => !IsBusy && !IsRecording && completedArchiveId is not null && completedSegmentId is not null;
     public bool CanDeleteSelectedArchive => CanEdit && !IsSummarizing && SelectedArchive is not null;
     partial void OnIsBusyChanged(bool value) { OnPropertyChanged(nameof(CanEdit)); OnPropertyChanged(nameof(CanSwitchAudioDevices)); OnPropertyChanged(nameof(CanChangeAudioMode)); OnPropertyChanged(nameof(CanStopRecording)); OnPropertyChanged(nameof(CanSplitCompletedSegment)); OnPropertyChanged(nameof(CanDeleteSelectedArchive)); }
-    partial void OnIsRecordingChanged(bool value) { OnPropertyChanged(nameof(CanEdit)); OnPropertyChanged(nameof(CanSwitchAudioDevices)); OnPropertyChanged(nameof(CanStopRecording)); OnPropertyChanged(nameof(CanSplitCompletedSegment)); OnPropertyChanged(nameof(CanDeleteSelectedArchive)); OnPropertyChanged(nameof(IsTranslationColumnVisible)); }
+    partial void OnIsRecordingChanged(bool value) { OnPropertyChanged(nameof(CanEdit)); OnPropertyChanged(nameof(CanSwitchAudioDevices)); OnPropertyChanged(nameof(CanStopRecording)); OnPropertyChanged(nameof(CanSplitCompletedSegment)); OnPropertyChanged(nameof(CanDeleteSelectedArchive)); OnPropertyChanged(nameof(IsTranslationColumnVisible)); OnPropertyChanged(nameof(IsSpeakerMetadataVisible)); }
     partial void OnIsSummarizingChanged(bool value) => OnPropertyChanged(nameof(CanDeleteSelectedArchive));
     partial void OnSummaryStatusChanged(string value) => OnPropertyChanged(nameof(IsSummaryPanelVisible));
     partial void OnHasGeneratedSummaryChanged(bool value) => OnPropertyChanged(nameof(IsSummaryPanelVisible));
     public void RefreshSummaryPanelVisibility() => OnPropertyChanged(nameof(IsSummaryPanelVisible));
-    public void RefreshTranscriptPresentation() => OnPropertyChanged(nameof(IsTranslationColumnVisible));
+    public void RefreshTranscriptPresentation() { OnPropertyChanged(nameof(IsTranslationColumnVisible)); OnPropertyChanged(nameof(IsSpeakerMetadataVisible)); }
     partial void OnSelectedArchiveChanged(Archive? value)
     {
         OnPropertyChanged(nameof(CanDeleteSelectedArchive));
@@ -497,6 +499,7 @@ public partial class MainPageViewModel : ObservableObject
             string key = Preferences.Unprotect(Config.SonioxSecret);
             if (string.IsNullOrWhiteSpace(key)) throw new InvalidOperationException("请先填写并保存 Soniox API Key。");
             activeTranslationEnabled = Config.Translate;
+            activeSpeakerDiarizationEnabled = Config.Speakers;
             activeSegmentation = Config.Segmentation.Copy().Validate();
             SummaryStatus = string.Empty;
             lastResponseReceivedAt = null;

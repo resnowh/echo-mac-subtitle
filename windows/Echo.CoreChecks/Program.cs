@@ -155,7 +155,7 @@ var transcriptViewModelSource = File.ReadAllText(Path.Combine(AppContext.BaseDir
 var transcriptCodeBehindSource = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "MainPage.xaml.cs"));
 Check(transcriptViewModelSource.Contains("IsTranslationColumnVisible => IsRecording ? activeTranslationEnabled : Config.Translate", StringComparison.Ordinal)
     && transcriptViewModelSource.Contains("OnPropertyChanged(nameof(IsTranslationColumnVisible))", StringComparison.Ordinal)
-    && transcriptViewModelSource.Contains("RefreshTranscriptPresentation() => OnPropertyChanged(nameof(IsTranslationColumnVisible))", StringComparison.Ordinal)
+    && transcriptViewModelSource.Contains("RefreshTranscriptPresentation() { OnPropertyChanged(nameof(IsTranslationColumnVisible)); OnPropertyChanged(nameof(IsSpeakerMetadataVisible)); }", StringComparison.Ordinal)
     && transcriptCodeBehindSource.Contains("TranscriptColumnSpan(bool translationEnabled) => translationEnabled ? 1 : 2", StringComparison.Ordinal)
     && transcriptCodeBehindSource.Contains("TranscriptRow_Loaded", StringComparison.Ordinal)
     && transcriptCodeBehindSource.Contains("realizedTranscriptRows.Add(row)", StringComparison.Ordinal)
@@ -165,6 +165,29 @@ Check(transcriptViewModelSource.Contains("IsTranslationColumnVisible => IsRecord
     && transcriptCodeBehindSource.Contains("ViewModel.RefreshTranscriptPresentation();", StringComparison.Ordinal)
     && transcriptCodeBehindSource.Split("ViewModel.RefreshTranscriptPresentation();", StringSplitOptions.None).Length >= 3,
     "translation column visibility follows the active recording config and refreshes when the saved language choice changes");
+Check(!TranscriptPresentationPolicy.SpeakerMetadataVisible(isRecording: true, activeSessionSetting: false, savedSetting: true)
+    && TranscriptPresentationPolicy.SpeakerMetadataVisible(isRecording: true, activeSessionSetting: true, savedSetting: false)
+    && TranscriptPresentationPolicy.SpeakerMetadataVisible(isRecording: false, activeSessionSetting: true, savedSetting: false) == false
+    && TranscriptPresentationPolicy.SpeakerMetadataVisible(isRecording: false, activeSessionSetting: false, savedSetting: true),
+    "speaker metadata visibility follows the frozen recording setting during a session and saved preference while idle");
+var speakerMetadataGroup = audioModePageXaml.Descendants(XName.Get("StackPanel", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .FirstOrDefault(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value == "SpeakerMetadataGroup");
+Check(transcriptViewModelSource.Contains("IsSpeakerMetadataVisible => TranscriptPresentationPolicy.SpeakerMetadataVisible(IsRecording, activeSpeakerDiarizationEnabled, Config.Speakers)", StringComparison.Ordinal)
+    && transcriptViewModelSource.Contains("activeSpeakerDiarizationEnabled = Config.Speakers", StringComparison.Ordinal)
+    && transcriptViewModelSource.Contains("OnPropertyChanged(nameof(IsSpeakerMetadataVisible))", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("nameof(ViewModel.IsSpeakerMetadataVisible)", StringComparison.Ordinal)
+    && speakerMetadataGroup?.Elements(XName.Get("TextBlock", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Take(2).All(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value is "SpeakerMetadataText" or "SpeakerSeparator"
+            && element.Attribute("Visibility")?.Value == "Collapsed") == true
+    && transcriptCodeBehindSource.Contains("bool showSpeaker = ViewModel.IsSpeakerMetadataVisible && HasValue((row.DataContext as Subtitle)?.Speaker)", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("speaker.Visibility = VisibleWhen(showSpeaker)", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("separator.Visibility = VisibleWhen(showSpeaker)", StringComparison.Ordinal)
+    && !transcriptCodeBehindSource.Contains("speakerMetadata.Visibility", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("or nameof(ViewModel.IsSpeakerMetadataVisible)", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("TranscriptRow_DataContextChanged(FrameworkElement sender, DataContextChangedEventArgs e)", StringComparison.Ordinal)
+    && speakerMetadataGroup?.Parent?.Attribute("DataContextChanged")?.Value == "TranscriptRow_DataContextChanged"
+    && transcriptCodeBehindSource.Contains("args.PropertyName == nameof(Subtitle.Speaker)", StringComparison.Ordinal),
+    "speaker labels and separator are hidden when disabled or absent, matching the Mac transcript metadata row");
 var dateHeading = audioModePageXaml.Descendants(XName.Get("TextBlock", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
     .FirstOrDefault(element => element.Attribute("Text")?.Value.Contains("DateSeparatorLabel", StringComparison.Ordinal) == true);
 var timeLabel = audioModePageXaml.Descendants(XName.Get("TextBlock", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))

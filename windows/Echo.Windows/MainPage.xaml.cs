@@ -168,7 +168,7 @@ public sealed partial class MainPage : Page
                 UpdateAudioModeMenu();
             }
             if (e.PropertyName is nameof(ViewModel.Level) or nameof(ViewModel.IsRecording) or nameof(ViewModel.Status) or nameof(ViewModel.AudioWaveformSamples)) UpdateAudioDisplay();
-            if (e.PropertyName == nameof(ViewModel.IsTranslationColumnVisible)) UpdateRealizedTranscriptRows();
+            if (e.PropertyName is nameof(ViewModel.IsTranslationColumnVisible) or nameof(ViewModel.IsSpeakerMetadataVisible)) UpdateRealizedTranscriptRows();
             if (e.PropertyName == nameof(ViewModel.IsRecording))
             {
                 UpdateRecordingLanguageHint();
@@ -197,6 +197,7 @@ public sealed partial class MainPage : Page
     public static Visibility HiddenWhen(bool value) => value ? Visibility.Collapsed : Visibility.Visible;
     public static bool Not(bool value) => !value;
     public static int TranscriptColumnSpan(bool translationEnabled) => translationEnabled ? 1 : 2;
+    public static bool HasValue(string? value) => !string.IsNullOrWhiteSpace(value);
     public static string AccessibleText(string role, string? value) => string.IsNullOrWhiteSpace(value) ? string.Empty : $"{role}：{value}";
     public static string TranscriptDisplayText(string? value, string placeholder) => string.IsNullOrEmpty(value) ? placeholder : value;
     public static string SubtitleEditAutomationId(Guid subtitleId) => $"EditSubtitle_{subtitleId:N}";
@@ -270,6 +271,7 @@ public sealed partial class MainPage : Page
                 if (observedSubtitleIds.Add(entry.Id))
                     entry.PropertyChanged += (_, args) =>
                     {
+                        if (args.PropertyName == nameof(Subtitle.Speaker)) UpdateRealizedTranscriptRows();
                         if (ReferenceEquals(ViewModel.Entries.LastOrDefault(), entry)
                             && args.PropertyName is nameof(Subtitle.English) or nameof(Subtitle.Chinese))
                             TranscriptContentChanged();
@@ -334,6 +336,10 @@ public sealed partial class MainPage : Page
     {
         if (sender is Grid row) realizedTranscriptRows.Remove(row);
     }
+    private void TranscriptRow_DataContextChanged(FrameworkElement sender, DataContextChangedEventArgs e)
+    {
+        if (sender is Grid row && row.IsLoaded) UpdateTranscriptRowPresentation(row);
+    }
     private void UpdateRealizedTranscriptRows()
     {
         foreach (Grid row in realizedTranscriptRows.ToArray())
@@ -346,6 +352,11 @@ public sealed partial class MainPage : Page
             Grid.SetColumnSpan(original, TranscriptColumnSpan(translationEnabled));
         if (FindDescendant<TextBlock>(row, "TranslatedTranscriptText") is { } translated)
             translated.Visibility = VisibleWhen(translationEnabled);
+        bool showSpeaker = ViewModel.IsSpeakerMetadataVisible && HasValue((row.DataContext as Subtitle)?.Speaker);
+        if (FindDescendant<TextBlock>(row, "SpeakerMetadataText") is { } speaker)
+            speaker.Visibility = VisibleWhen(showSpeaker);
+        if (FindDescendant<TextBlock>(row, "SpeakerSeparator") is { } separator)
+            separator.Visibility = VisibleWhen(showSpeaker);
     }
     private void InitializeLanguageFlyouts()
     {
