@@ -400,6 +400,70 @@ Check(TranscriptSegmentationPolicy.Trigger("one two three four five", 1, 4.5, po
         new TranscriptSegmentationSettings { LongSegmentWordThreshold = 1 }, translationEnabled: true, translationReady: false) is null
     && TranscriptSegmentationPolicy.Trigger("", 0, 0, policySettings, endpointReached: true) == TranscriptSegmentationTrigger.Endpoint,
     "segmentation policy requires its thresholds, waits for enabled translation, and gives semantic endpoints priority");
+using var segmentationFixtureDocument = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "segmentation-policy-parity.json")));
+var segmentationCases = segmentationFixtureDocument.RootElement.GetProperty("cases").EnumerateArray().ToArray();
+var windowsSegmentationResults = new List<(string Id, string Trigger)>();
+bool segmentationFixtureMatches = true;
+foreach (JsonElement testCase in segmentationCases)
+{
+    string id = testCase.GetProperty("id").GetString()!;
+    string text = testCase.TryGetProperty("text", out JsonElement literalText)
+        ? literalText.GetString()!
+        : string.Join(' ', Enumerable.Repeat(testCase.GetProperty("repeatWord").GetString()!, testCase.GetProperty("repeatCount").GetInt32()));
+    bool ReadBoolean(string name, bool fallback) => testCase.TryGetProperty(name, out JsonElement value) ? value.GetBoolean() : fallback;
+    int ReadInteger(string name, int fallback) => testCase.TryGetProperty(name, out JsonElement value) ? value.GetInt32() : fallback;
+    double ReadNumber(string name, double fallback) => testCase.TryGetProperty(name, out JsonElement value) ? value.GetDouble() : fallback;
+    var caseSettings = new TranscriptSegmentationSettings
+    {
+        LocalSilenceFallbackEnabled = ReadBoolean("localSilenceFallbackEnabled", true),
+        LocalSilenceThresholdSeconds = ReadNumber("localSilenceThresholdSeconds", 4.5),
+        LocalSilenceMinimumWordCount = ReadInteger("localSilenceMinimumWordCount", 5),
+        LongSegmentFallbackEnabled = ReadBoolean("longSegmentFallbackEnabled", true),
+        LongSegmentWordThreshold = ReadInteger("longSegmentWordThreshold", 80),
+        LongSegmentDurationThresholdSeconds = ReadNumber("longSegmentDurationThresholdSeconds", 90)
+    };
+    TranscriptSegmentationTrigger? trigger = TranscriptSegmentationPolicy.Trigger(
+        text,
+        ReadNumber("elapsedSeconds", 0),
+        ReadNumber("quietSeconds", 0),
+        caseSettings,
+        endpointReached: ReadBoolean("endpointReached", false),
+        translationEnabled: ReadBoolean("translationEnabled", false),
+        translationReady: ReadBoolean("translationReady", true));
+    string triggerName = trigger switch
+    {
+        TranscriptSegmentationTrigger.Endpoint => "endpoint",
+        TranscriptSegmentationTrigger.Silence => "silence",
+        TranscriptSegmentationTrigger.LongSegment => "longSegment",
+        _ => "none"
+    };
+    windowsSegmentationResults.Add((id, triggerName));
+    segmentationFixtureMatches &= triggerName == testCase.GetProperty("expectedTrigger").GetString();
+}
+
+bool macSegmentationArtifactMatches = true;
+if (Environment.GetEnvironmentVariable("ECHO_MAC_SEGMENTATION_FIXTURE") is { Length: > 0 } macSegmentationPath)
+{
+    using var macSegmentationDocument = JsonDocument.Parse(File.ReadAllText(macSegmentationPath));
+    JsonElement macRoot = macSegmentationDocument.RootElement;
+    string? macSourceCommit = macRoot.GetProperty("macSourceCommit").GetString();
+    string? transcriptModelsSha256 = macRoot.GetProperty("transcriptModelsSha256").GetString();
+    macSegmentationArtifactMatches = macSourceCommit is { Length: > 0 } and not "unknown"
+        && transcriptModelsSha256 is { Length: > 0 } and not "unknown";
+    JsonElement[] macCases = macRoot.GetProperty("cases").EnumerateArray().ToArray();
+    macSegmentationArtifactMatches &= macCases.Length == windowsSegmentationResults.Count;
+    if (macCases.Length == windowsSegmentationResults.Count)
+    {
+        for (int i = 0; i < macCases.Length; i++)
+        {
+            macSegmentationArtifactMatches &= macCases[i].GetProperty("id").GetString() == windowsSegmentationResults[i].Id
+                && macCases[i].GetProperty("trigger").GetString() == windowsSegmentationResults[i].Trigger
+                && macCases[i].GetProperty("trigger").GetString() == segmentationCases[i].GetProperty("expectedTrigger").GetString();
+        }
+    }
+}
+Check(segmentationFixtureMatches && macSegmentationArtifactMatches,
+    $"Windows segmentation policy matches {windowsSegmentationResults.Count} Mac-source cases for endpoint precedence, silence/long thresholds, translation wait, and Unicode whitespace");
 int localFinalized = 0; var localSegment = new Segment(); var localAssembler = new TokenAssembler(localSegment, _ => { }, _ => localFinalized++);
 using (var localPartial = JsonDocument.Parse("""{"tokens":[{"text":"A completed local phrase","is_final":true}]}""")) localAssembler.Apply(localPartial.RootElement);
 Check(localAssembler.FinalizeCurrent() && localFinalized == 1, "local segmentation finalizes the active subtitle through the shared finalization path");

@@ -133,3 +133,7 @@ Mac `SpeechViewModel` 在麦克风安装后 1.2 秒无原始回调时，以 450m
 ## A76 原生浮层双行尾部省略（2026-10-10）
 
 逐项复核 Mac `DesktopSubtitleOverlayView.subtitleText` 与 Windows 实际运行路径时发现，A38 的旧检查只读取已弃用的 WinUI XAML 浮层；当前原生 HWND/DirectWrite 绘制并未受该检查覆盖。现已删除不再实例化的 XAML 浮层和代码后置，并让原生渲染器将每条字幕布局高度限制为两行，使用字符级尾部省略号绘制文字与阴影。CoreChecks 改为检查原生绘制实现，166 项通过；Release x64 构建 0 警告、0 错误。未启动 Echo 窗口，也未保存桌面截图；真实字体行高、溢出文字视觉、RTL/复杂脚本、透明合成及 DPI 仍待隔离 GUI 验收。原始 Mac 代码摘录、构建/测试日志、文件哈希和边界见 [A76 来源底稿](../sources/windows-a76-overlay-two-line-rendering-2026-10-10/README.md)。
+
+## A77 Mac/Windows 分段策略生产对拍（2026-10-10）
+
+分段规则此前只有 Windows 本地断言。新增固定 JSON fixture，由 macOS CI 使用 `TranscriptModels.swift` 中的生产 `TranscriptSegmentationPolicy` 生成 13 个触发结果；Windows CI 下载这份实际输出，与 Windows `TranscriptSegmentationPolicy` 和固定预期逐项比较。覆盖语义端点对空内容/译文等待的优先级、静音最少词数及边界、译文到达、功能开关、长段词数/时长阈值、静音与长段同时满足时的优先级，以及 NBSP/全角空格词数。Windows 本机 167 项 CoreChecks 通过；GitHub 上的 Mac 生成工件和 Windows 对拍结果待本次提交 CI 完成后确认。当前对拍只比较纯策略触发器；生产会话时钟、段落 final 文本/时间戳和真实 Soniox 节奏仍未覆盖。原始输入、Mac 生产输出、日志/哈希及基线见 [A77 来源底稿](../sources/windows-a77-segmentation-policy-parity-2026-10-10/README.md)。

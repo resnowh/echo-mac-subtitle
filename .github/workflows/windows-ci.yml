@@ -67,8 +67,31 @@ jobs:
           path: ${{ runner.temp }}/mac-soniox-stress.json
           if-no-files-found: error
 
+  generate-mac-segmentation-fixture:
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Compile a harness against the Mac production segmentation policy
+        run: xcrun swiftc -parse-as-library -O -o "$RUNNER_TEMP/segmentation-policy-checks" macOS/Models/TranscriptModels.swift windows/MacParityChecks/SegmentationPolicyChecks.swift
+
+      - name: Generate fixed-boundary results from the Mac production policy
+        run: |
+          ECHO_MAC_SOURCE_COMMIT="$(git log -1 --format=%H -- macOS/Models/TranscriptModels.swift)" \
+          ECHO_MAC_TRANSCRIPT_MODELS_SHA256="$(shasum -a 256 macOS/Models/TranscriptModels.swift | cut -d ' ' -f 1)" \
+          "$RUNNER_TEMP/segmentation-policy-checks" windows/Echo.CoreChecks/Fixtures/segmentation-policy-parity.json "$RUNNER_TEMP/mac-segmentation-policy.json"
+
+      - name: Upload Mac production segmentation results
+        uses: actions/upload-artifact@v4
+        with:
+          name: echo-mac-segmentation-policy-fixture
+          path: ${{ runner.temp }}/mac-segmentation-policy.json
+          if-no-files-found: error
+
   build-and-check:
-    needs: [generate-mac-archive-fixture, generate-mac-soniox-runtime-fixture]
+    needs: [generate-mac-archive-fixture, generate-mac-soniox-runtime-fixture, generate-mac-segmentation-fixture]
     runs-on: windows-latest
 
     steps:
@@ -104,11 +127,18 @@ jobs:
           name: echo-mac-soniox-stress-fixture
           path: windows/Echo.CoreChecks/Fixtures/MacStress
 
+      - name: Download Mac production segmentation results
+        uses: actions/download-artifact@v4
+        with:
+          name: echo-mac-segmentation-policy-fixture
+          path: windows/Echo.CoreChecks/Fixtures/MacSegmentation
+
       - name: Run core checks including Mac Archive and Soniox production output
         env:
           ECHO_MAC_ARCHIVE_FIXTURE: windows/Echo.CoreChecks/Fixtures/Runtime/mac-archive.json
           ECHO_MAC_SONIOX_FIXTURE: windows/Echo.CoreChecks/Fixtures/MacRuntime/mac-soniox-runtime.json
           ECHO_MAC_SONIOX_STRESS_FIXTURE: windows/Echo.CoreChecks/Fixtures/MacStress/mac-soniox-stress.json
+          ECHO_MAC_SEGMENTATION_FIXTURE: windows/Echo.CoreChecks/Fixtures/MacSegmentation/mac-segmentation-policy.json
         run: dotnet run --project windows/Echo.CoreChecks -c Release --no-restore
 
       - name: Upload Windows Archive round trip
