@@ -57,8 +57,8 @@ public sealed partial class MainPage : Page
         InitializeComponent();
         var c = ViewModel.Config;
         Mode.SelectedIndex = c.AudioInputMode;
-        SourceLanguageChoice.ItemsSource = SourceLanguages;
-        TargetLanguageChoice.ItemsSource = TargetLanguages;
+        InitializeLanguageFlyouts();
+        UpdateAudioModeMenu();
         SettingsSourceLanguage.ItemsSource = PreferredLanguages;
         SettingsTargetLanguage.ItemsSource = TargetLanguages;
         CorrectionTerms.Text = c.CorrectionTerms;
@@ -164,9 +164,14 @@ public sealed partial class MainPage : Page
                 syncingAudioMode = true;
                 Mode.SelectedIndex = ViewModel.ActiveAudioMode;
                 syncingAudioMode = false;
+                UpdateAudioModeMenu();
             }
             if (e.PropertyName is nameof(ViewModel.Level) or nameof(ViewModel.IsRecording) or nameof(ViewModel.Status) or nameof(ViewModel.AudioWaveformSamples)) UpdateAudioDisplay();
-            if (e.PropertyName == nameof(ViewModel.IsRecording)) UpdateRecordingLanguageHint();
+            if (e.PropertyName == nameof(ViewModel.IsRecording))
+            {
+                UpdateRecordingLanguageHint();
+                InitializeLanguageFlyouts();
+            }
             if (e.PropertyName == nameof(ViewModel.Summary)) RenderSummary();
             if (e.PropertyName is nameof(ViewModel.HasGeneratedSummary) or nameof(ViewModel.SummaryStatus) or nameof(ViewModel.IsRecording)) UpdateSummaryVisibility();
         };
@@ -193,9 +198,14 @@ public sealed partial class MainPage : Page
     public static string SubtitleEditAutomationId(Guid subtitleId) => $"EditSubtitle_{subtitleId:N}";
     private void UpdateLanguageHeaders()
     {
-        SourceLanguageChoice.SelectedItem = SourceLanguages.FirstOrDefault(item => item.Code == (string.IsNullOrWhiteSpace(ViewModel.Config.SourceLanguage) ? null : ViewModel.Config.SourceLanguage)) ?? SourceLanguages[0];
-        TargetLanguageChoice.SelectedItem = TargetLanguages.FirstOrDefault(item => item.Code == (ViewModel.Config.Translate ? ViewModel.Config.TargetLanguage : null)) ?? TargetLanguages[0];
-        TargetLanguageChoice.Visibility = ViewModel.Config.Translate ? Visibility.Visible : Visibility.Collapsed;
+        var source = SourceLanguages.FirstOrDefault(item => item.Code == (string.IsNullOrWhiteSpace(ViewModel.Config.SourceLanguage) ? null : ViewModel.Config.SourceLanguage)) ?? SourceLanguages[0];
+        var target = TargetLanguages.FirstOrDefault(item => item.Code == (ViewModel.Config.Translate ? ViewModel.Config.TargetLanguage : null)) ?? TargetLanguages[0];
+        SourceLanguageTitle.Text = source.Title;
+        TargetLanguageTitle.Text = target.Title;
+        AutomationProperties.SetName(SourceLanguageChoice, $"识别语言：{source.Title}");
+        AutomationProperties.SetName(TargetLanguageChoice, $"翻译目标：{target.Title}");
+        UpdateLanguageFlyoutChecks(SourceLanguageFlyout, source.Code);
+        UpdateLanguageFlyoutChecks(TargetLanguageFlyout, target.Code);
         SettingsSourceMode.SelectedItem = string.IsNullOrWhiteSpace(ViewModel.Config.SourceLanguage) ? AutomaticSourceMode : PreferredSourceMode;
         SettingsSourceLanguage.SelectedItem = PreferredLanguages.FirstOrDefault(item => item.Code == ViewModel.Config.PreferredSourceLanguage) ?? PreferredLanguages[0];
         UpdatePreferredSourceSettingsVisibility();
@@ -297,23 +307,75 @@ public sealed partial class MainPage : Page
         }
         return null;
     }
-    private void SourceLanguage_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void InitializeLanguageFlyouts()
     {
-        if (SourceLanguageChoice.SelectedItem is not LanguageChoice selected) return;
+        PopulateLanguageFlyout(SourceLanguageFlyout, SourceLanguages, "SourceLanguage", SourceLanguageMenuItem_Click);
+        PopulateLanguageFlyout(TargetLanguageFlyout, TargetLanguages, "TargetLanguage", TargetLanguageMenuItem_Click);
+    }
+    private void PopulateLanguageFlyout(MenuFlyout flyout, IReadOnlyList<LanguageChoice> languages, string automationIdPrefix, RoutedEventHandler handler)
+    {
+        flyout.Items.Clear();
+        foreach (var language in languages)
+        {
+            var item = new MenuFlyoutItem { Text = language.Title, Tag = language.Code ?? string.Empty };
+            item.Click += handler;
+            AutomationProperties.SetAutomationId(item, $"{automationIdPrefix}_{(language.Code ?? "none")}");
+            flyout.Items.Add(item);
+        }
+        if (ViewModel.IsRecording)
+        {
+            flyout.Items.Add(new MenuFlyoutSeparator());
+            flyout.Items.Add(new MenuFlyoutItem { Text = "下次录音生效", IsEnabled = false });
+        }
+    }
+    private static void UpdateLanguageFlyoutChecks(MenuFlyout flyout, string? selectedCode)
+    {
+        foreach (var item in flyout.Items.OfType<MenuFlyoutItem>())
+        {
+            var code = (string)item.Tag;
+            item.Icon = (code.Length == 0 ? selectedCode is null : code == selectedCode)
+                ? new FontIcon { Glyph = "\uE73E", FontSize = 12 }
+                : null;
+        }
+    }
+    private void SourceLanguageMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuFlyoutItem { Tag: string code } || !TryFindLanguage(SourceLanguages, code, out var selected)) return;
         ViewModel.Config.SourceLanguage = selected.Code ?? string.Empty;
         if (selected.Code is not null) ViewModel.Config.PreferredSourceLanguage = selected.Code;
         ViewModel.Config.Save();
         UpdateLanguageHeaders();
         UpdateRecordingLanguageHint();
     }
-    private void TargetLanguage_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void TargetLanguageMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        if (TargetLanguageChoice.SelectedItem is not LanguageChoice selected) return;
+        if (sender is not MenuFlyoutItem { Tag: string code } || !TryFindLanguage(TargetLanguages, code, out var selected)) return;
         ViewModel.Config.Translate = selected.Code is not null;
         if (selected.Code is not null) ViewModel.Config.TargetLanguage = selected.Code;
         Translate.IsOn = ViewModel.Config.Translate;
-        TargetLanguageChoice.Visibility = ViewModel.Config.Translate ? Visibility.Visible : Visibility.Collapsed;
         ViewModel.Config.Save();
+        UpdateLanguageHeaders();
+    }
+    private static bool TryFindLanguage(IReadOnlyList<LanguageChoice> languages, string code, out LanguageChoice language)
+    {
+        language = languages.FirstOrDefault(item => (item.Code ?? string.Empty) == code)!;
+        return language is not null;
+    }
+    private void AudioModeMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuFlyoutItem { Tag: string value } && int.TryParse(value, out int mode))
+            Mode.SelectedIndex = mode;
+    }
+    private void UpdateAudioModeMenu()
+    {
+        if (Mode is null || AudioModeTitle is null) return;
+        AudioModeTitle.Text = Mode.SelectedItem as string ?? "音频来源";
+        AutomationProperties.SetName(AudioModeButton, $"音频来源：{AudioModeTitle.Text}");
+        for (int index = 0; index < AudioModeFlyout.Items.Count; index++)
+        {
+            if (AudioModeFlyout.Items[index] is not MenuFlyoutItem item) continue;
+            item.Icon = index == Mode.SelectedIndex ? new FontIcon { Glyph = "\uE73E", FontSize = 12 } : null;
+        }
     }
     private void UpdateAudioDisplay()
     {
@@ -416,6 +478,7 @@ public sealed partial class MainPage : Page
             Mode.SelectedIndex = ViewModel.ActiveAudioMode;
             syncingAudioMode = false;
         }
+        UpdateAudioModeMenu();
     }
     private async void Stop_Click(object sender, RoutedEventArgs e) => await ViewModel.StopAsync();
     private async void SwitchAudio_Click(object sender, RoutedEventArgs e)

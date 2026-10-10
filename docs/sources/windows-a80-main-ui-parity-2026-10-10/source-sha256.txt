@@ -1,0 +1,9 @@
+
+Algorithm Hash                                                             Path
+--------- ----                                                             ----
+SHA256    805C242A93A45830F355AD14A91DF567E166BDF1F36D697FB2A3D9D2538140E4 D:\ProgramData\WorkSpace\EchoWindowsUIParity\macOS\Views\TranscriptViews.swift
+SHA256    CB2ED238D2EE30643BE2F4621E18599D7102ADBECFDF898D0EC52204E7802D87 D:\ProgramData\WorkSpace\EchoWindowsUIParity\macOS\EchoMacApp.swift
+SHA256    9396612D40943D64564647CBCF0298CE16CBBF96D69B259893FDFD064BB584EE D:\ProgramData\WorkSpace\EchoWindowsUIParity\windows\Echo.Windows\MainPage.xaml
+SHA256    FDDCED9B83DBEDC0D4DBD1194E7F251E9AB08BADE5FFBF9BA009336229332B31 D:\ProgramData\WorkSpace\EchoWindowsUIParity\windows\Echo.Windows\MainPage.xaml.cs
+SHA256    ABF66727D8DA5BD081F4CBF641CD82A9DE23EE4338336B795834F207817E1090 D:\ProgramData\WorkSpace\EchoWindowsUIParity\windows\Echo.Windows\App.xaml
+SHA256    CAB4E57EE8D64583DB7FD4362227C28121994342397E91FE327F9DE650A153F7 D:\ProgramData\WorkSpace\EchoWindowsUIParity\windows\Echo.CoreChecks\Program.cs

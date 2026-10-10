@@ -102,6 +102,46 @@ var audioModeControl = audioModePageXaml.Descendants(XName.Get("ComboBox", "http
 Check(audioModeControl?.Attribute("SelectionChanged")?.Value == "AudioMode_SelectionChanged"
     && audioModeControl.Attribute("IsEnabled")?.Value.Contains("CanChangeAudioMode", StringComparison.Ordinal) == true,
     "audio input mode remains available during recording and routes selections through the live switch handler");
+var visibleAudioMode = audioModePageXaml.Descendants(XName.Get("Button", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .FirstOrDefault(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value == "AudioModeButton");
+Check(visibleAudioMode?.Attribute("AutomationProperties.AutomationId")?.Value == "InputMode"
+    && audioModePageXaml.Descendants(XName.Get("MenuFlyoutItem", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Count(element => element.Attribute("Click")?.Value == "AudioModeMenuItem_Click") == 3
+    && File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "MainPage.xaml.cs")).Contains("Mode.SelectedIndex = mode", StringComparison.Ordinal)
+    && File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "MainPage.xaml.cs")).Contains("SwitchAudioModeAsync(Mode.SelectedIndex)", StringComparison.Ordinal),
+    "compact audio source menu preserves the three existing modes and routes through live audio switching");
+var languageButtons = audioModePageXaml.Descendants(XName.Get("Button", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .Where(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value is "SourceLanguageChoice" or "TargetLanguageChoice")
+    .ToDictionary(element => element.Attribute(mainPageXamlNamespace + "Name")!.Value);
+string languagePageSource = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "MainPage.xaml.cs"));
+Check(languageButtons.Count == 2
+    && languageButtons["SourceLanguageChoice"].Attribute("AutomationProperties.AutomationId")?.Value == "SourceLanguageChoice"
+    && languageButtons["TargetLanguageChoice"].Attribute("AutomationProperties.AutomationId")?.Value == "TargetLanguageChoice"
+    && audioModePageXaml.Descendants(XName.Get("ComboBox", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .All(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value is not "SourceLanguageChoice" and not "TargetLanguageChoice")
+    && languagePageSource.Contains("PopulateLanguageFlyout(SourceLanguageFlyout, SourceLanguages", StringComparison.Ordinal)
+    && languagePageSource.Contains("PopulateLanguageFlyout(TargetLanguageFlyout, TargetLanguages", StringComparison.Ordinal)
+    && languagePageSource.Contains("\"SourceLanguage\", SourceLanguageMenuItem_Click", StringComparison.Ordinal)
+    && languagePageSource.Contains("\"TargetLanguage\", TargetLanguageMenuItem_Click", StringComparison.Ordinal)
+    && languagePageSource.Contains("{automationIdPrefix}_{(language.Code ?? \"none\")}", StringComparison.Ordinal)
+    && languagePageSource.Contains("下次录音生效", StringComparison.Ordinal)
+    && languagePageSource.Contains("AutomationProperties.SetName(TargetLanguageChoice", StringComparison.Ordinal)
+    && !languagePageSource.Contains("TargetLanguageChoice.Visibility =", StringComparison.Ordinal),
+    "top language choices use accessible buttons, retain all language options, and keep the no-translation target visible");
+var transcriptList = audioModePageXaml.Descendants(XName.Get("ListView", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .FirstOrDefault(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value == "TranscriptList");
+var correctionButton = audioModePageXaml.Descendants(XName.Get("Button", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .FirstOrDefault(element => element.Attribute("Click")?.Value == "Correction_Click");
+Check(transcriptList?.Element(XName.Get("ListView.ItemContainerStyle", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))?
+        .Elements(XName.Get("Style", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Elements(XName.Get("Setter", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Any(element => element.Attribute("Property")?.Value == "Padding" && element.Attribute("Value")?.Value == "0") == true
+    && correctionButton?.Attribute("Style")?.Value == "{StaticResource SubtitleActionButtonStyle}"
+    && correctionButton.Descendants(XName.Get("FontIcon", "http://schemas.microsoft.com/winfx/2006/xaml/presentation")).Any()
+    && audioModePageXaml.Descendants(XName.Get("Expander", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Any(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value is null && element.Attribute("AutomationProperties.AutomationId")?.Value == "SummarySection"
+            && element.Attribute("Background")?.Value == "Transparent"),
+    "transcript rows remove container padding, correction is a quiet icon action, and the summary header uses a transparent surface");
 string correctionEditorSource = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "MainPage.xaml.cs"));
 Check(correctionEditorSource.Contains("var historyExpander = new Expander { Header = \"识别稿与修改前版本\"", StringComparison.Ordinal)
     && correctionEditorSource.Contains("SetAutomationId(historyExpander, \"CorrectionHistory\")", StringComparison.Ordinal)

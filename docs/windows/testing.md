@@ -1,5 +1,11 @@
 # Windows 验证范围和证据
 
+## A80 当前主界面 UI 验证（2026-10-10）
+
+工作树 `D:\ProgramData\WorkSpace\EchoWindowsUIParity`，分支 `feature/windows-ui-mac-parity`，起点 PR #5 最新 head `b52f68efafd7fd1b0d1671ded4fc3f37c9a701e7`；Mac 对照为 `origin/main` `ae0359dc90da0ccb5e526a275da1747954a49a4f`。执行 `dotnet run --project windows/Echo.CoreChecks/Echo.CoreChecks.csproj -c Release`，182 项通过，其中新增 UI 源码契约检查覆盖语言按钮/目标“不翻译”常驻/录音中提示、音源菜单三种模式和实时切换回路、列表项清零容器留白、纠正按钮图标及总结透明面板。执行 `dotnet build windows/Echo.Windows/Echo.Windows.csproj -c Release -p:Platform=x64` 成功，0 警告、0 错误；仅构建，没有启动应用。
+
+本轮尊重用户明确的 GUI 使用安排，没有启动已安装或隔离的 Echo、没有做 UIA 或截图比较。用户在本次目标消息所附的两张图已检查为邮件界面，无法支持 Echo 视觉判断；因此 Mac/Windows 实际截图并排验收尚未完成。详情及源哈希见 [A80 底稿](../sources/windows-a80-main-ui-parity-2026-10-10/README.md)。
+
 ## 基线
 
 - Mac 来源：`origin/main` `ae0359dc90da0ccb5e526a275da1747954a49a4f`。
