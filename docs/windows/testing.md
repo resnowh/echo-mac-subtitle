@@ -136,4 +136,4 @@ Mac `SpeechViewModel` 在麦克风安装后 1.2 秒无原始回调时，以 450m
 
 ## A77 Mac/Windows 分段策略生产对拍（2026-10-10）
 
-分段规则此前只有 Windows 本地断言。新增固定 JSON fixture，由 macOS CI 使用 `TranscriptModels.swift` 中的生产 `TranscriptSegmentationPolicy` 生成 13 个触发结果；Windows CI 下载这份实际输出，与 Windows `TranscriptSegmentationPolicy` 和固定预期逐项比较。覆盖语义端点对空内容/译文等待的优先级、静音最少词数及边界、译文到达、功能开关、长段词数/时长阈值、静音与长段同时满足时的优先级，以及 NBSP/全角空格词数。Windows 本机 167 项 CoreChecks 通过；GitHub 上的 Mac 生成工件和 Windows 对拍结果待本次提交 CI 完成后确认。当前对拍只比较纯策略触发器；生产会话时钟、段落 final 文本/时间戳和真实 Soniox 节奏仍未覆盖。原始输入、Mac 生产输出、日志/哈希及基线见 [A77 来源底稿](../sources/windows-a77-segmentation-policy-parity-2026-10-10/README.md)。
+分段规则此前只有 Windows 本地断言。新增固定 JSON fixture，由 macOS CI 使用 `TranscriptModels.swift` 中的生产 `TranscriptSegmentationPolicy` 生成 13 个触发结果；Windows CI 下载这份实际输出，与 Windows `TranscriptSegmentationPolicy` 和固定预期逐项比较。覆盖语义端点对空内容/译文等待的优先级、静音最少词数及边界、译文到达、功能开关、长段词数/时长阈值、静音与长段同时满足时的优先级，以及 NBSP/全角空格词数。Windows 本机及 Actions run `38009024837` 的 167 项 CoreChecks、Mac 生产工件比较、Release x64 构建和 Mac Archive 回读均通过。当前对拍只比较纯策略触发器；生产会话时钟、段落 final 文本/时间戳和真实 Soniox 节奏仍未覆盖。原始输入、Mac 生产输出、日志/哈希及基线见 [A77 来源底稿](../sources/windows-a77-segmentation-policy-parity-2026-10-10/README.md)。
