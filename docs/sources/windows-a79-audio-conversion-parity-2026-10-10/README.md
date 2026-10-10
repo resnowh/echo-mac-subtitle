@@ -25,6 +25,6 @@ Windows `ToMono16k` 现对多声道输入取首声道，再以 WDL 重采样；C
 - 抽取的 Mac 生产 harness `mac-production-conversion-harness.swift` SHA-256 `03D6FA55D22EDEC32136146B5800600BA426B73B22B7351F66AAF3B6545939F6`。
 - Windows `AudioCapture.cs` SHA-256 `79F576CF207CD28C43531A8316256A91B9386E64255E4344CF8E1FE86AF6B5D2`；CoreChecks `Program.cs` SHA-256 `B18D4CB856EB455B15DF92B550ADAC1B5AD6E2ADA378AAF30C8AA5798857BF64`；workflow SHA-256 `437A39F0DA7DC77C9BEF18398295D030859B76A174B89A5BA26DE677AF5F6CC6`。
 - 常规 CoreChecks 日志 SHA-256 `7A09CB826CA3CCD5A23805012E72A5135F7753026C5E8D45FEFF0B2A9926F0EF`；Mac artifact 对拍日志 SHA-256 `D1390F89010A149D2A8B8C83DCE51CAF6A06AACA08A1DC3F357436A3449ACFB7`；Release 构建日志 SHA-256 `37913F2385FA347676276B0757A73CE6942B26B7DFA96F1C22C140C3616EB260`。
-- GitHub Actions 使用 `.github/workflows/windows-ci.yml` 的 `generate-mac-audio-conversion-fixture` macOS job 和 Windows `build-and-check`；新提交的 CI 运行尚待完成。旧的失败 artifact 保留为差异证据。
+- 当前提交 `e2a773569ca7b36885f0321e05fe6cca9dc9fbcd` 的 Windows CI run [`38012345830`](https://github.com/resnowh/echo-mac-subtitle/actions/runs/38012345830) 全部通过：Mac converter 编译及 artifact 生成、Windows CoreChecks/Release x64、Mac Archive 往返。该 run 的 Mac 原始 artifact 保存在 `ci-run-38012345830/mac-audio-conversion.json`，SHA-256 `1880F30A0F206E324A9C78338E281C847C420F3D2A9477E3644D3235582CEC8F`；用该 artifact 本机复跑 184 项全过，日志 SHA-256 `D0866FF31FCE49C9A923F9BE9FEC64A2B9F7DD73CC3FE480ED71C4E58FD94886`。旧的失败 artifact 仍保留为差异证据。
 
 该验证只证明固定合成输入下的转换行为和输出接近程度；不代表真实设备时钟同步、WASAPI 欠载/热拔插、长时间双路稳定性或实际 Soniox 网络会话已验收。Windows 主机没有 Swift 编译器，Mac harness 由 GitHub macOS runner 编译。
