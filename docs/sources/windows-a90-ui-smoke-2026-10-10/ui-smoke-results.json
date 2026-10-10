@@ -1,0 +1,52 @@
+﻿[
+    {
+        "detail":  "Start is visible; Stop is hidden while idle.",
+        "status":  "PASS",
+        "name":  "Recording page and idle recording actions are available"
+    },
+    {
+        "detail":  "音频来源：麦克风",
+        "status":  "PASS",
+        "name":  "Audio source exposes the persisted current mode"
+    },
+    {
+        "detail":  "Source=识别语言：自动识别; target=翻译目标：不翻译",
+        "status":  "PASS",
+        "name":  "Language buttons expose current selections instead of ComboBox values"
+    },
+    {
+        "detail":  "识别语言：自动识别",
+        "status":  "PASS",
+        "name":  "Source language flyout selects automatic recognition"
+    },
+    {
+        "detail":  "翻译目标：不翻译",
+        "status":  "PASS",
+        "name":  "Target language flyout selects no translation"
+    },
+    {
+        "detail":  "Visible=False; matches=0",
+        "status":  "PASS",
+        "name":  "No new-content action appears when already at latest"
+    },
+    {
+        "detail":  "Recognition, segmentation, AI services and appearance controls are reachable.",
+        "status":  "PASS",
+        "name":  "Settings pages and theme control are reachable"
+    },
+    {
+        "detail":  "Archive picker, export action and transcript list are reachable.",
+        "status":  "PASS",
+        "name":  "Archive picker, export action and transcript are available"
+    },
+    {
+        "detail":  "Correction editor opened and closed without changing synthetic text.",
+        "status":  "PASS",
+        "name":  "Correction editor opens and remains dismissible without editing"
+    },
+    {
+        "detail":  "Empty archive hint is visible.",
+        "status":  "PASS",
+        "name":  "Empty archive displays its empty state without subtitle rows"
+    }
+]

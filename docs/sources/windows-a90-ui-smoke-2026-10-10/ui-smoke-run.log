@@ -1,0 +1,18 @@
+A90 isolated GUI smoke final run (2026-10-10)
+Package identity: 041833B0-BB1F-458D-B149-AC9E04107D04
+Process ID: 29960
+Synthetic fixtures only; no recording, API key, or network calls.
+
+PASS	Recording page and idle recording actions are available	Start is visible; Stop is hidden while idle.
+PASS	Audio source exposes the persisted current mode	音频来源：麦克风
+PASS	Language buttons expose current selections instead of ComboBox values	Source=识别语言：自动识别; target=翻译目标：不翻译
+PASS	Source language flyout selects automatic recognition	识别语言：自动识别
+PASS	Target language flyout selects no translation	翻译目标：不翻译
+PASS	No new-content action appears when already at latest	Visible=False; matches=0
+PASS	Settings pages and theme control are reachable	Recognition, segmentation, AI services and appearance controls are reachable.
+PASS	Archive picker, export action and transcript are available	Archive picker, export action and transcript list are reachable.
+PASS	Correction editor opens and remains dismissible without editing	Correction editor opened and closed without changing synthetic text.
+PASS	Empty archive displays its empty state without subtitle rows	Empty archive hint is visible.
+
+PASS count: 10
+FAIL count: 0

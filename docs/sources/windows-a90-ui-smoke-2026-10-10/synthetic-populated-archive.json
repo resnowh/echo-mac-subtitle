@@ -1,0 +1,222 @@
+{
+  "title": "课堂演示 - 合成字幕",
+  "summarizedEntries": {},
+  "updatedAt": 780000120.0,
+  "id": "b6603702-81a3-453f-a1f7-51b7ff1f9417",
+  "createdAt": 779999900.0,
+  "summary": "# 今日课程总结\n\n## 核心观点\n\n- 双语内容在两列中保持顶部对齐。\n- 长句自然换行，元信息不抢正文注意力。\n\n## 下一步\n\n检查浅色主题、校对入口和窗口尺寸。",
+  "segments": [
+    {
+      "entries": [
+        {
+          "id": "3eea6f76-5e37-43ad-b7f5-9b820873dc83",
+          "start": 0.0,
+          "end": 3.0,
+          "recordedAt": 780000000.0,
+          "english": "The speaker introduces the lecture.",
+          "chinese": "讲者开始今天的课程。",
+          "speaker": "Speaker 1",
+          "language": "en",
+          "correction": null
+        },
+        {
+          "id": "45b0b391-30cc-42bb-9dff-286974cfe508",
+          "start": 4.0,
+          "end": 7.0,
+          "recordedAt": 780000005.0,
+          "english": "We compare two approaches before choosing.",
+          "chinese": "我们先比较两种方法，再做选择。",
+          "speaker": null,
+          "language": "en",
+          "correction": null
+        },
+        {
+          "id": "e51dba33-586a-4334-9ae9-cee025727442",
+          "start": 8.0,
+          "end": 11.0,
+          "recordedAt": 780000010.0,
+          "english": "Keep the original and translation aligned.",
+          "chinese": "请让原文和译文保持对齐。",
+          "speaker": null,
+          "language": "en",
+          "correction": null
+        },
+        {
+          "id": "0943e15f-22da-4e36-ad60-1c72aae59bf3",
+          "start": 12.0,
+          "end": 15.0,
+          "recordedAt": 780000015.0,
+          "english": "This deliberately long synthetic subtitle checks wrapping in the original English column. It describes a product decision and includes enough text to occupy several lines at the target window size.",
+          "chinese": "这是一条刻意加长的合成字幕，用来检查原文列自动换行。它描述一个产品决策，并包含足够文字，使其在目标窗口尺寸下占据多行。",
+          "speaker": "Speaker 1",
+          "language": "en",
+          "correction": null
+        },
+        {
+          "id": "0fa54ecf-04b8-4d14-b157-104debc17353",
+          "start": 16.0,
+          "end": 19.0,
+          "recordedAt": 780000020.0,
+          "english": "A short sentence checks row density.",
+          "chinese": "短句用于检查字幕行密度。",
+          "speaker": null,
+          "language": "en",
+          "correction": null
+        },
+        {
+          "id": "a937a321-6c77-4f0b-b5cc-c33623e52d1f",
+          "start": 20.0,
+          "end": 23.0,
+          "recordedAt": 780000025.0,
+          "english": "The speaker introduces the lecture.",
+          "chinese": "讲者开始今天的课程。",
+          "speaker": null,
+          "language": "en",
+          "correction": null
+        },
+        {
+          "id": "9fe3d647-964e-4ffc-9dbb-839a434d8349",
+          "start": 24.0,
+          "end": 27.0,
+          "recordedAt": 780000030.0,
+          "english": "The revised synthetic sentence.",
+          "chinese": "已校对的合成句子。",
+          "speaker": "Speaker 1",
+          "language": "en",
+          "correction": {
+            "revision": "2d248f8d-2ca8-4352-96d7-231a446d4f19",
+            "rawSource": "We compare two approaches before choosing.",
+            "translationLocked": false,
+            "sourceLocked": true,
+            "rawTranslation": "我们先比较两种方法，再做选择。",
+            "history": []
+          }
+        },
+        {
+          "id": "58d23e00-b557-466e-a9e0-a99609d1a35a",
+          "start": 28.0,
+          "end": 31.0,
+          "recordedAt": 780000035.0,
+          "english": "Keep the original and translation aligned.",
+          "chinese": "请让原文和译文保持对齐。",
+          "speaker": null,
+          "language": "en",
+          "correction": null
+        },
+        {
+          "id": "718b2897-41b0-4def-9521-dc796ff1626d",
+          "start": 32.0,
+          "end": 35.0,
+          "recordedAt": 780000040.0,
+          "english": "This deliberately long synthetic subtitle checks wrapping in the original English column. It describes a product decision and includes enough text to occupy several lines at the target window size.",
+          "chinese": "这是一条刻意加长的合成字幕，用来检查原文列自动换行。它描述一个产品决策，并包含足够文字，使其在目标窗口尺寸下占据多行。",
+          "speaker": null,
+          "language": "en",
+          "correction": null
+        },
+        {
+          "id": "fc5b6b4c-d6c2-483b-a054-10572d1946d3",
+          "start": 36.0,
+          "end": 39.0,
+          "recordedAt": 780000045.0,
+          "english": "A short sentence checks row density.",
+          "chinese": "短句用于检查字幕行密度。",
+          "speaker": "Speaker 1",
+          "language": "en",
+          "correction": null
+        },
+        {
+          "id": "1ee67353-0c01-4ea5-848d-cff7eae3cccc",
+          "start": 40.0,
+          "end": 43.0,
+          "recordedAt": 780000050.0,
+          "english": "The speaker introduces the lecture.",
+          "chinese": "讲者开始今天的课程。",
+          "speaker": null,
+          "language": "en",
+          "correction": null
+        },
+        {
+          "id": "1e998b93-8d29-4f7f-8ab6-85ffee04962e",
+          "start": 44.0,
+          "end": 47.0,
+          "recordedAt": 780000055.0,
+          "english": "We compare two approaches before choosing.",
+          "chinese": "我们先比较两种方法，再做选择。",
+          "speaker": null,
+          "language": "en",
+          "correction": null
+        },
+        {
+          "id": "44c291c5-e332-4ffa-8aef-e31df3623eb4",
+          "start": 48.0,
+          "end": 51.0,
+          "recordedAt": 780000060.0,
+          "english": "Keep the original and translation aligned.",
+          "chinese": "请让原文和译文保持对齐。",
+          "speaker": "Speaker 1",
+          "language": "en",
+          "correction": null
+        },
+        {
+          "id": "51b66087-95c2-446d-91a3-70790ad0a9f0",
+          "start": 52.0,
+          "end": 55.0,
+          "recordedAt": 780000065.0,
+          "english": "This deliberately long synthetic subtitle checks wrapping in the original English column. It describes a product decision and includes enough text to occupy several lines at the target window size.",
+          "chinese": "这是一条刻意加长的合成字幕，用来检查原文列自动换行。它描述一个产品决策，并包含足够文字，使其在目标窗口尺寸下占据多行。",
+          "speaker": null,
+          "language": "en",
+          "correction": null
+        },
+        {
+          "id": "17c352d0-085a-49aa-aaf9-35ab3a8740fa",
+          "start": 56.0,
+          "end": 59.0,
+          "recordedAt": 780000070.0,
+          "english": "A short sentence checks row density.",
+          "chinese": "短句用于检查字幕行密度。",
+          "speaker": null,
+          "language": "en",
+          "correction": null
+        },
+        {
+          "id": "fb41e0ed-07ac-4fba-a405-02033d1c22b5",
+          "start": 60.0,
+          "end": 63.0,
+          "recordedAt": 780000075.0,
+          "english": "The speaker introduces the lecture.",
+          "chinese": "讲者开始今天的课程。",
+          "speaker": "Speaker 1",
+          "language": "en",
+          "correction": null
+        },
+        {
+          "id": "b1a3fca3-b88c-4247-8f5e-524e61900cf2",
+          "start": 64.0,
+          "end": 67.0,
+          "recordedAt": 780000080.0,
+          "english": "We compare two approaches before choosing.",
+          "chinese": "我们先比较两种方法，再做选择。",
+          "speaker": null,
+          "language": "en",
+          "correction": null
+        },
+        {
+          "id": "ff4a519e-d08a-4911-9f25-da3618a96df3",
+          "start": 68.0,
+          "end": 71.0,
+          "recordedAt": 780000085.0,
+          "english": "Keep the original and translation aligned.",
+          "chinese": "请让原文和译文保持对齐。",
+          "speaker": null,
+          "language": "en",
+          "correction": null
+        }
+      ],
+      "updatedAt": 780000120.0,
+      "startedAt": 780000000.0,
+      "id": "ff6820f5-c5f1-46ae-8016-96196369af1b"
+    }
+  ]
+}

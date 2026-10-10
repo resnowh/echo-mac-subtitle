@@ -1,0 +1,1 @@
+DATA_ROOT=C:\Users\HENRY\AppData\Local\Packages\041833B0-BB1F-458D-B149-AC9E04107D04_1z32rh13vfry6\LocalCache\Local\EchoWindows

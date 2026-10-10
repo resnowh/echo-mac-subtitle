@@ -194,3 +194,10 @@ CoreChecks 检查字幕行加载时读取统一显示状态、并在 ViewModel �
 ## A89 UI Automation smoke 更新（2026-10-10）
 
 旧 `windows/ui-smoke.ps1` 仍期待已移除的语言 ComboBox 和旧电脑音频默认值，且以窗口消息发送 Escape，无法可靠驱动 WinUI flyout。现改为检查当前模式的可访问名称、识别/翻译菜单选项、Settings 四分类、主题、存档菜单、字幕列表和纠正编辑器；Escape 使用 UIA 工具要求的 `send-input`。PowerShell AST 和脚本 UIA selector 与当前 XAML/C# 对照检查通过。本次没有启动应用；端到端结果须在下一次独立合成数据 GUI 批次中记录，不能把静态检查称为 UI smoke 通过。
+
+## A90 隔离包 UIA smoke 实测（2026-10-10）
+
+- **基线**：从 PR #6 分支 `feature/windows-ui-mac-parity` 的 `0d103514f98f3e549298859791add5dbde8303b2` 创建临时本地副本；测试包使用唯一身份 `041833B0-BB1F-458D-B149-AC9E04107D04` 和独立包数据目录。
+- **验证**：隔离 Debug x64 包构建 0 警告、0 错误；`windows/ui-smoke.ps1` 在一次进程会话内通过 10/10 UIA 项，覆盖录音空闲状态、音源/语言标签、语言菜单幂等状态、无新内容提示、四个设置分栏及深浅主题、合成存档/导出、校对弹窗关闭、空存档状态。最终 JSON 与截图见 [A90 证据底稿](../sources/windows-a90-ui-smoke-2026-10-10/README.md)。
+- **隔离与清理**：仅使用合成设置和字幕；未启动录音、访问真实存档/API Key、连接云服务或读取用户截图。测试进程结束后注销了该唯一开发包身份，确认不再注册；临时构建目录和数据证据保留。`macOS/` 未改。
+- **验收边界**：UIA 和合成截图证明控件可访问、流程可操作，不替代 Mac 与 Windows 并排视觉验收、Narrator/键盘全路径、多显示器或其他 DPI 的人工检查。
