@@ -495,7 +495,7 @@ if (sessionMacArtifactPresent)
     sessionMacArtifactMatches = macSessionRoot.GetProperty("sourceCommit").GetString() is { Length: > 0 } and not "unknown"
         && macSessionSourceHash is { Length: 64 } && macSessionSourceHash.All(Uri.IsHexDigit)
         && macSessionRoot.GetProperty("events").GetArrayLength() == segmentationSessionEvents.Length;
-    macSessionEvents = macSessionRoot.GetProperty("events").EnumerateArray().ToArray();
+    macSessionEvents = macSessionRoot.GetProperty("events").EnumerateArray().Select(item => item.Clone()).ToArray();
 }
 for (int i = 0; i < segmentationSessionEvents.Length; i++)
 {

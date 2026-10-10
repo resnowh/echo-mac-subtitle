@@ -37,7 +37,7 @@
 - 已完成：Mac 四类设置导航和 Soniox/local segmentation 配置已接入；默认值、范围、说明、下一会话快照和本地兜底策略有自动检查。DeepSeek 自动总结开关（默认关闭）与停止后总结已接入。数据底稿见 [A24 Soniox segmentation source baseline](../sources/windows-a24-soniox-segmentation-2026-10-09.md)。
 - 已完成：实现悬浮字幕窗口和单会话字幕投影，设置和 final/迟到译文保留语义有自动检查；A38 对齐翻译关闭时强制显示原文及每路最多两行的尾部省略规则。A76 清除未被调用的旧 XAML 实现，把两行尾部省略合同接到当前 Win2D/DirectWrite 原生绘制路径；A50 的隔离 GUI 验证覆盖 layered HWND 点击穿透和调整模式，但发生在 A76 布局修改之前。当前字体排版、多屏/DPI、全屏和虚拟桌面仍待隔离验收；浮层不得产生额外音频或网络流。
 - 分段策略：Mac 每 500ms 检查本地静音兜底；语义 endpoint 优先，翻译开启时等译文；超长段按词数和时长双阈值定稿。Windows 使用当前会话配置快照。A77 增加 Mac 生产策略驱动的 CI fixture，逐项比较 13 个边界触发器；它不验证录音会话时钟或端到端 token 时间戳，真实 Soniox endpoint 节奏仍待验。见 [A77](../sources/windows-a77-segmentation-policy-parity-2026-10-10/README.md)。
-- A78 将 Mac 生产 token handler 和 `autoFinalizeIfNeeded` 放进同一确定性会话：译文迟到、静音等待、空响应刷新 quiet timer、长段阈值前后及语义 endpoint 都逐事件比较最终行、文本、起止/现实时间、speaker、language 和定稿数。Windows ViewModel 与测试共用 `TranscriptSegmentationRuntime`。本机 177 项 CoreChecks 和 Release x64 通过；Mac/Windows Actions 对拍待提交后验证。固定时间模拟不等于真实 timer 和 Soniox 网络节奏，见 [A78](../sources/windows-a78-segmentation-session-parity-2026-10-10/README.md)。
+- A78 将 Mac 生产 token handler 和 `autoFinalizeIfNeeded` 放进同一确定性会话：译文迟到、静音等待、空响应刷新 quiet timer、长段阈值前后及语义 endpoint 都逐事件比较最终行、文本、起止/现实时间、speaker、language 和定稿数。Windows ViewModel 与测试共用 `TranscriptSegmentationRuntime`。Mac CI 生成的 9 个生产快照已保存；本机对拍和 177 项 CoreChecks、Release x64 通过。首次 Windows Actions 暴露 JSON 读取生命周期缺陷，修复后本机通过，修复提交的 CI 待确认。固定时间模拟不等于真实 timer 和 Soniox 网络节奏，见 [A78](../sources/windows-a78-segmentation-session-parity-2026-10-10/README.md)。
 - 对齐 Mac 的设置保存、授权、设备状态、错误恢复和窗口尺寸等可见行为。
 
 ## P2：AI 与易用性

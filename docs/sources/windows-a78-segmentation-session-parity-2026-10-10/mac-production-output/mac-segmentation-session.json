@@ -1,0 +1,197 @@
+{
+  "events" : [
+    {
+      "expected" : [
+        {
+          "chinese" : "",
+          "end" : 2.5,
+          "english" : "we should start the class today",
+          "language" : "en",
+          "recordedAtUnixSeconds" : 1767225601,
+          "speaker" : "Speaker 1",
+          "start" : 1
+        }
+      ],
+      "finalizationCount" : 0,
+      "kind" : "response"
+    },
+    {
+      "expected" : [
+        {
+          "chinese" : "",
+          "end" : 2.5,
+          "english" : "we should start the class today",
+          "language" : "en",
+          "recordedAtUnixSeconds" : 1767225601,
+          "speaker" : "Speaker 1",
+          "start" : 1
+        }
+      ],
+      "finalizationCount" : 0,
+      "kind" : "tick"
+    },
+    {
+      "expected" : [
+        {
+          "chinese" : "我们今天开始上课",
+          "end" : 2.5,
+          "english" : "we should start the class today",
+          "language" : "en",
+          "recordedAtUnixSeconds" : 1767225601,
+          "speaker" : "Speaker 1",
+          "start" : 1
+        }
+      ],
+      "finalizationCount" : 0,
+      "kind" : "response"
+    },
+    {
+      "expected" : [
+        {
+          "chinese" : "我们今天开始上课",
+          "end" : 2.5,
+          "english" : "we should start the class today",
+          "language" : "en",
+          "recordedAtUnixSeconds" : 1767225601,
+          "speaker" : "Speaker 1",
+          "start" : 1
+        }
+      ],
+      "finalizationCount" : 1,
+      "kind" : "tick"
+    },
+    {
+      "expected" : [
+        {
+          "chinese" : "我们今天开始上课",
+          "end" : 2.5,
+          "english" : "we should start the class today",
+          "language" : "en",
+          "recordedAtUnixSeconds" : 1767225601,
+          "speaker" : "Speaker 1",
+          "start" : 1
+        },
+        {
+          "chinese" : "长段译文",
+          "end" : 21,
+          "english" : "lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture",
+          "language" : "en",
+          "recordedAtUnixSeconds" : 1767225620,
+          "speaker" : "Speaker 1",
+          "start" : 20
+        }
+      ],
+      "finalizationCount" : 1,
+      "kind" : "response"
+    },
+    {
+      "expected" : [
+        {
+          "chinese" : "我们今天开始上课",
+          "end" : 2.5,
+          "english" : "we should start the class today",
+          "language" : "en",
+          "recordedAtUnixSeconds" : 1767225601,
+          "speaker" : "Speaker 1",
+          "start" : 1
+        },
+        {
+          "chinese" : "长段译文",
+          "end" : 21,
+          "english" : "lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture",
+          "language" : "en",
+          "recordedAtUnixSeconds" : 1767225620,
+          "speaker" : "Speaker 1",
+          "start" : 20
+        }
+      ],
+      "finalizationCount" : 1,
+      "kind" : "response"
+    },
+    {
+      "expected" : [
+        {
+          "chinese" : "我们今天开始上课",
+          "end" : 2.5,
+          "english" : "we should start the class today",
+          "language" : "en",
+          "recordedAtUnixSeconds" : 1767225601,
+          "speaker" : "Speaker 1",
+          "start" : 1
+        },
+        {
+          "chinese" : "长段译文",
+          "end" : 21,
+          "english" : "lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture",
+          "language" : "en",
+          "recordedAtUnixSeconds" : 1767225620,
+          "speaker" : "Speaker 1",
+          "start" : 20
+        }
+      ],
+      "finalizationCount" : 1,
+      "kind" : "tick"
+    },
+    {
+      "expected" : [
+        {
+          "chinese" : "我们今天开始上课",
+          "end" : 2.5,
+          "english" : "we should start the class today",
+          "language" : "en",
+          "recordedAtUnixSeconds" : 1767225601,
+          "speaker" : "Speaker 1",
+          "start" : 1
+        },
+        {
+          "chinese" : "长段译文",
+          "end" : 21,
+          "english" : "lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture",
+          "language" : "en",
+          "recordedAtUnixSeconds" : 1767225620,
+          "speaker" : "Speaker 1",
+          "start" : 20
+        }
+      ],
+      "finalizationCount" : 2,
+      "kind" : "tick"
+    },
+    {
+      "expected" : [
+        {
+          "chinese" : "我们今天开始上课",
+          "end" : 2.5,
+          "english" : "we should start the class today",
+          "language" : "en",
+          "recordedAtUnixSeconds" : 1767225601,
+          "speaker" : "Speaker 1",
+          "start" : 1
+        },
+        {
+          "chinese" : "长段译文",
+          "end" : 21,
+          "english" : "lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture lecture",
+          "language" : "en",
+          "recordedAtUnixSeconds" : 1767225620,
+          "speaker" : "Speaker 1",
+          "start" : 20
+        },
+        {
+          "chinese" : "下一节课现在开始",
+          "end" : 121,
+          "english" : "the next class starts now",
+          "language" : "en",
+          "recordedAtUnixSeconds" : 1767225720,
+          "speaker" : "Speaker 2",
+          "start" : 120
+        }
+      ],
+      "finalizationCount" : 3,
+      "kind" : "response"
+    }
+  ],
+  "mode" : "segmentation-session",
+  "source" : "macOS\/ViewModels\/SpeechViewModel.swift production method extraction",
+  "sourceCommit" : "e2c1f9a8aae285fa6fcac119ca85a8d46a767de6",
+  "speechViewModelSha256" : "1844d63f0025243f3891a5aab732c099614bead18c35948ecec0ded60c97e0f9"
+}
