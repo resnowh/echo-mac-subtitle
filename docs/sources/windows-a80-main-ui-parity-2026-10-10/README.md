@@ -25,7 +25,7 @@ Mac 参考：`origin/main` `ae0359dc90da0ccb5e526a275da1747954a49a4f`
 - 顶部识别语言和翻译目标改为 Button + MenuFlyout，动态显示当前语言和勾选项；“不翻译”保留在目标位。录音中菜单注明下次录音生效，原设置对象和保存流程不变。
 - 音频来源改成轻量菜单，但保留隐藏的 `Mode` 状态选择器及原 `AudioMode_SelectionChanged`，选择后继续走同一实时切换/持久化逻辑；保留三种模式、设备切换及原 AutomationId。
 - 主内容 margin 调为20 DIP、主行距18 DIP；语言两列间距14。菜单按钮透明、min-height30、padding 0×3，动态显示当前选择和勾选，AutomationId 按来源/目标区分。
-- 字幕容器 padding/margin/min-height 清零；日期头上下12/4 DIP，每行上下6 DIP、元信息/正文间距4 DIP，正文15 DIP、元信息12 DIP且时间使用 Tabular numeral；纠正为低强调铅笔按钮，保留逐字幕 AutomationId。
+- 字幕容器 padding/margin/min-height 清零；日期头上下12/4 DIP，每行上下6 DIP、元信息/正文间距4 DIP，正文15 DIP、元信息12 DIP且时间使用 Tabular numeral；空原文显示Mac相同省略号，空译文保留一行；纠正为低强调铅笔按钮，保留逐字幕 AutomationId。
 - 录音控制最小宽148/126 DIP，开始/停止高32/34 DIP，保留 Mint/危险色语义。存档行首列弹性占宽，标题左靠、导出/更多右靠。未改录音、存档或总结业务处理。
 - 波形保留48点 RMS 与52 DIP尺寸，背景改为弱表面：深色白色6%不透明、浅色黑色4%、高对比度使用系统 Window 色。AI 总结改为padding12/圆角10的轻表面，标题右侧菜单含三种总结范围；保留状态、220 DIP滚动、展开/复制与原 ViewModel 调用。
 - 沿用 Echo Accent、窗口尺寸和无障碍语义；未改 `macOS/`。Tabular numeral 使用 WinUI `Typography.NumeralAlignment`，[Microsoft 文档](https://learn.microsoft.com/en-us/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.documents.typography.numeralalignment?view=windows-app-sdk-1.8)。
@@ -36,7 +36,7 @@ Mac 参考：`origin/main` `ae0359dc90da0ccb5e526a275da1747954a49a4f`
 
 原始输出保存在 `corechecks.log` 和 `build.log`。
 
-- `dotnet run --project windows/Echo.CoreChecks/Echo.CoreChecks.csproj -c Release`：184 项通过。新增断言覆盖语言菜单、目标不翻译常驻、录音提示、三态音源实时切换、字幕容器/行参数/日期留白/tabular数字、纠正入口、存档右对齐、深浅/高对比表面资源和总结范围菜单。
+- `dotnet run --project windows/Echo.CoreChecks/Echo.CoreChecks.csproj -c Release`：184 项通过。新增断言覆盖语言菜单、目标不翻译常驻、录音提示、三态音源实时切换、字幕容器/行参数/日期留白/tabular数字/空文本占位、纠正入口、存档右对齐、深浅/高对比表面资源和总结范围菜单。
 - `dotnet build windows/Echo.Windows/Echo.Windows.csproj -c Release -p:Platform=x64 --no-restore -p:PublishReadyToRun=false`：成功，0 警告、0 错误。该构建涵盖 WinUI XAML 编译，没有启动 GUI。
 - PR #6 初始提交 `f3326a0` 的 Actions 8 项全部通过；本次追加更改已本机验证，推送新提交后应以新 head 的远端检查为准。
 - `git diff --check`：通过。

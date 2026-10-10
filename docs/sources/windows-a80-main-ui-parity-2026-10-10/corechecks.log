@@ -11,7 +11,7 @@ PASS: live audio mode switching keeps only the capture routes required by the se
 PASS: audio input mode remains available during recording and routes selections through the live switch handler
 PASS: compact audio source menu preserves the three existing modes and routes through live audio switching
 PASS: top language choices use accessible buttons, retain all language options, and keep the no-translation target visible
-PASS: transcript rows remove container padding, preserve Mac date spacing and tabular time, use a quiet correction action and a low-emphasis summary surface
+PASS: transcript rows retain Mac empty-text placeholders, date spacing and tabular time with a quiet correction action and low-emphasis summary surface
 PASS: main spacing, expanding archive selection, quiet waveform surface and summary scope actions follow the Mac layout contract
 PASS: low-emphasis background remains theme-aware and falls back to a system brush in High Contrast
 PASS: subtitle correction editor exposes dated history, bounded scrolling, and inline term addition like Mac
@@ -140,11 +140,11 @@ PASS: long transcript chunks stay bounded without dropping Unicode text
 PASS: AI summary transcript preserves numbered bilingual text and Mac local timestamp formatting across midnight
 PASS: AI summary transcript derives Mac wall-clock times from archive segment start when entry timestamps are absent
 PASS: incremental and full-summary prompts match Mac scope guidance and include the bilingual transcript
-A16 synthetic 2-hour archive: entries=7200, JSON=2501561 bytes, SRT=565471 bytes, snapshot+JSON+parse+SRT=87 ms
+A16 synthetic 2-hour archive: entries=7200, JSON=2501561 bytes, SRT=565471 bytes, snapshot+JSON+parse+SRT=99 ms
 PASS: two-hour synthetic archive snapshot, JSON round trip and SRT export preserve all 7200 entries and the final timestamp
-A16 atomic disk save: JSON=2501561 bytes, write+flush+replace+reload=97 ms, backupEntries=1
+A16 atomic disk save: JSON=2501561 bytes, write+flush+replace+reload=100 ms, backupEntries=1
 PASS: two-hour synthetic archive is durably replaced and reloaded while the previous checkpoint remains in backup
-A67 synthetic 2-hour Soniox stream: responses=14400, rows=7200, JSON=2587961 bytes, SRT=659071 bytes, stream+roundtrip+SRT=209 ms
+A67 synthetic 2-hour Soniox stream: responses=14400, rows=7200, JSON=2587961 bytes, SRT=659071 bytes, stream+roundtrip+SRT=215 ms
 PASS: two-hour synthetic Soniox provisional/final stream preserves 7200 bilingual rows, timestamps, metadata, and SRT output
 PASS: Apple date reference is not Unix time
 PASS: network retry policy is bounded and excludes service/device errors

@@ -3,8 +3,8 @@ Algorithm Hash                                                             Path
 --------- ----                                                             ----
 SHA256    805C242A93A45830F355AD14A91DF567E166BDF1F36D697FB2A3D9D2538140E4 D:\ProgramData\WorkSpace\EchoWindowsUIParity\macOS\Views\TranscriptViews.swift
 SHA256    CB2ED238D2EE30643BE2F4621E18599D7102ADBECFDF898D0EC52204E7802D87 D:\ProgramData\WorkSpace\EchoWindowsUIParity\macOS\EchoMacApp.swift
-SHA256    8A31CD19B455C506E045E1E1B6586EE1468947BC0D946E95163A75B7E08552D6 D:\ProgramData\WorkSpace\EchoWindowsUIParity\windows\Echo.Windows\MainPage.xaml
-SHA256    DA5309D69A64CC2ED0E5F0C2C365663C3D2419B787B5ADC13E7B373597EF886A D:\ProgramData\WorkSpace\EchoWindowsUIParity\windows\Echo.Windows\MainPage.xaml.cs
+SHA256    0F5420D9F6E737D4B5CC90A7F61D345875BA8558130CA5880B1ADDC1EC0D4817 D:\ProgramData\WorkSpace\EchoWindowsUIParity\windows\Echo.Windows\MainPage.xaml
+SHA256    1B10C91C6D2582A5AE0521A8DD37DEF92D2C8DDA0AE8ED014A56B800DF55AEF0 D:\ProgramData\WorkSpace\EchoWindowsUIParity\windows\Echo.Windows\MainPage.xaml.cs
 SHA256    5F8E991565F4071F3319F3DB544DDF7A7514FD605152938FC69C7A3DD032E7C3 D:\ProgramData\WorkSpace\EchoWindowsUIParity\windows\Echo.Windows\App.xaml
-SHA256    7B8C4322510CE87E1732055D36D2A69A6093014C9FC95BB98227C1163AC4C029 D:\ProgramData\WorkSpace\EchoWindowsUIParity\windows\Echo.CoreChecks\Program.cs
+SHA256    1D17FD35E76A2D333ADD3FD810EC626E3047E3014493A6CDD24AACAC65710857 D:\ProgramData\WorkSpace\EchoWindowsUIParity\windows\Echo.CoreChecks\Program.cs
 SHA256    956E792D99D4E3C1B01EB93C5516C397A6BEBD313D4968E38B21F991EA7CCE00 D:\ProgramData\WorkSpace\EchoWindowsUIParity\windows\Echo.CoreChecks\Echo.CoreChecks.csproj

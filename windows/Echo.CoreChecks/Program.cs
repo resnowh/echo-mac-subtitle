@@ -151,8 +151,13 @@ Check(transcriptList?.Element(XName.Get("ListView.ItemContainerStyle", "http://s
     && audioModePageXaml.Descendants(XName.Get("MenuFlyoutItem", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
         .Count(element => element.Attribute("Click")?.Value == "SummaryMenuItem_Click") == 3
     && dateHeading?.Attribute("Margin")?.Value == "0,12,0,4"
-    && timeLabel?.Attribute("Typography.NumeralAlignment")?.Value == "Tabular",
-    "transcript rows remove container padding, preserve Mac date spacing and tabular time, use a quiet correction action and a low-emphasis summary surface");
+    && timeLabel?.Attribute("Typography.NumeralAlignment")?.Value == "Tabular"
+    && audioModePageXaml.Descendants(XName.Get("TextBlock", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Any(element => element.Attribute("Text")?.Value.Contains("TranscriptDisplayText(English, '…')", StringComparison.Ordinal) == true)
+    && audioModePageXaml.Descendants(XName.Get("TextBlock", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Any(element => element.Attribute("Text")?.Value.Contains("TranscriptDisplayText(Chinese, ' ')", StringComparison.Ordinal) == true)
+    && languagePageSource.Contains("string.IsNullOrEmpty(value) ? placeholder : value", StringComparison.Ordinal),
+    "transcript rows retain Mac empty-text placeholders, date spacing and tabular time with a quiet correction action and low-emphasis summary surface");
 var recordingPanel = audioModePageXaml.Descendants(XName.Get("Grid", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
     .FirstOrDefault(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value == "RecordingPanel");
 var archiveButton = audioModePageXaml.Descendants(XName.Get("Button", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))

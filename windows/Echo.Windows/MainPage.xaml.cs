@@ -195,6 +195,7 @@ public sealed partial class MainPage : Page
     public static Visibility HiddenWhen(bool value) => value ? Visibility.Collapsed : Visibility.Visible;
     public static bool Not(bool value) => !value;
     public static string AccessibleText(string role, string? value) => string.IsNullOrWhiteSpace(value) ? string.Empty : $"{role}：{value}";
+    public static string TranscriptDisplayText(string? value, string placeholder) => string.IsNullOrEmpty(value) ? placeholder : value;
     public static string SubtitleEditAutomationId(Guid subtitleId) => $"EditSubtitle_{subtitleId:N}";
     private void UpdateLanguageHeaders()
     {
