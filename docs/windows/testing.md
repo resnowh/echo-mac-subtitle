@@ -176,3 +176,9 @@ CoreChecks 检查字幕行加载时读取统一显示状态、并在 ViewModel �
 - 隔离 worktree Windows Release x64：最终 UI/XAML 源码构建成功，0 警告、0 错误；日志 `a86-build-final4.log`。
 - `git diff --check` 通过。无 GUI、UIA 或截图运行；目标附件为无关邮件截图，当前仍无可用 Echo Mac/Windows 对照图。视觉、键盘/Narrator、浅/深/高对比和 125/150/200% DPI 运行态验收未完成。
 - 早期隔离尝试的外置 MSBuild 中间目录会重复包含生成源码；另一次模板函数绑定会触发编译器错误。两类失败及最终成功原始日志保存在 [A86 来源底稿](../sources/windows-ui-refinement-2026-10-10/README.md)，最后采用独立 worktree 的常规构建目录完成验证。
+
+## A87 新内容提示布局回归（2026-10-10）
+
+- 将“有新内容”提示移入字幕 Grid 的独立 `Auto` 行，避免遮住字幕纠正按钮；CoreChecks 静态验证布局、折叠默认状态、`ScrollToLatest` AutomationId 和 transcript follow state 可见性接线。
+- 隔离 Windows Release x64 构建：0 警告、0 错误；CoreChecks 189 项通过。首次运行的合成 WebSocket 测试遇到未完成关闭握手，原始失败日志已保留；隔离重跑完整通过。
+- 没有启动 Echo，也没有做 UIA 或截图验收；真实提示高度、间距、DPI 和视觉效果仍由用户检查。未修改 `macOS/`。日志和哈希见 [A87 来源底稿](../sources/windows-ui-refinement-2026-10-10/README.md)。

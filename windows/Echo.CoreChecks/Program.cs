@@ -136,6 +136,22 @@ Check(languageButtons.Count == 2
 var transcriptList = audioModePageXaml.Descendants(XName.Get("ListView", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
     .FirstOrDefault(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value == "TranscriptList");
 var transcriptRegion = transcriptList?.Parent;
+string newContentCodeBehindSource = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "MainPage.xaml.cs"));
+var transcriptLayoutRows = transcriptRegion?.Element(XName.Get("Grid.RowDefinitions", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    ?.Elements(XName.Get("RowDefinition", "http://schemas.microsoft.com/winfx/2006/xaml/presentation")).ToArray();
+var newContentButton = audioModePageXaml.Descendants(XName.Get("Button", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .FirstOrDefault(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value == "NewContentButton");
+Check(transcriptLayoutRows is { Length: 2 }
+    && transcriptLayoutRows[0].Attribute("Height")?.Value == "*"
+    && transcriptLayoutRows[1].Attribute("Height")?.Value == "Auto"
+    && transcriptList?.Attribute("Grid.Row")?.Value == "0"
+    && newContentButton is not null
+    && newContentButton.Parent == transcriptRegion
+    && newContentButton.Attribute("Grid.Row")?.Value == "1"
+    && newContentButton.Attribute("Visibility")?.Value == "Collapsed"
+    && newContentButton.Attribute("AutomationProperties.AutomationId")?.Value == "ScrollToLatest"
+    && newContentCodeBehindSource.Contains("NewContentButton.Visibility = transcriptFollowState.HasNewContent ? Visibility.Visible : Visibility.Collapsed;", StringComparison.Ordinal),
+    "new-content prompt occupies its own collapsed row below the transcript so it cannot cover subtitle edit actions");
 var transcriptDivider = transcriptRegion?.Elements(XName.Get("Border", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
     .SingleOrDefault(element => element.Attribute("Height")?.Value == "1");
 Check(transcriptRegion?.Attribute("Opacity") is null

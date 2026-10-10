@@ -58,3 +58,37 @@
 - macOS CI：run [`38028073642`](https://github.com/resnowh/echo-mac-subtitle/actions/runs/38028073642) 通过。
 - macOS unsigned distribution preflight：run [`38028073669`](https://github.com/resnowh/echo-mac-subtitle/actions/runs/38028073669) 通过。
 - 上述 run 的原始 JSON 和 PR check 摘要见 `windows-ci-e2ad87f.json`、`macos-ci-e2ad87f.json`、`distribution-preflight-e2ad87f.json`、`pr-checks-e2ad87f.json`。
+
+## A87 新内容提示避让纠正操作（2026-10-10）
+
+### 基线与远端状态
+
+- Mac `origin/main`：`ae0359dc90da0ccb5e526a275da1747954a49a4f`。
+- PR #5 的 Windows 基线 / PR #6 目标分支 `feature/windows-mac-parity`：`b52f68efafd7fd1b0d1671ded4fc3f37c9a701e7`。
+- PR #6 分支 `feature/windows-ui-mac-parity`：`6c22c95c84389b9f3b15ea2284a1d0a696d6d30d`。
+- 本轮执行 `git fetch origin`，并核对上述引用及远端 PR #6 head；开始修改时没有待拉取的新提交。PR #6 保持开放，目标分支不变。
+
+### 差异与改动
+
+字幕列表的“有新内容”按钮原先叠在 ListView 右下角，可能遮住字幕行右侧的纠正按钮。现在父 Grid 为字幕区域保留 `*` 行、为提示按钮保留 `Auto` 行；按钮默认折叠，出现时放在列表下方。原有滚动跟随可见性逻辑与 `ScrollToLatest` AutomationId 不变。按钮高度和内边距收紧至 12 DIP 字号、28 DIP 最小高、10×4 DIP Padding。
+
+改动文件：
+
+- `windows/Echo.Windows/MainPage.xaml`
+- `windows/Echo.CoreChecks/Program.cs`
+- `docs/windows/ui-parity.md`
+- `docs/windows/mac-parity-matrix.md`
+- `docs/windows/testing.md`
+- `docs/roadmap/数据清单.md`
+- 本来源目录的日志、清单和哈希
+
+### 验证与限制
+
+- 隔离 worktree Windows Release x64：成功，0 警告、0 错误；见 `a87-build.log`。
+- 隔离 worktree CoreChecks：189 项通过，未连接云服务、未保存音频；见 `a87-corechecks-final.log`。
+- 首次 CoreChecks 在合成 WebSocket close handshake 抛异常；失败原文保存在 `a87-corechecks-first-run.log`，隔离重跑完整通过。
+- UI 静态断言覆盖独立 Auto 行、折叠默认状态、AutomationId 和可见性由 transcript follow state 控制。
+- `git diff --check` 通过。没有启动 Echo、UIA 或截图；提示真实显示时的行高、间距、主题及 DPI 仍待用户视觉评估。任务附件不是 Echo 参考图。没有真实字幕、录音或 Key 输入；`macOS/` 未修改。
+- 本次修改推送后，GitHub Actions 状态由 PR #6 页面确认；本底稿保留源码和本地测试证据，不因 CI 回执更新触发额外提交。
+
+详细文件 SHA-256 见 `a87-source-sha256.txt` 和 `a87-artifacts.sha256`。

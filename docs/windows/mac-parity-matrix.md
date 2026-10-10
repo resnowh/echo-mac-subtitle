@@ -91,3 +91,9 @@ Mac SwiftUI 仅在启用翻译时构建译文列。Windows 现在在翻译关闭
 ## A86 Speaker 元信息条件显示（2026-10-10）
 
 Windows 字幕元信息现在与 Mac `metadata(for:)` 一致：录音时遵循本次会话启动时冻结的 speaker 设置；闲置时遵循已保存设置。Speaker 名称和分隔点仅在该行有非空标签时显示。虚拟化行的 DataContextChanged 和 Speaker 字段变化会更新状态。最终源码 188 项 CoreChecks 与隔离 Release x64（0 警告、0 错误）通过。没有启动 GUI；真实 UI 排版、键盘/Narrator 和主题/DPI 对照仍待用户视觉验收。
+
+## A87 新内容提示与字幕纠正入口避让（2026-10-10）
+
+| 区域 | Mac 行为 | Windows 调整 | 验证与边界 |
+|---|---|---|---|
+| 新内容提示 | 用户离开最新位置后才显示，并提供回到最新入口 | 提示放在 ListView 下方独立 Auto 行，列表可滚动区域不再被按钮覆盖；可见性继续由 transcript follow state 驱动 | CoreChecks 静态断言 XAML 行位置、折叠默认值、AutomationId 和可见性接线；Release x64 构建通过。未启动 GUI，按钮出现时的实际高度和视觉间距待用户评估 |

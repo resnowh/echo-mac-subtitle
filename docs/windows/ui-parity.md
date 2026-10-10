@@ -111,3 +111,7 @@ Mac 在翻译关闭时不创建译文 Text，而让原文列自然铺满可用�
 Mac `SynchronizedTranscriptView.metadata(for:)` 只在当前显示配置开启说话人区分、且字幕行有非空 speaker 时加入 Speaker 名称。Windows 模板此前总是显示 `Speaker` 字段，即使设置已关闭或旧字幕缺少该字段，也会占据元信息行空间。现在录音中使用会话启动时冻结的 `Config.Speakers`，闲置时使用已保存设置；对应的 Speaker 名称和中点分隔符按字段是否为空显示。ListView 的行加载、数据上下文复用和 Speaker 字段变化都会刷新此显示状态。实现仅改变字幕元信息可见性，不更改 Soniox 请求、speaker 解析或存档数据。
 
 CoreChecks 覆盖活动会话/闲置偏好矩阵、UI 通知、模板默认折叠和空值处理；188 项全过。隔离 worktree 的 Release x64 XAML 构建为 0 警告、0 错误。没有启动应用，真实字体与行高效果仍由用户视觉验收。
+
+## A87 新内容提示避让字幕操作（2026-10-10）
+
+原“有新内容”按钮叠放在字幕 `ListView` 的右下角，可能覆盖右侧的字幕纠正入口。现在字幕 Grid 使用 `*` 字幕行和 `Auto` 提示行：列表与空态位于第一行，提示按钮折叠时不占空间，出现时位于列表下方；按钮仍由原有跟随状态控制并保留 `ScrollToLatest` AutomationId。按钮样式收紧为 12 DIP、28 DIP 最小高，右对齐。此为静态布局和构建修正，未做运行态截图验收。

@@ -25,9 +25,10 @@
    </Grid><TextBlock Grid.Row="1" x:Name="LanguageNextSessionHint" Text="录音中更改语言：下次录音生效" FontSize="12" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Visibility="Collapsed"/>
    </Grid>
     <Grid Grid.Row="2">
+     <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
     <Border Height="1" VerticalAlignment="Top" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Opacity="0.55" IsHitTestVisible="False"/>
-    <TextBlock x:Name="EmptyHint" Text="开始录音后，每条识别结果会保留在这里" VerticalAlignment="Top" Padding="0,14,0,0" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-    <ListView x:Name="TranscriptList" ItemsSource="{x:Bind ViewModel.Entries, Mode=OneWay}" SelectionMode="None" Background="Transparent" BorderThickness="0" AutomationProperties.Name="双语字幕记录" AutomationProperties.AutomationId="TranscriptList" Padding="0,8,0,12">
+    <TextBlock x:Name="EmptyHint" Grid.Row="0" Text="开始录音后，每条识别结果会保留在这里" VerticalAlignment="Top" Padding="0,14,0,0" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+    <ListView x:Name="TranscriptList" Grid.Row="0" ItemsSource="{x:Bind ViewModel.Entries, Mode=OneWay}" SelectionMode="None" Background="Transparent" BorderThickness="0" AutomationProperties.Name="双语字幕记录" AutomationProperties.AutomationId="TranscriptList" Padding="0,8,0,12">
      <ListView.ItemTemplate><DataTemplate x:DataType="core:Subtitle">
       <Grid x:Name="TranscriptEntryRow" Loaded="TranscriptRow_Loaded" Unloaded="TranscriptRow_Unloaded" DataContextChanged="TranscriptRow_DataContextChanged" Padding="0,6" RowSpacing="4" ColumnSpacing="14" HorizontalAlignment="Stretch"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
        <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="{x:Bind DateSeparatorLabel, Mode=OneWay}" Visibility="{x:Bind local:MainPage.VisibleWhen(HasDateSeparator), Mode=OneWay}" Style="{StaticResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,12,0,4" AutomationProperties.HeadingLevel="Level2"/>
@@ -40,7 +41,7 @@
      </DataTemplate></ListView.ItemTemplate>
      <ListView.ItemContainerStyle><Style TargetType="ListViewItem"><Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="0"/><Setter Property="MinHeight" Value="0"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Background" Value="Transparent"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="VerticalContentAlignment" Value="Stretch"/></Style></ListView.ItemContainerStyle>
     </ListView>
-    <Button x:Name="NewContentButton" Content="有新内容  ↓" Click="Latest_Click" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="12" Visibility="Collapsed" Background="{ThemeResource EchoAccentBrush}" Foreground="{ThemeResource EchoAccentForegroundBrush}" AutomationProperties.AutomationId="ScrollToLatest"/>
+    <Button x:Name="NewContentButton" Grid.Row="1" Content="有新内容  ↓" Click="Latest_Click" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,8,0,0" Padding="10,4" MinHeight="28" FontSize="12" Visibility="Collapsed" Background="{ThemeResource EchoAccentBrush}" Foreground="{ThemeResource EchoAccentForegroundBrush}" AutomationProperties.AutomationId="ScrollToLatest"/>
    </Grid>
    <Grid Grid.Row="3" RowSpacing="10">
     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
