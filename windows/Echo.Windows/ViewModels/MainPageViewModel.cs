@@ -57,6 +57,7 @@ public partial class MainPageViewModel : ObservableObject
     public ObservableCollection<Subtitle> Entries { get; } = [];
     public DesktopSubtitleOverlayFeed SubtitleOverlayFeed { get; } = new();
     public bool HasEntries => Entries.Count > 0;
+    public bool IsTranslationColumnVisible => IsRecording ? activeTranslationEnabled : Config.Translate;
     public int ActiveAudioMode { get; private set; } = 1;
     public string? ActiveOutputId { get; private set; }
     public string? ActiveInputId { get; private set; }
@@ -80,11 +81,12 @@ public partial class MainPageViewModel : ObservableObject
     public bool CanSplitCompletedSegment => !IsBusy && !IsRecording && completedArchiveId is not null && completedSegmentId is not null;
     public bool CanDeleteSelectedArchive => CanEdit && !IsSummarizing && SelectedArchive is not null;
     partial void OnIsBusyChanged(bool value) { OnPropertyChanged(nameof(CanEdit)); OnPropertyChanged(nameof(CanSwitchAudioDevices)); OnPropertyChanged(nameof(CanChangeAudioMode)); OnPropertyChanged(nameof(CanStopRecording)); OnPropertyChanged(nameof(CanSplitCompletedSegment)); OnPropertyChanged(nameof(CanDeleteSelectedArchive)); }
-    partial void OnIsRecordingChanged(bool value) { OnPropertyChanged(nameof(CanEdit)); OnPropertyChanged(nameof(CanSwitchAudioDevices)); OnPropertyChanged(nameof(CanStopRecording)); OnPropertyChanged(nameof(CanSplitCompletedSegment)); OnPropertyChanged(nameof(CanDeleteSelectedArchive)); }
+    partial void OnIsRecordingChanged(bool value) { OnPropertyChanged(nameof(CanEdit)); OnPropertyChanged(nameof(CanSwitchAudioDevices)); OnPropertyChanged(nameof(CanStopRecording)); OnPropertyChanged(nameof(CanSplitCompletedSegment)); OnPropertyChanged(nameof(CanDeleteSelectedArchive)); OnPropertyChanged(nameof(IsTranslationColumnVisible)); }
     partial void OnIsSummarizingChanged(bool value) => OnPropertyChanged(nameof(CanDeleteSelectedArchive));
     partial void OnSummaryStatusChanged(string value) => OnPropertyChanged(nameof(IsSummaryPanelVisible));
     partial void OnHasGeneratedSummaryChanged(bool value) => OnPropertyChanged(nameof(IsSummaryPanelVisible));
     public void RefreshSummaryPanelVisibility() => OnPropertyChanged(nameof(IsSummaryPanelVisible));
+    public void RefreshTranscriptPresentation() => OnPropertyChanged(nameof(IsTranslationColumnVisible));
     partial void OnSelectedArchiveChanged(Archive? value)
     {
         OnPropertyChanged(nameof(CanDeleteSelectedArchive));

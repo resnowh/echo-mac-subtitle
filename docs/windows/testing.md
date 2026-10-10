@@ -163,3 +163,7 @@ Mac CI 从 `SpeechViewModel.swift` 抽取未修改的生产 `handleSonioxMessage
 ## A84 录音工具栏窄窗布局（2026-10-10）
 
 Mac `EchoMacApp.swift` 用 `ViewThatFits` 在横向空间不足时把连接状态放到录音按钮下方；Windows 原来一直固定在同一行。现增加 760 DIP `AdaptiveTrigger`：窄窗状态置于第二行，宽窗恢复右侧排列，状态内容与原 360 DIP 省略及 UI Automation 名称保持不变。CoreChecks 验证默认窄窗位置和宽窗触发/Setter。源码契约与构建不是运行态缩放验收；未启动 Echo，真实布局仍交由用户查看。
+
+## A85 翻译列布局回归（2026-10-10）
+
+CoreChecks 检查字幕行加载时读取统一显示状态、并在 ViewModel 通知后更新已实现的 ListView 项；原文 ColumnSpan 与译文 Visibility 随状态切换。检查 ViewModel 在录音时采用活动会话配置、闲置时采用保存配置；目标语言菜单和设置保存会刷新布局属性。这是静态 XAML/C# 契约；当前/下次会话切换、各主题渲染仍待 GUI 验收。

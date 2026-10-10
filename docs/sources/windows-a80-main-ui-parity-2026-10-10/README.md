@@ -74,3 +74,11 @@ Mac 参考：`origin/main` `ae0359dc90da0ccb5e526a275da1747954a49a4f`
 - Mac `EchoMacApp.swift` 的 `ViewThatFits` 会在状态文本不能与录音控件同行时切换为纵向排列；Windows 新增 `AdaptiveTrigger MinWindowWidth=760`，状态默认位于按钮组下方，宽窗时由 VisualState 放回右侧。音频模式、开始/停止和切设备按钮不移动；连接文字仍保留 360 DIP 截断、AutomationId 与 Polite live region。
 - CoreChecks 185 项全通过；Release x64 构建 0 警告、0 错误。两个过程使用 `$TEMP/Echo-A84-20261010` 下独立输出；原始日志见 `a84-corechecks.log` 和 `a84-build.log`。
 - 没有启动 GUI，因此没有验证 680/760/820 DIP 下的真实布局绘制或用户字体环境；该视觉检查由用户完成。Mac 源码仅作只读基准。
+
+## A85 翻译关闭时的双栏布局（2026-10-10）
+
+- Mac `SynchronizedTranscriptView` 只在 `displayedConfig.translationEnabled` 为 true 时创建译文 Text；翻译关闭时原文 HStack 占满宽度。Windows 原来始终保留两列，关闭翻译时浪费半幅空间。
+- Windows 新增只服务布局的 `IsTranslationColumnVisible`：录音中使用启动时的活动翻译状态，闲置时使用保存的 `Config.Translate`；目标语言菜单和设置保存会通知视图。模板行加载时折叠译文/调整原文跨列；状态变化时只刷新当前已实现的 ListView 行，未改识别、翻译或 Archive 数据逻辑。
+- 首次 XAML 编译发现 DataTemplate 的 `x:Bind` 无法解析页面级 ViewModel；改为行加载/虚拟化容器刷新后消除。简要诊断见 `a85-build-diagnostic.txt`。
+- 隔离 CoreChecks **186 项全过**；Release x64 **0 警告、0 错误**。原始输出 `a85-corechecks.log`、`a85-build.log`；SHA-256 见 `a85-sha256.txt`。
+- 没有启动应用或截图，实际“翻译/不翻译”样式以及录音中切换目标后的当前/下次会话显示仍待用户目测。Mac 源码只读。

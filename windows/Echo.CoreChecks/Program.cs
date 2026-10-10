@@ -147,6 +147,24 @@ var summaryPanel = audioModePageXaml.Descendants(XName.Get("Grid", "http://schem
     .FirstOrDefault(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value == "SummarySection");
 var correctionButton = audioModePageXaml.Descendants(XName.Get("Button", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
     .FirstOrDefault(element => element.Attribute("Click")?.Value == "Correction_Click");
+var sourceTranscriptText = audioModePageXaml.Descendants(XName.Get("TextBlock", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .Single(element => element.Attribute("Text")?.Value.Contains("TranscriptDisplayText(English", StringComparison.Ordinal) == true);
+var translatedTranscriptText = audioModePageXaml.Descendants(XName.Get("TextBlock", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .Single(element => element.Attribute("Text")?.Value.Contains("TranscriptDisplayText(Chinese", StringComparison.Ordinal) == true);
+var transcriptViewModelSource = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "MainPageViewModel.cs"));
+var transcriptCodeBehindSource = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "MainPage.xaml.cs"));
+Check(transcriptViewModelSource.Contains("IsTranslationColumnVisible => IsRecording ? activeTranslationEnabled : Config.Translate", StringComparison.Ordinal)
+    && transcriptViewModelSource.Contains("OnPropertyChanged(nameof(IsTranslationColumnVisible))", StringComparison.Ordinal)
+    && transcriptViewModelSource.Contains("RefreshTranscriptPresentation() => OnPropertyChanged(nameof(IsTranslationColumnVisible))", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("TranscriptColumnSpan(bool translationEnabled) => translationEnabled ? 1 : 2", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("TranscriptRow_Loaded", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("realizedTranscriptRows.Add(row)", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("realizedTranscriptRows.Remove(row)", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("foreach (Grid row in realizedTranscriptRows.ToArray())", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("UpdateTranscriptRowPresentation(row)", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Contains("ViewModel.RefreshTranscriptPresentation();", StringComparison.Ordinal)
+    && transcriptCodeBehindSource.Split("ViewModel.RefreshTranscriptPresentation();", StringSplitOptions.None).Length >= 3,
+    "translation column visibility follows the active recording config and refreshes when the saved language choice changes");
 var dateHeading = audioModePageXaml.Descendants(XName.Get("TextBlock", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
     .FirstOrDefault(element => element.Attribute("Text")?.Value.Contains("DateSeparatorLabel", StringComparison.Ordinal) == true);
 var timeLabel = audioModePageXaml.Descendants(XName.Get("TextBlock", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
@@ -157,6 +175,12 @@ Check(transcriptList?.Element(XName.Get("ListView.ItemContainerStyle", "http://s
         .Any(element => element.Attribute("Property")?.Value == "Padding" && element.Attribute("Value")?.Value == "0") == true
     && correctionButton?.Attribute("Style")?.Value == "{StaticResource SubtitleActionButtonStyle}"
     && correctionButton.Descendants(XName.Get("FontIcon", "http://schemas.microsoft.com/winfx/2006/xaml/presentation")).Any()
+    && sourceTranscriptText.Attribute(mainPageXamlNamespace + "Name")?.Value == "OriginalTranscriptText"
+    && sourceTranscriptText.Attribute("Grid.ColumnSpan")?.Value == "1"
+    && translatedTranscriptText.Attribute(mainPageXamlNamespace + "Name")?.Value == "TranslatedTranscriptText"
+    && translatedTranscriptText.Attribute("Grid.Column")?.Value == "1"
+    && transcriptList?.Descendants(XName.Get("Grid", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+        .Any(element => element.Attribute("Loaded")?.Value == "TranscriptRow_Loaded") == true
     && summaryPanel?.Attribute("AutomationProperties.AutomationId")?.Value == "SummarySection"
     && summaryPanel.Parent is XElement summaryBorder
     && summaryBorder.Name == XName.Get("Border", "http://schemas.microsoft.com/winfx/2006/xaml/presentation")

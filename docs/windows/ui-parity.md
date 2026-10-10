@@ -13,7 +13,7 @@
 | 顶部品牌与工具栏 | 根视图 `.padding(20)`、纵向间隔 18；ECHO 为 caption bold/Mint，右侧浮层/设置/主题/置顶为 borderless 图标按钮 | 主内容边距 `28,12,28,24`、行距 16；ECHO 12 DIP；工具按钮固定 36×36 并带 QuietButton 内边距 | 根边距调整为 20、主行距 18；保留 Windows 标题栏与 36×36 工具按钮及全部入口，保持现有主题 Mint。WinUI 标题栏/图标视觉继续采用平台样式 |
 | 语言选择 | 两个等宽菜单，列距 14；subheadline semibold/secondary，小箭头 9 pt/tertiary；录音提示 caption2/tertiary，语言下方 Divider opacity .55 | 两个带 Header 的 ComboBox，默认背景、边框、内边距和最小高度 | Button + MenuFlyout；按钮透明、padding 0×3、min-height 30，文字 14 DIP semibold/secondary、箭头 9/tertiary；录音提示改用 tertiary brush；选中项有勾；“不翻译”始终在目标列。保留设置保存、动态名称与 AutomationId |
 | 字幕列表容器 | ScrollView + `LazyVStack(spacing: 0)`；日期头上/下留白 12/4，单条内容上下留白 7，元信息至正文间距 5；仅 Divider opacity .55 | ListView 外 padding `0,16,0,24`；未覆盖 ListViewItem 默认 padding/min-height；数据行 Grid padding `0,8`、行间距 5；区域容器 opacity .55 会连字幕一起变淡 | ListView padding `0,8,0,12`，列表项 Padding/Margin 清零、MinHeight=0、背景透明；每行上下 6 DIP、行间距 4。日期头补 12/4 DIP，保留动态高度和虚拟化；顶部 1 DIP 分隔线单独设 opacity .55，不降低整块字幕对比度；无逐字幕背景卡片 |
-| 双栏正文 | HStack 顶部对齐、间距 14；Mac `.font(.body)`、lineSpacing 3；空原文显示省略号，译文留空位 | 两列等宽，间距 14；系统默认正文样式和容器留白 | 两列仍等宽并顶部对齐，间距 14；正文显式 15 DIP，自动换行，空原文显示“…”、空译文保留一行；行间距沿用字体默认；逐字幕底线高 1 DIP、低对比度。正文基线字号和光栅效果待截图核验 |
+| 双栏正文 | HStack 顶部对齐、间距 14；Mac 仅翻译开启时显示译文列，关闭时原文使用整行；font.body，lineSpacing 3；空原文显示省略号 | 两列等宽、间距 14；原文与译文固定各占一列，即使关闭翻译也空留半幅 | 翻译开启时两列等宽、间距14、正文15 DIP；关闭时译文列折叠、原文跨两列；自动换行；行上下6、行间距4；逐字幕细分隔线；正文实际栅格效果待截图核验
 | Speaker/时间/语言 | caption.monospacedDigit + secondary；时间格式 HH:mm:ss；语言和纠正状态只在需要时显示 | CaptionTextBlockStyle、secondary；元信息间距 8 | 字号 12 DIP、secondary；时间启用 Tabular numeral；保留语言与“已纠正”条件。元信息横向间距收至 7 DIP |
 | 纠正操作 | Pencil +“纠正/查看校对”，borderless，caption 色，与元信息同行右对齐 | 每行普通 Button，padding `8,2`、min-height 28，WinUI 默认按钮状态可见 | 透明背景、padding `4,2`、min-width 0、min-height 30；12 DIP 铅笔与文字，右对齐；继承 DefaultButtonStyle 以保留 hover/focus 键盘反馈与逐字幕 AutomationId |
 | 录音控制 | HStack 间距 10；音源菜单最小宽 148；同一切换按钮最小宽 126，borderedProminent，录音时红色、空闲 Mint；状态圆点 8、文字间距 7；空间不足时 ViewThatFits 将状态放到下一行 | 三态 ComboBox 和开始/停止按钮列；状态原本固定处于按钮右侧 | 轻量三态菜单复用原 Mode 事件，min-width 148；开始/停止统一 min-width 126、min-height 34；开始沿用 Echo Mint，停止用系统 Critical brush；状态 8 DIP 圆点和 360 DIP 截断保留；A84 在窗口宽小于 760 DIP 时将状态移至第二行 |
@@ -101,3 +101,7 @@ A49 首次在独立包和临时数据目录启动浮层，实际扩展样式缺�
 ## A84 录音工具栏窄窗布局（2026-10-10）
 
 Mac `EchoMacApp.swift` 用 `ViewThatFits` 在横向空间不足时把连接状态放到录音按钮下方；Windows 原来一直固定在同一行。现增加 760 DIP `AdaptiveTrigger`：窄窗状态置于第二行，宽窗恢复右侧排列，状态内容与原 360 DIP 省略及 UI Automation 名称保持不变。CoreChecks 验证默认窄窗位置和宽窗触发/Setter。源码契约与构建不是运行态缩放验收；未启动 Echo，真实布局仍交由用户查看。
+
+## A85 翻译列状态对齐（2026-10-10）
+
+Mac 在翻译关闭时不创建译文 Text，而让原文列自然铺满可用宽度；Windows 原来始终显示左右两列，未翻译时留下半屏空白。现按当前显示设置折叠译文并扩展原文。录音中读取启动时的活动翻译配置；闲置时读取保存配置，因此录音期间改为“下次生效”不会提前改变当前字幕布局。状态通知与显示属性由原 ViewModel 配置接线驱动，不更改识别、翻译或存档数据。

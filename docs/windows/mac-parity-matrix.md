@@ -8,7 +8,7 @@
 | 语言选择 | 两列间隔 14；subheadline semibold/secondary，小箭头 9 pt tertiary；录音提示下方显示；divider opacity .55 | 两个有 Header 的默认 ComboBox | 透明 Button + MenuFlyout；min-height 30、padding 0×3；当前选择、勾选、“不翻译”常驻和下次录音提示；保留设置保存与 AutomationId | 静态接线通过；菜单展开和键盘/Narrator 未实测 |
 | 日期/字幕列表 | LazyVStack 间距 0；日期标签 top/bottom 12/4；仅 Divider opacity .55 | ListView padding `0,16,0,24`，默认 ListViewItem padding/min-height 与行模板叠加；曾将 opacity 设在整块容器 | ListView padding `0,8,0,12`；容器 padding/margin 0、min-height 0、透明；日期 margin `0,12,0,4`；A83 将 .55 仅施于 1 DIP 顶部分隔线 | CoreChecks/构建通过；真实像素、长列表抖动/滚动仍未 GUI 验证 |
 | Speaker/时间戳 | caption.monospacedDigit、secondary；HH:mm:ss | CaptionTextBlockStyle、secondary | 12 DIP secondary，Tabular numeral；语言与纠正状态条件显示 | 静态 XAML/构建通过；字体实际效果未测 |
-| 双栏正文/分隔线 | 两列顶部对齐、间距14；body、lineSpacing3；纵向 padding7；低对比度 Divider | 双列间距14；正文和默认列表容器留白较松 | 双列等宽、间距14、正文15 DIP、自动换行；行上下6、行间距4；1 DIP 分隔线 opacity .55 | 参数和静态契约通过；截图、真实 DPI/主题仍未验 |
+| 双栏正文/分隔线 | 翻译开启时双栏顶部对齐、间距14；关闭时原文占整行；body、lineSpacing3、padding7；低对比度 Divider | 双栏固定平分，未翻译时右侧空白 | 开翻译等宽双栏；关翻译折叠译文、原文 Grid.ColumnSpan=2；间距14、正文15 DIP、自动换行；行上下6；1 DIP 分隔线 .55 | CoreChecks/构建通过；当前会话/下次会话切换行为由静态契约验证，GUI 像素仍待看 |
 | 纠正操作 | 元信息行右侧 Pencil + 文字，borderless/secondary | 普通按钮 padding `8,2`、min-height 28 | 透明按钮 padding `4,2`、min-height30；12 DIP 铅笔/文字，保留逐字幕 AutomationId 和焦点状态 | CoreChecks/构建通过；焦点可见态未 GUI 检查 |
 | 录音控制 | gap10；音源宽148；同一切换按钮宽126；空闲 Mint、录音 red；8点状态圆点；ViewThatFits 空间不足时换行 | 三态 ComboBox、默认 WinUI 高度/边框、状态固定横排 | 轻量三态菜单保留实时路由；A82 开始/停止统一高34、宽126；A84 窗宽小于760 DIP 时将连接状态移到按钮组下方 | CoreChecks/构建及 PR CI 验证；运行态缩放仍待 GUI 目测 |
 | 存档工具栏 | gap10；存档最大260，Spacer 将导出/更多推右 | Auto/Auto/Auto/*，操作靠左 | */Auto/Auto，存档伸展且内容左对齐，导出/更多右靠 | XAML 布局契约通过；窄窗口实际换行未测 |
@@ -83,3 +83,7 @@ Windows 来源：当前 PR 分支 `feature/windows-mac-parity`；其历史迁移
 ## A84 录音工具栏窄窗布局（2026-10-10）
 
 Mac `EchoMacApp.swift` 用 `ViewThatFits` 在横向空间不足时把连接状态放到录音按钮下方；Windows 原来一直固定在同一行。现增加 760 DIP `AdaptiveTrigger`：窄窗状态置于第二行，宽窗恢复右侧排列，状态内容与原 360 DIP 省略及 UI Automation 名称保持不变。CoreChecks 验证默认窄窗位置和宽窗触发/Setter。源码契约与构建不是运行态缩放验收；未启动 Echo，真实布局仍交由用户查看。
+
+## A85 翻译关闭时的字幕宽度
+
+Mac SwiftUI 仅在启用翻译时构建译文列。Windows 现在在翻译关闭时将译文 TextBlock 收起并使原文跨双列；活动录音仍使用会话开始时的翻译状态，避免将下次会话设置套到当前结果。

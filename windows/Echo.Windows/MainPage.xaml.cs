@@ -24,6 +24,7 @@ public sealed record LanguageChoice(string? Code, string Title);
 
 public sealed partial class MainPage : Page
 {
+    private readonly HashSet<Grid> realizedTranscriptRows = [];
     private readonly List<Border> waveform = [];
     private NativeDesktopSubtitleOverlayWindow? subtitleOverlayWindow;
     private static readonly LanguageChoice[] SourceLanguages =
@@ -167,6 +168,7 @@ public sealed partial class MainPage : Page
                 UpdateAudioModeMenu();
             }
             if (e.PropertyName is nameof(ViewModel.Level) or nameof(ViewModel.IsRecording) or nameof(ViewModel.Status) or nameof(ViewModel.AudioWaveformSamples)) UpdateAudioDisplay();
+            if (e.PropertyName == nameof(ViewModel.IsTranslationColumnVisible)) UpdateRealizedTranscriptRows();
             if (e.PropertyName == nameof(ViewModel.IsRecording))
             {
                 UpdateRecordingLanguageHint();
@@ -194,6 +196,7 @@ public sealed partial class MainPage : Page
     public static Visibility VisibleWhen(bool value) => value ? Visibility.Visible : Visibility.Collapsed;
     public static Visibility HiddenWhen(bool value) => value ? Visibility.Collapsed : Visibility.Visible;
     public static bool Not(bool value) => !value;
+    public static int TranscriptColumnSpan(bool translationEnabled) => translationEnabled ? 1 : 2;
     public static string AccessibleText(string role, string? value) => string.IsNullOrWhiteSpace(value) ? string.Empty : $"{role}：{value}";
     public static string TranscriptDisplayText(string? value, string placeholder) => string.IsNullOrEmpty(value) ? placeholder : value;
     public static string SubtitleEditAutomationId(Guid subtitleId) => $"EditSubtitle_{subtitleId:N}";
@@ -308,6 +311,42 @@ public sealed partial class MainPage : Page
         }
         return null;
     }
+    private static T? FindDescendant<T>(DependencyObject parent, string name) where T : FrameworkElement
+    {
+        int count = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(parent);
+        for (int index = 0; index < count; index++)
+        {
+            var child = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(parent, index);
+            if (child is T match && match.Name == name) return match;
+            if (FindDescendant<T>(child, name) is { } nested) return nested;
+        }
+        return null;
+    }
+    private void TranscriptRow_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is Grid row)
+        {
+            realizedTranscriptRows.Add(row);
+            UpdateTranscriptRowPresentation(row);
+        }
+    }
+    private void TranscriptRow_Unloaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is Grid row) realizedTranscriptRows.Remove(row);
+    }
+    private void UpdateRealizedTranscriptRows()
+    {
+        foreach (Grid row in realizedTranscriptRows.ToArray())
+            UpdateTranscriptRowPresentation(row);
+    }
+    private void UpdateTranscriptRowPresentation(Grid row)
+    {
+        bool translationEnabled = ViewModel.IsTranslationColumnVisible;
+        if (FindDescendant<TextBlock>(row, "OriginalTranscriptText") is { } original)
+            Grid.SetColumnSpan(original, TranscriptColumnSpan(translationEnabled));
+        if (FindDescendant<TextBlock>(row, "TranslatedTranscriptText") is { } translated)
+            translated.Visibility = VisibleWhen(translationEnabled);
+    }
     private void InitializeLanguageFlyouts()
     {
         PopulateLanguageFlyout(SourceLanguageFlyout, SourceLanguages, "SourceLanguage", SourceLanguageMenuItem_Click);
@@ -356,6 +395,7 @@ public sealed partial class MainPage : Page
         Translate.IsOn = ViewModel.Config.Translate;
         ViewModel.Config.Save();
         UpdateLanguageHeaders();
+        ViewModel.RefreshTranscriptPresentation();
     }
     private static bool TryFindLanguage(IReadOnlyList<LanguageChoice> languages, string code, out LanguageChoice language)
     {
@@ -932,6 +972,7 @@ public sealed partial class MainPage : Page
             c.AutoSummaryEnabled = AutoSummary.IsOn;
             c.Theme = ThemePreference.FromIndex(ThemeChoice.SelectedIndex);
             c.Save();
+            ViewModel.RefreshTranscriptPresentation();
             bool sonioxStillUnreadable = sonioxSecretUnreadable && SonioxKey.Password.Trim().Length == 0;
             bool deepSeekStillUnreadable = deepSeekSecretUnreadable && DeepSeekKey.Password.Trim().Length == 0;
             sonioxSecretUnreadable = sonioxStillUnreadable;
