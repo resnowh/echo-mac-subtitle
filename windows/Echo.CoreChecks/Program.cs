@@ -464,6 +464,111 @@ if (Environment.GetEnvironmentVariable("ECHO_MAC_SEGMENTATION_FIXTURE") is { Len
 }
 Check(segmentationFixtureMatches && macSegmentationArtifactMatches,
     $"Windows segmentation policy matches {windowsSegmentationResults.Count} Mac-source cases for endpoint precedence, silence/long thresholds, translation wait, and Unicode whitespace");
+using var segmentationSessionFixture = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "segmentation-session-parity.json")));
+JsonElement segmentationSessionRoot = segmentationSessionFixture.RootElement;
+JsonElement[] segmentationSessionEvents = segmentationSessionRoot.GetProperty("events").EnumerateArray().ToArray();
+JsonElement segmentationSessionConfig = segmentationSessionRoot.GetProperty("config");
+double sessionStartedAtUnixSeconds = segmentationSessionRoot.GetProperty("sessionStartedAtUnixSeconds").GetDouble();
+double sessionStartedAtAppleSeconds = (DateTimeOffset.FromUnixTimeSeconds((long)sessionStartedAtUnixSeconds) - Archive.AppleEpoch).TotalSeconds;
+var segmentationSessionSegment = new Segment { StartedAt = sessionStartedAtAppleSeconds };
+int segmentationSessionFinalizations = 0;
+var segmentationSessionAssembler = new TokenAssembler(segmentationSessionSegment, _ => { }, _ => segmentationSessionFinalizations++);
+var segmentationSessionSettings = new TranscriptSegmentationSettings
+{
+    LocalSilenceFallbackEnabled = segmentationSessionConfig.GetProperty("localSilenceFallbackEnabled").GetBoolean(),
+    LocalSilenceThresholdSeconds = segmentationSessionConfig.GetProperty("localSilenceThresholdSeconds").GetDouble(),
+    LocalSilenceMinimumWordCount = segmentationSessionConfig.GetProperty("localSilenceMinimumWordCount").GetInt32(),
+    LongSegmentFallbackEnabled = segmentationSessionConfig.GetProperty("longSegmentFallbackEnabled").GetBoolean(),
+    LongSegmentWordThreshold = segmentationSessionConfig.GetProperty("longSegmentWordThreshold").GetInt32(),
+    LongSegmentDurationThresholdSeconds = segmentationSessionConfig.GetProperty("longSegmentDurationThresholdSeconds").GetDouble()
+}.Validate();
+int[] expectedSessionEntryCounts = [1, 1, 1, 1, 2, 2, 2, 2, 3];
+int[] expectedSessionFinalizations = [0, 0, 0, 1, 1, 1, 1, 2, 3];
+bool sessionMacArtifactPresent = Environment.GetEnvironmentVariable("ECHO_MAC_SEGMENTATION_SESSION_FIXTURE") is { Length: > 0 };
+bool sessionMacArtifactMatches = !sessionMacArtifactPresent;
+JsonElement[] macSessionEvents = [];
+if (sessionMacArtifactPresent)
+{
+    using var macSessionDocument = JsonDocument.Parse(File.ReadAllText(Environment.GetEnvironmentVariable("ECHO_MAC_SEGMENTATION_SESSION_FIXTURE")!));
+    JsonElement macSessionRoot = macSessionDocument.RootElement;
+    string? macSessionSourceHash = macSessionRoot.GetProperty("speechViewModelSha256").GetString();
+    sessionMacArtifactMatches = macSessionRoot.GetProperty("sourceCommit").GetString() is { Length: > 0 } and not "unknown"
+        && macSessionSourceHash is { Length: 64 } && macSessionSourceHash.All(Uri.IsHexDigit)
+        && macSessionRoot.GetProperty("events").GetArrayLength() == segmentationSessionEvents.Length;
+    macSessionEvents = macSessionRoot.GetProperty("events").EnumerateArray().ToArray();
+}
+for (int i = 0; i < segmentationSessionEvents.Length; i++)
+{
+    JsonElement currentEvent = segmentationSessionEvents[i];
+    if (currentEvent.GetProperty("kind").GetString() == "response")
+    {
+        using var responseDocument = JsonDocument.Parse(currentEvent.GetProperty("message").GetRawText());
+        segmentationSessionAssembler.Apply(responseDocument.RootElement);
+    }
+    else
+    {
+        TranscriptSegmentationRuntime.TryFinalizeCurrent(
+            segmentationSessionSegment,
+            segmentationSessionAssembler,
+            segmentationSessionSettings,
+            currentEvent.GetProperty("elapsedSeconds").GetDouble(),
+            currentEvent.GetProperty("quietSeconds").GetDouble(),
+            segmentationSessionConfig.GetProperty("translationEnabled").GetBoolean());
+    }
+
+    bool localSessionMatches = segmentationSessionSegment.Entries.Count == expectedSessionEntryCounts[i]
+        && segmentationSessionFinalizations == expectedSessionFinalizations[i];
+    if (i == 3)
+        localSessionMatches &= segmentationSessionSegment.Entries[0].English == "we should start the class today"
+            && segmentationSessionSegment.Entries[0].Chinese == "我们今天开始上课"
+            && segmentationSessionSegment.Entries[0].Start == 1
+            && segmentationSessionSegment.Entries[0].End == 2.5;
+    if (i == 7)
+        localSessionMatches &= segmentationSessionSegment.Entries[1].English == string.Join(' ', Enumerable.Repeat("lecture", 80))
+            && segmentationSessionSegment.Entries[1].Chinese == "长段译文"
+            && segmentationSessionSegment.Entries[1].Start == 20
+            && segmentationSessionSegment.Entries[1].End == 21;
+    if (i == 8)
+        localSessionMatches &= segmentationSessionSegment.Entries[2].English == "the next class starts now"
+            && segmentationSessionSegment.Entries[2].Chinese == "下一节课现在开始"
+            && segmentationSessionSegment.Entries[2].Start == 120
+            && segmentationSessionSegment.Entries[2].End == 121
+            && segmentationSessionSegment.Entries[2].Speaker == "Speaker 2"
+            && segmentationSessionSegment.Entries[2].Language == "en";
+
+    bool macEventMatches = !sessionMacArtifactPresent;
+    if (sessionMacArtifactPresent && macSessionEvents.Length == segmentationSessionEvents.Length)
+    {
+        JsonElement macEvent = macSessionEvents[i];
+        JsonElement expectedRows = macEvent.GetProperty("expected");
+        macEventMatches = macEvent.GetProperty("kind").GetString() == currentEvent.GetProperty("kind").GetString()
+            && macEvent.GetProperty("finalizationCount").GetInt32() == segmentationSessionFinalizations
+            && expectedRows.GetArrayLength() == segmentationSessionSegment.Entries.Count;
+        if (macEventMatches)
+        {
+            int rowIndex = 0;
+            foreach (JsonElement expectedRow in expectedRows.EnumerateArray())
+            {
+                Subtitle actualRow = segmentationSessionSegment.Entries[rowIndex++];
+                double expectedRecordedAtUnix = expectedRow.GetProperty("recordedAtUnixSeconds").GetDouble();
+                double actualRecordedAtUnix = actualRow.RecordedAt is double recordedAt
+                    ? Archive.AppleEpoch.AddSeconds(recordedAt).ToUnixTimeMilliseconds() / 1000d : double.NaN;
+                macEventMatches &= expectedRow.GetProperty("english").GetString() == actualRow.English
+                    && expectedRow.GetProperty("chinese").GetString() == actualRow.Chinese
+                    && Math.Abs(expectedRow.GetProperty("start").GetDouble() - actualRow.Start) < .001
+                    && Math.Abs(expectedRow.GetProperty("end").GetDouble() - actualRow.End) < .001
+                    && Math.Abs(expectedRecordedAtUnix - actualRecordedAtUnix) < .001
+                    && (expectedRow.TryGetProperty("speaker", out JsonElement expectedSpeaker) ? expectedSpeaker.GetString() : null) == actualRow.Speaker
+                    && (expectedRow.TryGetProperty("language", out JsonElement expectedLanguage) ? expectedLanguage.GetString() : null) == actualRow.Language;
+            }
+        }
+    }
+    Check(localSessionMatches && macEventMatches,
+        $"segmentation token/session event {i + 1} preserves the Mac final rows, text, timestamps, metadata, and fallback timing");
+    sessionMacArtifactMatches &= macEventMatches;
+}
+Check(sessionMacArtifactMatches,
+    $"Windows token assembler and production session finalizer match {segmentationSessionEvents.Length} Mac production session snapshots");
 int localFinalized = 0; var localSegment = new Segment(); var localAssembler = new TokenAssembler(localSegment, _ => { }, _ => localFinalized++);
 using (var localPartial = JsonDocument.Parse("""{"tokens":[{"text":"A completed local phrase","is_final":true}]}""")) localAssembler.Apply(localPartial.RootElement);
 Check(localAssembler.FinalizeCurrent() && localFinalized == 1, "local segmentation finalizes the active subtitle through the shared finalization path");

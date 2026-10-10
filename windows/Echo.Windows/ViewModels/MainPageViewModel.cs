@@ -156,13 +156,11 @@ public partial class MainPageViewModel : ObservableObject
         new(target, entry => Entries.Add(entry), SubtitleFinalized);
     private void AutoFinalizeIfNeeded()
     {
-        if (!IsRecording || segment?.Entries.LastOrDefault() is not { } latest || assembler is null) return;
+        if (!IsRecording || segment is null || assembler is null) return;
         double elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(sessionStartedTimestamp).TotalSeconds;
         double quiet = lastResponseReceivedAt is { } received ? (DateTimeOffset.UtcNow - received).TotalSeconds : 0;
-        bool translationReady = !string.IsNullOrWhiteSpace(latest.Chinese);
-        if (TranscriptSegmentationPolicy.Trigger(latest.English, Math.Max(0, elapsed - latest.Start), quiet,
-            activeSegmentation, translationEnabled: activeTranslationEnabled, translationReady: translationReady) is null) return;
-        if (assembler.FinalizeCurrent()) Save();
+        if (TranscriptSegmentationRuntime.TryFinalizeCurrent(segment, assembler, activeSegmentation,
+            elapsed, quiet, activeTranslationEnabled)) Save();
     }
     public async Task LoadArchivesAsync()
     {

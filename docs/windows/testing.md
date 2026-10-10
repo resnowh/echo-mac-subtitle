@@ -137,3 +137,7 @@ Mac `SpeechViewModel` 在麦克风安装后 1.2 秒无原始回调时，以 450m
 ## A77 Mac/Windows 分段策略生产对拍（2026-10-10）
 
 分段规则此前只有 Windows 本地断言。新增固定 JSON fixture，由 macOS CI 使用 `TranscriptModels.swift` 中的生产 `TranscriptSegmentationPolicy` 生成 13 个触发结果；Windows CI 下载这份实际输出，与 Windows `TranscriptSegmentationPolicy` 和固定预期逐项比较。覆盖语义端点对空内容/译文等待的优先级、静音最少词数及边界、译文到达、功能开关、长段词数/时长阈值、静音与长段同时满足时的优先级，以及 NBSP/全角空格词数。Windows 本机及 Actions run `38009024837` 的 167 项 CoreChecks、Mac 生产工件比较、Release x64 构建和 Mac Archive 回读均通过。当前对拍只比较纯策略触发器；生产会话时钟、段落 final 文本/时间戳和真实 Soniox 节奏仍未覆盖。原始输入、Mac 生产输出、日志/哈希及基线见 [A77 来源底稿](../sources/windows-a77-segmentation-policy-parity-2026-10-10/README.md)。
+
+## A78：分段会话端到端生产对拍（2026-10-10）
+
+Mac CI 从 `SpeechViewModel.swift` 抽取未修改的生产 `handleSonioxMessage` 和 `autoFinalizeIfNeeded`，用确定性时钟处理 9 个合成响应/timer 事件。Windows 使用生产 `TokenAssembler` 和 `MainPageViewModel` 调用的同一个 `TranscriptSegmentationRuntime`；CI 下载 Mac 逐事件快照，比较最终字幕边界、双语文本、起止与现实时间、speaker、language 和定稿次数。覆盖译文迟到、静音等译文、空响应刷新静音计时、长段 89.999/90 秒边界和 endpoint。Windows 本机 177 项 CoreChecks 和 Release x64（0 警告、0 错误）通过；Mac harness 编译、工件对拍与本次提交 CI 待验证。它不代表真实墙钟 timer、音频或 Soniox 网络验收。固定输入、原始 Mac harness、日志与哈希见 [A78 来源底稿](../sources/windows-a78-segmentation-session-parity-2026-10-10/README.md)。

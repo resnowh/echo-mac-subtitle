@@ -8,6 +8,7 @@ import sys
 
 METHODS = (
     "handleSonioxMessage",
+    "autoFinalizeIfNeeded",
     "ensureCurrentEntry",
     "updateCurrentEntry",
     "finalizeCurrentEntry",
@@ -27,8 +28,10 @@ def extract(source: str, name: str) -> str:
     next_declaration = next((match for match in matches if match.start() > start.start()), None)
     declaration = source[start.start() : next_declaration.start() if next_declaration else len(source)].rstrip()
     declaration = re.sub(r"^(    )private ", r"\1", declaration, count=1)
-    if name == "handleSonioxMessage":
+    if name in {"handleSonioxMessage", "autoFinalizeIfNeeded"}:
         declaration = declaration.replace("finalizeCurrentEntry()", "recordProductionFinalization()")
+    if name in {"handleSonioxMessage", "autoFinalizeIfNeeded", "elapsedSinceSessionStart"}:
+        declaration = declaration.replace("Date()", "testNow")
     return declaration
 
 
@@ -60,7 +63,8 @@ final class OverlayFeedStub {
 final class ProductionSonioxHarness {
     var entries: [SubtitleEntry] = []
     var currentEntryID: UUID?
-    var sessionStartedAt: Date? = Date(timeIntervalSinceNow: -10)
+    var sessionStartedAt: Date? = Date(timeIntervalSince1970: 1767225600)
+    var testNow = Date(timeIntervalSince1970: 1767225600)
     var currentSpeaker: String?
     var currentLanguage: String?
     var finalEnglish = ""
@@ -92,6 +96,7 @@ final class ProductionSonioxHarness {
     func saveCurrentSessionFile(force: Bool = false) {}
     func requestCorrection(_ id: UUID, automatic: Bool) {}
     func recordProductionFinalization() {
+        guard currentEntryID != nil else { return }
         finalizationCount += 1
         finalizeCurrentEntry()
     }
@@ -150,6 +155,57 @@ struct SonioxRuntimeFixtureRunner {
                 "expectedFinalizations": model.finalizationCount,
                 "expected": expected
             ])
+        } else if fixture["mode"] as? String == "segmentation-session" {
+            let baseUnix = fixture["sessionStartedAtUnixSeconds"] as! Double
+            let baseDate = Date(timeIntervalSince1970: baseUnix)
+            model.sessionStartedAt = baseDate
+            model.testNow = baseDate
+            let config = fixture["config"] as! [String: Any]
+            model.activeSegmentationConfig = TranscriptSegmentationConfig(
+                localSilenceFallbackEnabled: config["localSilenceFallbackEnabled"] as? Bool ?? true,
+                localSilenceThresholdSeconds: config["localSilenceThresholdSeconds"] as? Double ?? 4.5,
+                localSilenceMinimumWordCount: config["localSilenceMinimumWordCount"] as? Int ?? 5,
+                longSegmentFallbackEnabled: config["longSegmentFallbackEnabled"] as? Bool ?? true,
+                longSegmentWordThreshold: config["longSegmentWordThreshold"] as? Int ?? 80,
+                longSegmentDurationThresholdSeconds: config["longSegmentDurationThresholdSeconds"] as? Double ?? 90
+            )
+            var recognition = RecognitionConfig()
+            recognition.translationEnabled = config["translationEnabled"] as? Bool ?? true
+            model.activeRecognitionConfig = recognition
+            let events = fixture["events"] as! [[String: Any]]
+            for (index, event) in events.enumerated() {
+                let elapsed = event["elapsedSeconds"] as? Double ?? 0
+                model.testNow = baseDate.addingTimeInterval(elapsed)
+                if event["kind"] as? String == "response" {
+                    let message = event["message"] as! [String: Any]
+                    let data = try JSONSerialization.data(withJSONObject: message, options: [.sortedKeys])
+                    model.handleSonioxMessage(String(data: data, encoding: .utf8)!)
+                } else {
+                    let quiet = event["quietSeconds"] as? Double ?? 0
+                    model.lastTokenReceivedAt = model.testNow.addingTimeInterval(-quiet)
+                    model.autoFinalizeIfNeeded()
+                }
+                let expected = model.entries.map { entry -> [String: Any] in
+                    var value: [String: Any] = [
+                        "english": entry.english,
+                        "chinese": entry.chinese,
+                        "start": entry.start,
+                        "end": entry.end
+                    ]
+                    if let recordedAt = entry.recordedAt {
+                        value["recordedAtUnixSeconds"] = recordedAt.timeIntervalSince1970
+                    }
+                    if let speaker = entry.speaker { value["speaker"] = speaker }
+                    if let language = entry.language { value["language"] = language }
+                    return value
+                }
+                outputs.append([
+                    "kind": event["kind"] as? String ?? "tick",
+                    "finalizationCount": model.finalizationCount,
+                    "expected": expected
+                ])
+                print("Mac production segmentation event \(index + 1): entries=\(expected.count), finalizations=\(model.finalizationCount)")
+            }
         } else {
             let events = fixture["events"] as! [[String: Any]]
             for (index, event) in events.enumerated() {
@@ -179,6 +235,7 @@ struct SonioxRuntimeFixtureRunner {
         let result: [String: Any] = [
             "source": "macOS/ViewModels/SpeechViewModel.swift production method extraction",
             "sourceCommit": ProcessInfo.processInfo.environment["ECHO_SOURCE_SHA"] ?? "unknown",
+            "speechViewModelSha256": ProcessInfo.processInfo.environment["ECHO_SPEECH_VIEW_MODEL_SHA256"] ?? "unknown",
             "mode": fixture["mode"] as? String ?? "sequence",
             "events": outputs
         ]

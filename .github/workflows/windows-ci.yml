@@ -43,6 +43,10 @@ jobs:
       - name: Compile the production handler harness with Mac transcript models
         run: xcrun swiftc -parse-as-library -O -o "$RUNNER_TEMP/soniox-runtime-checks" macOS/Models/TranscriptModels.swift "$RUNNER_TEMP/soniox-runtime-checks.swift"
 
+      - name: Hash the Mac production ViewModel source
+        id: mac-source-hash
+        run: echo "sha256=$(shasum -a 256 macOS/ViewModels/SpeechViewModel.swift | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+
       - name: Run synthetic Soniox responses through Mac production handler
         env:
           ECHO_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -53,6 +57,19 @@ jobs:
         with:
           name: echo-mac-soniox-runtime-fixture
           path: ${{ runner.temp }}/mac-soniox-runtime.json
+          if-no-files-found: error
+
+      - name: Run production Mac token handler and timer on a fixed segmentation session
+        env:
+          ECHO_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          ECHO_SPEECH_VIEW_MODEL_SHA256: ${{ steps.mac-source-hash.outputs.sha256 }}
+        run: '"$RUNNER_TEMP/soniox-runtime-checks" windows/Echo.CoreChecks/Fixtures/segmentation-session-parity.json "$RUNNER_TEMP/mac-segmentation-session.json"'
+
+      - name: Upload Mac production segmentation session result
+        uses: actions/upload-artifact@v4
+        with:
+          name: echo-mac-segmentation-session-fixture
+          path: ${{ runner.temp }}/mac-segmentation-session.json
           if-no-files-found: error
 
       - name: Run two-hour synthetic stream through Mac production handler
@@ -133,12 +150,19 @@ jobs:
           name: echo-mac-segmentation-policy-fixture
           path: windows/Echo.CoreChecks/Fixtures/MacSegmentation
 
+      - name: Download Mac production segmentation session result
+        uses: actions/download-artifact@v4
+        with:
+          name: echo-mac-segmentation-session-fixture
+          path: windows/Echo.CoreChecks/Fixtures/MacSegmentationSession
+
       - name: Run core checks including Mac Archive and Soniox production output
         env:
           ECHO_MAC_ARCHIVE_FIXTURE: windows/Echo.CoreChecks/Fixtures/Runtime/mac-archive.json
           ECHO_MAC_SONIOX_FIXTURE: windows/Echo.CoreChecks/Fixtures/MacRuntime/mac-soniox-runtime.json
           ECHO_MAC_SONIOX_STRESS_FIXTURE: windows/Echo.CoreChecks/Fixtures/MacStress/mac-soniox-stress.json
           ECHO_MAC_SEGMENTATION_FIXTURE: windows/Echo.CoreChecks/Fixtures/MacSegmentation/mac-segmentation-policy.json
+          ECHO_MAC_SEGMENTATION_SESSION_FIXTURE: windows/Echo.CoreChecks/Fixtures/MacSegmentationSession/mac-segmentation-session.json
         run: dotnet run --project windows/Echo.CoreChecks -c Release --no-restore
 
       - name: Upload Windows Archive round trip
