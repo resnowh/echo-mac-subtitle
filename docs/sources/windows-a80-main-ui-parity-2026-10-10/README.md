@@ -38,7 +38,7 @@ Mac 参考：`origin/main` `ae0359dc90da0ccb5e526a275da1747954a49a4f`
 
 - `dotnet run --project windows/Echo.CoreChecks/Echo.CoreChecks.csproj -c Release`：184 项通过。新增断言覆盖语言菜单、目标不翻译常驻、录音提示、三态音源实时切换、字幕容器/行参数/日期留白/tabular数字/空文本占位、纠正入口、存档右对齐、深浅/高对比表面资源和总结范围菜单。
 - `dotnet build windows/Echo.Windows/Echo.Windows.csproj -c Release -p:Platform=x64 --no-restore -p:PublishReadyToRun=false`：成功，0 警告、0 错误。该构建涵盖 WinUI XAML 编译，没有启动 GUI。
-- PR #6 初始提交 `f3326a0` 的 Actions 8 项全部通过；本次追加更改已本机验证，推送新提交后应以新 head 的远端检查为准。
+- PR #6 当前代码提交 `7056cdc25039a136c7adf0b3cce714e1fd1d0f07` 的 Actions 8 项全部通过：Windows CI run [38023773238](https://github.com/resnowh/echo-mac-subtitle/actions/runs/38023773238)、Mac CI run [38023773203](https://github.com/resnowh/echo-mac-subtitle/actions/runs/38023773203)、分发预检 run [38023773159](https://github.com/resnowh/echo-mac-subtitle/actions/runs/38023773159)。
 - `git diff --check`：通过。
 - 没有启动 Echo 或 GUI、没有点击录音/访问用户存档、没有请求云服务、没有读取或保存真实音频。
 
