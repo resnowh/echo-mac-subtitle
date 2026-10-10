@@ -6,7 +6,7 @@
 |---|---|---|---|---|
 | 顶部品牌/工具栏 | 内容 padding 20、纵向 spacing 18；caption bold Mint 品牌；borderless 图标按钮 | 主面板 margin `28,12,28,24`、row spacing 16；36×36 QuietButton | margin 20、row spacing 18；保留 36×36 Windows 图标入口 | 源码参数和 CoreChecks 通过；未做画面对比 |
 | 语言选择 | 两列间隔 14；subheadline semibold/secondary，小箭头 9 pt tertiary；录音提示下方显示；divider opacity .55 | 两个有 Header 的默认 ComboBox | 透明 Button + MenuFlyout；min-height 30、padding 0×3；当前选择、勾选、“不翻译”常驻和下次录音提示；保留设置保存与 AutomationId | 静态接线通过；菜单展开和键盘/Narrator 未实测 |
-| 日期/字幕列表 | LazyVStack 间距 0；日期标签 top/bottom 12/4 | ListView padding `0,16,0,24`，默认 ListViewItem padding/min-height 与行模板叠加 | ListView padding `0,8,0,12`；容器 padding/margin 0、min-height 0、透明；日期 margin `0,12,0,4` | CoreChecks/构建通过；长列表抖动/滚动仍未 GUI 验证 |
+| 日期/字幕列表 | LazyVStack 间距 0；日期标签 top/bottom 12/4；仅 Divider opacity .55 | ListView padding `0,16,0,24`，默认 ListViewItem padding/min-height 与行模板叠加；曾将 opacity 设在整块容器 | ListView padding `0,8,0,12`；容器 padding/margin 0、min-height 0、透明；日期 margin `0,12,0,4`；A83 将 .55 仅施于 1 DIP 顶部分隔线 | CoreChecks/构建通过；真实像素、长列表抖动/滚动仍未 GUI 验证 |
 | Speaker/时间戳 | caption.monospacedDigit、secondary；HH:mm:ss | CaptionTextBlockStyle、secondary | 12 DIP secondary，Tabular numeral；语言与纠正状态条件显示 | 静态 XAML/构建通过；字体实际效果未测 |
 | 双栏正文/分隔线 | 两列顶部对齐、间距14；body、lineSpacing3；纵向 padding7；低对比度 Divider | 双列间距14；正文和默认列表容器留白较松 | 双列等宽、间距14、正文15 DIP、自动换行；行上下6、行间距4；1 DIP 分隔线 opacity .55 | 参数和静态契约通过；截图、真实 DPI/主题仍未验 |
 | 纠正操作 | 元信息行右侧 Pencil + 文字，borderless/secondary | 普通按钮 padding `8,2`、min-height 28 | 透明按钮 padding `4,2`、min-height30；12 DIP 铅笔/文字，保留逐字幕 AutomationId 和焦点状态 | CoreChecks/构建通过；焦点可见态未 GUI 检查 |
@@ -75,3 +75,7 @@ Windows 来源：当前 PR 分支 `feature/windows-mac-parity`；其历史迁移
 5. 发布：签名证书、CI 构建产物留存和干净 Windows 机器安装升级验证。
 
 当前状态结合 `origin/main` 源码比对、A33/A49/A50 隔离 GUI 和 CI；透明缓冲区及点击穿透已实测，但未做 Mac/Windows 截图视觉对照、真实异 DPI 多屏、全屏应用、真实设备采集或正式签名安装验收。
+
+## A83 主字幕对比度回归（2026-10-10）
+
+静态对照 Mac `macOS/Views/TranscriptViews.swift` 的 Divider `.opacity(0.55)` 与 Windows `MainPage.xaml` 后发现，Windows 曾将透明度设在容纳 ListView、空态与新内容提示的父 Grid 上，整块内容会一起变淡。现改为仅让独立的 1 DIP 顶部分隔线使用 0.55 透明度；CoreChecks 检查父容器无 Opacity、透明度仅作用于细线。该检查是静态 XAML 契约，不替代深浅主题及显示器上的视觉验收。未访问用户字幕、录音、API Key 或截图；未启动 Echo；`macOS/` 未改。

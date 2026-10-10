@@ -62,3 +62,9 @@ Mac 参考：`origin/main` `ae0359dc90da0ccb5e526a275da1747954a49a4f`
 - Windows 起始提交 `a2e8f0308b1813d84c9aa33a10d8e703e69fa9b9` 中开始按钮继承通用工具栏 32 DIP 最小高度，停止按钮为 34 DIP。开始按钮现显式设为 34 DIP；CoreChecks 同时断言开始/停止宽 126 DIP、高 34 DIP，避免两种状态跳动。
 - CoreChecks 184 项通过，Release x64 构建 0 警告、0 错误。原始日志 `a82-corechecks.log`、`a82-build.log`，源码及日志哈希 `a82-sha256.txt`。
 - 本次未启动 GUI；实际的控件边界、键盘焦点和截图验收仍由用户反馈。`macOS/` 未修改。
+
+## A83 主字幕分隔线对比度（2026-10-10）
+
+- Mac `TranscriptViews.swift` 对行间 Divider 单独使用 opacity 0.55；Windows 原先把相同值设在整块字幕区域 Grid，造成正文、元信息、空态和浮动提示一并变淡。现由独立的 1 DIP 顶部分隔线承接该透明度。
+- A83 CoreChecks 为 185 项，通过；Release x64 构建 0 警告、0 错误。最终 CoreChecks 与 Release x64 构建分别将产物写入系统临时目录 `Echo-A83-20261010`，原始输出为 `a83-isolated-corechecks.log` 与 `a83-isolated-build.log`；首次把测试输出放进项目目录时发现 SDK 会把旧 `bin` 夹具当源码，`Echo.CoreChecks.csproj` 已明确排除 `bin/**/*.cs`。普通本机输出亦保留在 `a83-corechecks.log` 与 `a83-build.log`，源码/文档/日志 SHA-256 见 `a83-sha256.txt`。
+- 这是源码级与构建验证。没有启动 GUI，因此实际主题混色和对比度仍交由用户视觉验收；没有更改 `macOS/`。

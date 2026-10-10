@@ -155,3 +155,7 @@ Mac CI 从 `SpeechViewModel.swift` 抽取未修改的生产 `handleSonioxMessage
 ## A79：Mac/Windows 生产音频转换对拍（2026-10-10）
 
 固定 float32 输入覆盖 48 kHz mono、44.1 kHz stereo、150 ms 起音和反相双声道。Mac CI 从 `macOS/Audio/AudioCapture.swift` 提取未修改的生产 `MacMicrophoneCapture.convert`，以 1,024 帧块复用 converter，输出 16 kHz mono PCM16 参考；Windows 使用同一输入调用生产 `AudioCapture.ToMono16k`。首次生产对拍发现 Mac 立体声转单声道保留首声道、Windows 原实现平均所有声道；Windows 现按 Mac 保留首声道，并验证反相右声道时仍有信号。比较在 PCM16 量化后允许 0.1 帧步进对齐，以反映 AVFoundation/WDL 的分数采样延迟差异；输出帧数容差 8 帧（0.5 ms）、相关性至少 0.995、RMS 差异至多 3%。PR #5 的 Actions run `38012345830` 全部通过：Mac 生产 harness/artifact、Windows CoreChecks/Release x64 和 Mac Archive 往返；使用其保存的 Mac artifact 本机复跑 184 项全过，四组相关性 0.999864–0.999970，帧数差 6。日志及哈希见 [A79 来源底稿](../sources/windows-a79-audio-conversion-parity-2026-10-10/README.md)。该测试不替代真实设备时钟、WASAPI 欠载或长会话硬件验收。
+
+## A83 主字幕对比度回归（2026-10-10）
+
+静态对照 Mac `macOS/Views/TranscriptViews.swift` 的 Divider `.opacity(0.55)` 与 Windows `MainPage.xaml` 后发现，Windows 曾将透明度设在容纳 ListView、空态与新内容提示的父 Grid 上，整块内容会一起变淡。现改为仅让独立的 1 DIP 顶部分隔线使用 0.55 透明度；CoreChecks 检查父容器无 Opacity、透明度仅作用于细线。该检查是静态 XAML 契约，不替代深浅主题及显示器上的视觉验收。未访问用户字幕、录音、API Key 或截图；未启动 Echo；`macOS/` 未改。

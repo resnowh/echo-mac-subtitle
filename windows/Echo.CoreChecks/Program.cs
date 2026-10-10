@@ -135,6 +135,14 @@ Check(languageButtons.Count == 2
     "top language choices use accessible buttons, retain all options, keep the no-translation target visible, and use Mac tertiary emphasis for chevrons and recording hint");
 var transcriptList = audioModePageXaml.Descendants(XName.Get("ListView", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
     .FirstOrDefault(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value == "TranscriptList");
+var transcriptRegion = transcriptList?.Parent;
+var transcriptDivider = transcriptRegion?.Elements(XName.Get("Border", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
+    .SingleOrDefault(element => element.Attribute("Height")?.Value == "1");
+Check(transcriptRegion?.Attribute("Opacity") is null
+    && transcriptDivider is not null
+    && transcriptDivider.Attribute("Opacity")?.Value == "0.55"
+    && transcriptDivider.Attribute("IsHitTestVisible")?.Value == "False",
+    "transcript divider opacity is isolated to its one-pixel line so subtitles, empty state, and unread-content control keep full contrast");
 var summaryPanel = audioModePageXaml.Descendants(XName.Get("Grid", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))
     .FirstOrDefault(element => element.Attribute(mainPageXamlNamespace + "Name")?.Value == "SummarySection");
 var correctionButton = audioModePageXaml.Descendants(XName.Get("Button", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))

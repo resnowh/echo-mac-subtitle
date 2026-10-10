@@ -12,7 +12,7 @@
 |---|---|---|---|
 | 顶部品牌与工具栏 | 根视图 `.padding(20)`、纵向间隔 18；ECHO 为 caption bold/Mint，右侧浮层/设置/主题/置顶为 borderless 图标按钮 | 主内容边距 `28,12,28,24`、行距 16；ECHO 12 DIP；工具按钮固定 36×36 并带 QuietButton 内边距 | 根边距调整为 20、主行距 18；保留 Windows 标题栏与 36×36 工具按钮及全部入口，保持现有主题 Mint。WinUI 标题栏/图标视觉继续采用平台样式 |
 | 语言选择 | 两个等宽菜单，列距 14；subheadline semibold/secondary，小箭头 9 pt/tertiary；录音提示 caption2/tertiary，语言下方 Divider opacity .55 | 两个带 Header 的 ComboBox，默认背景、边框、内边距和最小高度 | Button + MenuFlyout；按钮透明、padding 0×3、min-height 30，文字 14 DIP semibold/secondary、箭头 9/tertiary；录音提示改用 tertiary brush；选中项有勾；“不翻译”始终在目标列。保留设置保存、动态名称与 AutomationId |
-| 字幕列表容器 | ScrollView + `LazyVStack(spacing: 0)`；日期头上/下留白 12/4；单条内容上下留白 7，元信息至正文间距 5 | ListView 外 padding `0,16,0,24`；未覆盖 ListViewItem 默认 padding/min-height；数据行 Grid padding `0,8`、行间距 5 | ListView padding `0,8,0,12`，列表项 Padding/Margin 清零、MinHeight=0、背景透明；每行上下 6 DIP、行间距 4。日期头补 12/4 DIP，保留动态高度和虚拟化；无逐字幕背景卡片 |
+| 字幕列表容器 | ScrollView + `LazyVStack(spacing: 0)`；日期头上/下留白 12/4，单条内容上下留白 7，元信息至正文间距 5；仅 Divider opacity .55 | ListView 外 padding `0,16,0,24`；未覆盖 ListViewItem 默认 padding/min-height；数据行 Grid padding `0,8`、行间距 5；区域容器 opacity .55 会连字幕一起变淡 | ListView padding `0,8,0,12`，列表项 Padding/Margin 清零、MinHeight=0、背景透明；每行上下 6 DIP、行间距 4。日期头补 12/4 DIP，保留动态高度和虚拟化；顶部 1 DIP 分隔线单独设 opacity .55，不降低整块字幕对比度；无逐字幕背景卡片 |
 | 双栏正文 | HStack 顶部对齐、间距 14；Mac `.font(.body)`、lineSpacing 3；空原文显示省略号，译文留空位 | 两列等宽，间距 14；系统默认正文样式和容器留白 | 两列仍等宽并顶部对齐，间距 14；正文显式 15 DIP，自动换行，空原文显示“…”、空译文保留一行；行间距沿用字体默认；逐字幕底线高 1 DIP、低对比度。正文基线字号和光栅效果待截图核验 |
 | Speaker/时间/语言 | caption.monospacedDigit + secondary；时间格式 HH:mm:ss；语言和纠正状态只在需要时显示 | CaptionTextBlockStyle、secondary；元信息间距 8 | 字号 12 DIP、secondary；时间启用 Tabular numeral；保留语言与“已纠正”条件。元信息横向间距收至 7 DIP |
 | 纠正操作 | Pencil +“纠正/查看校对”，borderless，caption 色，与元信息同行右对齐 | 每行普通 Button，padding `8,2`、min-height 28，WinUI 默认按钮状态可见 | 透明背景、padding `4,2`、min-width 0、min-height 30；12 DIP 铅笔与文字，右对齐；继承 DefaultButtonStyle 以保留 hover/focus 键盘反馈与逐字幕 AutomationId |
@@ -93,3 +93,7 @@ A49 首次在独立包和临时数据目录启动浮层，实际扩展样式缺�
 - 不依赖颜色单独表达录音、连接或错误状态。
 - 主窗口缩放、窄宽布局、100/150/200% DPI、多个显示器分别验收。
 - UI 截图对照必须注明 Windows 版本、分辨率、DPI、主题和窗口尺寸；未运行应用的静态检查不能标作视觉验收通过。
+
+## A83 主字幕对比度回归（2026-10-10）
+
+静态对照 Mac `macOS/Views/TranscriptViews.swift` 的 Divider `.opacity(0.55)` 与 Windows `MainPage.xaml` 后发现，Windows 曾将透明度设在容纳 ListView、空态与新内容提示的父 Grid 上，整块内容会一起变淡。现改为仅让独立的 1 DIP 顶部分隔线使用 0.55 透明度；CoreChecks 检查父容器无 Opacity、透明度仅作用于细线。该检查是静态 XAML 契约，不替代深浅主题及显示器上的视觉验收。未访问用户字幕、录音、API Key 或截图；未启动 Echo；`macOS/` 未改。
