@@ -190,3 +190,7 @@ CoreChecks 检查字幕行加载时读取统一显示状态、并在 ViewModel �
 - 最终 UIA：820×650 时字幕列表 140 DIP，连接状态和音源按钮同排；680×520 时列表 120 DIP、合成字幕完整可见，工具栏使用紧凑换行。最终深色截图和测量 JSON 见 [A88 底稿](../sources/windows-a88-gui-review-2026-10-10/README.md)。
 - CoreChecks 191 项通过；Release x64 和隔离 Debug 包构建均 0 警告/错误。测试包关闭并注销，`macOS/` 未改。
 - **仍待视觉验收**：Mac 并排截图、浅色/高对比、Narrator/键盘焦点、其他 DPI/宽度、录音权限和滚动状态。
+
+## A89 UI Automation smoke 更新（2026-10-10）
+
+旧 `windows/ui-smoke.ps1` 仍期待已移除的语言 ComboBox 和旧电脑音频默认值，且以窗口消息发送 Escape，无法可靠驱动 WinUI flyout。现改为检查当前模式的可访问名称、识别/翻译菜单选项、Settings 四分类、主题、存档菜单、字幕列表和纠正编辑器；Escape 使用 UIA 工具要求的 `send-input`。PowerShell AST 和脚本 UIA selector 与当前 XAML/C# 对照检查通过。本次没有启动应用；端到端结果须在下一次独立合成数据 GUI 批次中记录，不能把静态检查称为 UI smoke 通过。
