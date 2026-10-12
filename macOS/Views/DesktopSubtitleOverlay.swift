@@ -132,7 +132,7 @@ final class SubtitleOverlayController: NSObject, ObservableObject, NSWindowDeleg
     func move(from start: NSRect, translation: CGSize) {
         guard isAdjusting, let panel else { return }
         gestureInProgress = true
-        let origin = NSPoint(x: start.minX + translation.width, y: start.minY + translation.height)
+        let origin = NSPoint(x: start.minX + translation.width, y: start.minY - translation.height)
         applyingFrame = true
         panel.setFrameOrigin(origin)
         applyingFrame = false
