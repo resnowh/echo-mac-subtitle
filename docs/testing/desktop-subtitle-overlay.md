@@ -7,8 +7,8 @@
 - **已通过**：纯 Swift 逻辑测试，覆盖 provisional 整条替换、不重复拼接、译文延迟到达、原译文 entry 配对、新句不继承旧译文、关闭翻译、定稿后保留时间/超时隐藏、新字幕替换和清空。
 - **已通过**：UserDefaults 默认值、配置往返持久化、超范围值回退、至少保留一种语言显示。
 - **已通过**：现有隔离音频/传输/Archive/SRT/识别/分段回归测试；未连接真实麦克风、ScreenCaptureKit 或 Soniox。
-- **待验证**：隔离 Debug / Release Xcode build；结果以本次任务最终报告为准。
-- **未自动执行**：关闭/重启或替换正在运行的 Echo、启动 GUI 实例、使用真实音频设备或影响正在录音的测试，原因是保护用户当前运行的 Echo。
+- **编译状态**：macOS CI 执行 Debug / Release 编译；当前结果以 [GitHub Actions](https://github.com/resnowh/echo-mac-subtitle/actions/workflows/ci.yml) 为准。历史通过记录不等于所有后续提交都会通过。
+- **未覆盖**：真实 GUI、麦克风、ScreenCaptureKit、Soniox 服务端及正在录音的实例。隔离测试不会退出、重启或覆盖正在运行的 Echo。
 
 ## 真实 macOS GUI 验收清单
 
@@ -23,6 +23,6 @@
 - [ ] 外接屏拔出/分辨率变化后回到可见区域；多个 Space 与全屏应用覆盖（仅尽力支持）。
 - [ ] 连续运行数小时后观察内存、CPU、窗口/任务是否有累积。
 
-真实 GUI 项目尚未执行；在保护运行中的 Echo 约束下记录为：
+真实 GUI 项目尚未由这份自动化验收验证；如在用户正在录音期间跳过实测，记录为：
 
 `未自动执行：为避免中断用户当前正在运行的 Echo。`
