@@ -9,6 +9,11 @@ struct DesktopSubtitleOverlaySettings: Codable, Equatable {
     var originalFontSize = 26.0
     var translationFontSize = 24.0
     var opacity = 1.0
+    var backgroundOpacity = 0.0
+    var originalColorHex = "#FFFFFF"
+    var translationColorHex = "#FFFFFF"
+    // nil means fit content height dynamically; a value records a user resize.
+    var preferredHeightFraction: Double?
     var widthFraction = 0.75
     var retentionSeconds = 5.0
     var shadowStrength = 0.35
@@ -23,6 +28,7 @@ struct DesktopSubtitleOverlaySettings: Codable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case enabled, showOriginal, showTranslation, originalFontSize, translationFontSize
         case opacity, widthFraction, retentionSeconds, shadowStrength, clickThrough
+        case backgroundOpacity, originalColorHex, translationColorHex, preferredHeightFraction
         case positionLocked, screenID, normalizedX, normalizedBottom
     }
 
@@ -37,6 +43,12 @@ struct DesktopSubtitleOverlaySettings: Codable, Equatable {
         originalFontSize = Self.validated(try values.decodeIfPresent(Double.self, forKey: .originalFontSize), range: 16...48, fallback: 26)
         translationFontSize = Self.validated(try values.decodeIfPresent(Double.self, forKey: .translationFontSize), range: 14...44, fallback: 24)
         opacity = Self.validated(try values.decodeIfPresent(Double.self, forKey: .opacity), range: 0.35...1, fallback: 1)
+        backgroundOpacity = Self.validated(try values.decodeIfPresent(Double.self, forKey: .backgroundOpacity), range: 0...0.95, fallback: 0)
+        originalColorHex = Self.colorHex(try values.decodeIfPresent(String.self, forKey: .originalColorHex))
+        translationColorHex = Self.colorHex(try values.decodeIfPresent(String.self, forKey: .translationColorHex))
+        if let height = try values.decodeIfPresent(Double.self, forKey: .preferredHeightFraction) {
+            preferredHeightFraction = height.isFinite ? min(max(height, 0.1), 0.85) : nil
+        }
         widthFraction = Self.validated(try values.decodeIfPresent(Double.self, forKey: .widthFraction), range: 0.35...0.95, fallback: 0.75)
         retentionSeconds = Self.validated(try values.decodeIfPresent(Double.self, forKey: .retentionSeconds), range: 1...15, fallback: 5)
         shadowStrength = Self.validated(try values.decodeIfPresent(Double.self, forKey: .shadowStrength), range: 0...1, fallback: 0.35)
@@ -57,6 +69,12 @@ struct DesktopSubtitleOverlaySettings: Codable, Equatable {
         result.originalFontSize = Self.validated(originalFontSize, range: 16...48, fallback: 26)
         result.translationFontSize = Self.validated(translationFontSize, range: 14...44, fallback: 24)
         result.opacity = Self.validated(opacity, range: 0.35...1, fallback: 1)
+        result.backgroundOpacity = Self.validated(backgroundOpacity, range: 0...0.95, fallback: 0)
+        result.originalColorHex = Self.colorHex(originalColorHex)
+        result.translationColorHex = Self.colorHex(translationColorHex)
+        if let height = preferredHeightFraction {
+            result.preferredHeightFraction = height.isFinite ? min(max(height, 0.1), 0.85) : nil
+        }
         result.widthFraction = Self.validated(widthFraction, range: 0.35...0.95, fallback: 0.75)
         result.retentionSeconds = Self.validated(retentionSeconds, range: 1...15, fallback: 5)
         result.shadowStrength = Self.validated(shadowStrength, range: 0...1, fallback: 0.35)
@@ -75,6 +93,14 @@ struct DesktopSubtitleOverlaySettings: Codable, Equatable {
         guard let data = defaults.data(forKey: userDefaultsKey),
               let value = try? JSONDecoder().decode(Self.self, from: data) else { return .defaults }
         return value.validated()
+    }
+
+    static func colorHex(_ value: String?) -> String {
+        guard let value, value.count == 7, value.first == "#",
+              value.dropFirst().utf8.allSatisfy({
+                  (48...57).contains($0) || (65...70).contains($0) || (97...102).contains($0)
+              }) else { return "#FFFFFF" }
+        return value.uppercased()
     }
 
     private static func validated(_ value: Double?, range: ClosedRange<Double>, fallback: Double) -> Double {
