@@ -130,40 +130,87 @@ struct DesktopSubtitleOverlayState: Equatable {
     }
 }
 
+/// The immediately preceding sentence is retained independently of the
+/// current provisional sentence. A replacement must not erase its text.
+struct DesktopSubtitleOverlayPrevious: Equatable {
+    var state: DesktopSubtitleOverlayState
+    var replacedAt: Date
+
+    func remainsVisible(at date: Date, retention: TimeInterval) -> Bool {
+        date.timeIntervalSince(replacedAt) < retention
+    }
+}
+
 struct DesktopSubtitleOverlayReducer {
     private(set) var current: DesktopSubtitleOverlayState?
+    private(set) var previous: DesktopSubtitleOverlayPrevious?
 
     mutating func update(_ entry: SubtitleEntry, translationEnabled: Bool, at date: Date = Date()) {
         let original = entry.english.trimmingCharacters(in: .whitespacesAndNewlines)
         let translation = entry.chinese.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !original.isEmpty || (translationEnabled && !translation.isEmpty) else { return }
-        let sameEntry = current?.entryID == entry.id
-        // New meaningful text on an already-finalized entry (e.g. late translation
-        // or a manual correction) must remain readable for a full retention window.
-        // Identical updates must not indefinitely extend that window.
-        let textChanged = sameEntry &&
-            (current?.original != original || current?.translation != translation ||
-             current?.translationEnabled != translationEnabled)
-        let wasFinal = sameEntry && (current?.isFinal ?? false)
-        let previousFinalizedAt = sameEntry ? current?.finalizedAt : nil
-        current = DesktopSubtitleOverlayState(
-            entryID: entry.id,
-            original: original,
-            translation: translation,
-            translationEnabled: translationEnabled,
-            isFinal: wasFinal,
-            revision: UUID(),
-            finalizedAt: wasFinal && textChanged ? date : previousFinalizedAt
-        )
+
+        // Translation may arrive after a new source sentence has started.
+        // Update the retained sentence by ID rather than switching the live
+        // line back to the old sentence or pairing text with the new one.
+        if current?.entryID != entry.id, previous?.state.entryID == entry.id {
+            guard let old = previous else { return }
+            let updated = Self.updatedState(old.state, entry: entry,
+                                            translationEnabled: translationEnabled, at: date)
+            if updated.original != old.state.original ||
+               updated.translation != old.state.translation ||
+               updated.translationEnabled != old.state.translationEnabled {
+                previous = DesktopSubtitleOverlayPrevious(state: updated, replacedAt: date)
+            }
+            return
+        }
+
+        if current?.entryID != entry.id {
+            if let outgoing = current {
+                previous = DesktopSubtitleOverlayPrevious(state: outgoing, replacedAt: date)
+            }
+            current = nil
+        }
+        current = Self.updatedState(current, entry: entry,
+                                    translationEnabled: translationEnabled, at: date)
     }
 
     mutating func finalize(_ entry: SubtitleEntry, translationEnabled: Bool, at date: Date = Date()) {
         update(entry, translationEnabled: translationEnabled, at: date)
+        if previous?.state.entryID == entry.id, current?.entryID != entry.id {
+            previous?.state.isFinal = true
+            previous?.state.finalizedAt = date
+            return
+        }
         guard current?.entryID == entry.id else { return }
         current?.isFinal = true
         current?.finalizedAt = date
         current?.revision = UUID()
     }
 
-    mutating func clear() { current = nil }
+    mutating func clear() {
+        current = nil
+        previous = nil
+    }
+
+    private static func updatedState(_ prior: DesktopSubtitleOverlayState?,
+                                     entry: SubtitleEntry, translationEnabled: Bool,
+                                     at date: Date) -> DesktopSubtitleOverlayState {
+        let original = entry.english.trimmingCharacters(in: .whitespacesAndNewlines)
+        let translation = entry.chinese.trimmingCharacters(in: .whitespacesAndNewlines)
+        let sameEntry = prior?.entryID == entry.id
+        let textChanged = sameEntry &&
+            (prior?.original != original || prior?.translation != translation ||
+             prior?.translationEnabled != translationEnabled)
+        let wasFinal = sameEntry && (prior?.isFinal ?? false)
+        return DesktopSubtitleOverlayState(
+            entryID: entry.id,
+            original: original,
+            translation: translation,
+            translationEnabled: translationEnabled,
+            isFinal: wasFinal,
+            revision: UUID(),
+            finalizedAt: wasFinal && textChanged ? date : (sameEntry ? prior?.finalizedAt : nil)
+        )
+    }
 }
