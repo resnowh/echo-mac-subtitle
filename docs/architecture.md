@@ -28,19 +28,6 @@ Audio Source
 
 ## 模块职责
 
-### 字幕纠正旁路
-
-每行“纠正/查看校对”打开 `SubtitleCorrectionEditor`，不停止录音。ViewModel 通过
-`SubtitleEntry.edit/applyRecognition/undoCorrection` 维护锁定和历史，强制保存当前段，并按稳定 UUID 更新历史段。
-DeepSeek 校对默认关闭；可手动请求，或开启后在分句结束 3 秒后排队。每次处理一句和附近两句上下文，
-一个请求在途、最多 20 个等待任务、手动任务优先、最多保留 100 个候选，失败不自动重试。
-清空/新录音准备取消旧任务并变更 generation；结果还必须匹配 archive、语言配置、文本和纠正 revision。
-关闭自动校对后不接纳在途自动结果。AI 不直接修改字幕，uncertain 候选要求人工核对。
-只发送文字不发送音频，使用独立 JSON 请求，不改变总结或音频/WebSocket 生命周期。
-JSON 参数依据 [DeepSeek 官方说明](https://api-docs.deepseek.com/guides/json_mode/)，截断或缺字段响应会被拒绝。
-UserDefaults 的 `correctionTerms` 保存课程术语，AI 校对立即使用，Soniox 从下次建连使用；
-`aiCorrectionEnabled` 缺省为 false。
-
 - `Models/TranscriptModels.swift`：平台无关的字幕、存档、输入源、主题和识别配置模型。
 - `Audio/AudioCapture.swift`：音频采集抽象；`AudioCaptureSource` 描述 PCM 话筒源，`SystemAudioCaptureSource` 描述系统音频源。
 - `Audio/AudioCapture.swift` 中的 `MacMicrophoneCapture`：macOS `AVAudioEngine` 话筒实现。
@@ -62,7 +49,20 @@ UserDefaults 的 `correctionTerms` 保存课程术语，AI 校对立即使用，
 
 依赖方向是：采集实现 → 音频抽象/PCM pipeline → `SpeechViewModel` → Soniox transport / token processing / 存储 / SwiftUI。Soniox request 和 transport 已独立于 View；session 生命周期与 token 业务协调仍由 `SpeechViewModel` 负责。
 
-### 桌面悬浮字幕旁路
+## 字幕纠正与校对旁路
+
+每行“纠正/查看校对”打开 `SubtitleCorrectionEditor`，不停止录音。ViewModel 通过
+`SubtitleEntry.edit/applyRecognition/undoCorrection` 维护锁定和历史，强制保存当前段，并按稳定 UUID 更新历史段。
+DeepSeek 校对默认关闭；可手动请求，或开启后在分句结束 3 秒后排队。每次处理一句和附近两句上下文，
+一个请求在途、最多 20 个等待任务、手动任务优先、最多保留 100 个候选，失败不自动重试。
+清空/新录音准备取消旧任务并变更 generation；结果还必须匹配 archive、语言配置、文本和纠正 revision。
+关闭自动校对后不接纳在途自动结果。AI 不直接修改字幕，uncertain 候选要求人工核对。
+只发送文字不发送音频，使用独立 JSON 请求，不改变总结或音频/WebSocket 生命周期。
+JSON 参数依据 [DeepSeek 官方说明](https://api-docs.deepseek.com/guides/json_mode/)，截断或缺字段响应会被拒绝。
+UserDefaults 的 `correctionTerms` 保存课程术语，AI 校对立即使用，Soniox 从下次建连使用；
+`aiCorrectionEnabled` 缺省为 false。
+
+## 桌面悬浮字幕旁路
 
 ```mermaid
 flowchart LR
@@ -83,8 +83,8 @@ flowchart LR
 ## 平台边界
 
 - **macOS-specific**：`MacMicrophoneCapture`、`MacSystemAudioCapture`、`AVAudioConverter`/`AVAudioEngine`、ScreenCaptureKit、`NSWindow` 置顶、NSSavePanel 以及当前 Xcode app target。
-- **平台无关**：`TranscriptModels`、`PCM16TimelineMixer`、`PCM16Prebuffer`、`SRTExporter`、`TranscriptArchiveStore` 的数据和纯逻辑部分、`RecognitionConfig` 到 request 字典的映射、DeepSeek request 构造。
-- **未来 Windows**：实现与 `AudioCaptureSource`/`SystemAudioCaptureSource` 等价的 Windows 采集适配器即可接入相同的格式转换、混音、WebSocket、字幕和存储层；电脑音频预计使用 WASAPI。当前仓库没有 Windows 实现，也不承诺 Windows 编译。
+- **可移植的纯逻辑（当前在 macOS Swift target 中）**：`TranscriptModels`、`PCM16TimelineMixer`、`PCM16Prebuffer`、`SRTExporter`、`TranscriptArchiveStore` 的数据和纯逻辑部分、`RecognitionConfig` 到 request 字典的映射、DeepSeek request 构造。
+- **Windows 预览（独立分支）**：[`feature/windows-preview`](https://github.com/resnowh/echo-mac-subtitle/tree/feature/windows-preview) 提供原生 WinUI 3/C# 实现，**不是**把此处 Swift 模块直接编译到 Windows。本文模块路径均指 macOS `main`；Windows 的具体实现、能力和验证结果应以对应分支为准。
 
 ## 并发与生命周期
 
