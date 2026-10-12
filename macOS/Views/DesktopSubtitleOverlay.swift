@@ -42,14 +42,18 @@ private final class TransparentSubtitlePanel: NSPanel {
 
 final class SubtitleOverlayController: NSObject, ObservableObject, NSWindowDelegate {
     @Published private(set) var isAdjusting = false
+
     var hasWindow: Bool { panel != nil }
-    var currentPanelWidth: CGFloat { panel?.frame.width ?? 700 }
+    var currentPanelFrame: NSRect? { panel?.frame }
+
     private var panel: TransparentSubtitlePanel?
     private var retainedSpeechModel: SpeechViewModel?
     private weak var settingsStore: DesktopSubtitleOverlaySettingsStore?
     private var applyingFrame = false
+    private var gestureInProgress = false
     private var screenChangeObserver: NSObjectProtocol?
     private var lastAppliedWidthFraction: Double?
+    private var measuredContentHeight: CGFloat = 140
 
     override init() {
         super.init()
@@ -84,27 +88,30 @@ final class SubtitleOverlayController: NSObject, ObservableObject, NSWindowDeleg
     func hide() {
         guard Thread.isMainThread else { DispatchQueue.main.async { [weak self] in self?.hide() }; return }
         panel?.orderOut(nil)
+        panel?.delegate = nil
         panel?.contentView = nil
         panel = nil
         retainedSpeechModel = nil
         settingsStore = nil
         isAdjusting = false
+        gestureInProgress = false
     }
 
     func setAdjusting(_ value: Bool) {
+        guard let panel else { return }
+        if !value && gestureInProgress { commitPlacement(resized: false) }
         isAdjusting = value
         updateInteraction()
-        if value, panel?.isVisible != true,
-           let model = retainedSpeechModel, let settings = settingsStore {
-            show(model: model, settings: settings, adjusting: true)
-        }
+        if value { panel.orderFrontRegardless() }
+        if !value { updateFrame(forceDefault: false) }
     }
 
     func refresh(settings: DesktopSubtitleOverlaySettings) {
         guard let panel else { return }
         if !settings.enabled { hide(); return }
         updateInteraction()
-        if lastAppliedWidthFraction.map({ abs($0 - settings.widthFraction) > 0.001 }) ?? true {
+        if !gestureInProgress &&
+            (lastAppliedWidthFraction.map { abs($0 - settings.widthFraction) > 0.001 } ?? true) {
             updateFrame(forceDefault: false)
         }
         if !panel.isVisible { panel.orderFrontRegardless() }
@@ -112,20 +119,91 @@ final class SubtitleOverlayController: NSObject, ObservableObject, NSWindowDeleg
 
     func resetPosition() {
         settingsStore?.resetPosition()
-        if settingsStore != nil { updateFrame(forceDefault: true) }
+        updateFrame(forceDefault: true)
     }
 
-    func resize(width: CGFloat) {
-        guard let panel, settingsStore?.settings != nil,
-              let screen = NSScreen.screens.first(where: { $0.frame.intersects(panel.frame) }) else { return }
-        settingsStore?.update { $0.widthFraction = min(max(width / screen.visibleFrame.width, 0.35), 0.95) }
-        if let latest = settingsStore?.settings { refresh(settings: latest) }
+    func resetAutoHeight() {
+        settingsStore?.update { $0.preferredHeightFraction = nil }
+        updateFrame(forceDefault: false)
+    }
+
+    // SwiftUI gestures explicitly move the panel; background dragging was
+    // unreliable because the hosting view and scroll content consume events.
+    func move(from start: NSRect, translation: CGSize) {
+        guard isAdjusting, let panel else { return }
+        gestureInProgress = true
+        let origin = NSPoint(x: start.minX + translation.width, y: start.minY + translation.height)
+        applyingFrame = true
+        panel.setFrameOrigin(origin)
+        applyingFrame = false
+    }
+
+    func resize(from start: NSRect, translation: CGSize) {
+        guard isAdjusting, let panel, let settings = settingsStore?.settings else { return }
+        gestureInProgress = true
+        let visible = screen(for: settings).visibleFrame
+        let width = min(max(start.width + translation.width, min(280, visible.width)), visible.width)
+        let height = min(max(start.height - translation.height, 90), max(90, visible.height * 0.85))
+        // Bottom-right grip: keep top-left anchored as the user drags.
+        let x = min(max(start.minX, visible.minX), visible.maxX - width)
+        let y = min(max(start.maxY - height, visible.minY), visible.maxY - height)
+        applyingFrame = true
+        panel.setFrame(NSRect(x: x, y: y, width: width, height: height),
+                       display: true, animate: false)
+        applyingFrame = false
+    }
+
+    func commitPlacement(resized: Bool) {
+        guard let panel, let store = settingsStore else { gestureInProgress = false; return }
+        gestureInProgress = false
+        let screen = NSScreen.screens.max {
+            $0.frame.intersection(panel.frame).width * $0.frame.intersection(panel.frame).height <
+            $1.frame.intersection(panel.frame).width * $1.frame.intersection(panel.frame).height
+        } ?? screen(for: store.settings)
+        let visible = screen.visibleFrame
+        let width = min(panel.frame.width, visible.width)
+        let height = min(panel.frame.height, visible.height * 0.85)
+        let origin = NSPoint(
+            x: min(max(panel.frame.minX, visible.minX), visible.maxX - width),
+            y: min(max(panel.frame.minY, visible.minY), visible.maxY - height)
+        )
+        applyingFrame = true
+        panel.setFrame(NSRect(origin: origin, size: NSSize(width: width, height: height)),
+                       display: true, animate: false)
+        applyingFrame = false
+        store.update {
+            $0.screenID = Self.screenID(screen)
+            $0.normalizedX = min(max((origin.x + width / 2 - visible.minX) / visible.width, 0), 1)
+            $0.normalizedBottom = min(max((origin.y - visible.minY) / visible.height, 0), 1)
+            $0.widthFraction = min(max(width / visible.width, 0.35), 0.95)
+            if resized { $0.preferredHeightFraction = min(max(height / visible.height, 0.1), 0.85) }
+        }
+        lastAppliedWidthFraction = store.settings.widthFraction
+        if !resized { updateFrame(forceDefault: false) }
+    }
+
+    func contentHeightDidChange(_ value: CGFloat) {
+        guard value.isFinite, value > 0 else { return }
+        measuredContentHeight = value
+        guard let panel, let settings = settingsStore?.settings,
+              settings.preferredHeightFraction == nil, !gestureInProgress, !isAdjusting else { return }
+        let visible = screen(for: settings).visibleFrame
+        let height = min(max(value, 72), visible.height * 0.85)
+        guard abs(panel.frame.height - height) > 2 else { return }
+        let origin = NSPoint(
+            x: panel.frame.minX,
+            y: min(max(panel.frame.minY, visible.minY), visible.maxY - height)
+        )
+        applyingFrame = true
+        panel.setFrame(NSRect(origin: origin, size: NSSize(width: panel.frame.width, height: height)),
+                       display: true, animate: false)
+        applyingFrame = false
     }
 
     private func createPanel(model: SpeechViewModel, settings: DesktopSubtitleOverlaySettingsStore) {
         let panel = TransparentSubtitlePanel(
-            contentRect: NSRect(x: 0, y: 0, width: 700, height: 110),
-            styleMask: [.borderless, .nonactivatingPanel, .resizable],
+            contentRect: NSRect(x: 0, y: 0, width: 700, height: 140),
+            styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
@@ -138,8 +216,6 @@ final class SubtitleOverlayController: NSObject, ObservableObject, NSWindowDeleg
         panel.becomesKeyOnlyIfNeeded = true
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
-        panel.minSize = NSSize(width: 280, height: 72)
-        panel.maxSize = NSSize(width: 3_000, height: 180)
         panel.delegate = self
         panel.contentView = NSHostingView(rootView: DesktopSubtitleOverlayView(
             feed: model.desktopSubtitleOverlayFeed,
@@ -151,30 +227,28 @@ final class SubtitleOverlayController: NSObject, ObservableObject, NSWindowDeleg
 
     private func updateInteraction() {
         guard let panel, let settings = settingsStore?.settings else { return }
-        panel.ignoresMouseEvents = settings.clickThrough && !isAdjusting
-        panel.isMovableByWindowBackground = isAdjusting && !settings.positionLocked
-        if isAdjusting && settings.positionLocked {
-            // Adjustment mode temporarily overrides the saved lock.
-            panel.isMovableByWindowBackground = true
-        }
+        panel.ignoresMouseEvents = !isAdjusting && settings.clickThrough
+        // All adjustment gestures are explicit in the SwiftUI hosting view.
+        panel.isMovableByWindowBackground = false
     }
 
     private func updateFrame(forceDefault: Bool) {
-        guard let panel, let settings = settingsStore?.settings else { return }
-        let screen = screen(for: settings)
-        let visible = screen.visibleFrame
-        let width = min(max(visible.width * settings.widthFraction, 280), visible.width)
-        let height: CGFloat = 150
+        guard let panel, let settings = settingsStore?.settings, !gestureInProgress else { return }
+        let visible = screen(for: settings).visibleFrame
+        let width = min(max(visible.width * settings.widthFraction, min(280, visible.width)), visible.width)
+        let height = min(max(settings.preferredHeightFraction.map { visible.height * $0 }
+                             ?? measuredContentHeight, 72), visible.height * 0.85)
         let xFraction = forceDefault ? 0.5 : settings.normalizedX
         let bottomFraction = forceDefault ? 0.09 : settings.normalizedBottom
-        var origin = NSPoint(
-            x: visible.minX + visible.width * xFraction - width / 2,
-            y: visible.minY + visible.height * bottomFraction
+        let origin = NSPoint(
+            x: min(max(visible.minX + visible.width * xFraction - width / 2, visible.minX),
+                   visible.maxX - width),
+            y: min(max(visible.minY + visible.height * bottomFraction, visible.minY),
+                   visible.maxY - height)
         )
-        origin.x = min(max(origin.x, visible.minX), visible.maxX - width)
-        origin.y = min(max(origin.y, visible.minY), visible.maxY - height)
         applyingFrame = true
-        panel.setFrame(NSRect(origin: origin, size: NSSize(width: width, height: height)), display: true, animate: false)
+        panel.setFrame(NSRect(origin: origin, size: NSSize(width: width, height: height)),
+                       display: true, animate: false)
         applyingFrame = false
         lastAppliedWidthFraction = settings.widthFraction
     }
@@ -187,25 +261,6 @@ final class SubtitleOverlayController: NSObject, ObservableObject, NSWindowDeleg
 
     private static func screenID(_ screen: NSScreen) -> String? {
         (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.stringValue
-    }
-
-    func windowDidMove(_ notification: Notification) { saveCurrentPlacement() }
-    func windowDidResize(_ notification: Notification) { saveCurrentPlacement() }
-
-    private func saveCurrentPlacement() {
-        guard !applyingFrame, let panel, let store = settingsStore,
-              let screen = NSScreen.screens.first(where: { $0.frame.intersects(panel.frame) }) ?? NSScreen.main else { return }
-        let visible = screen.visibleFrame
-        let x = min(max((panel.frame.midX - visible.minX) / visible.width, 0), 1)
-        let bottom = min(max((panel.frame.minY - visible.minY) / visible.height, 0), 1)
-        let id = Self.screenID(screen)
-        let widthFraction = min(max(panel.frame.width / visible.width, 0.35), 0.95)
-        store.update {
-            $0.screenID = id
-            $0.normalizedX = x
-            $0.normalizedBottom = bottom
-            $0.widthFraction = widthFraction
-        }
     }
 }
 
