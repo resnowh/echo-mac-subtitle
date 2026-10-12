@@ -1,38 +1,46 @@
 # Echo 文档中心 / Documentation
 
-[返回项目首页](../README.md) · [English README](../README.en.md)
+[项目首页](../README.md) · [English](../README.en.md) · [报告问题](https://github.com/resnowh/echo-mac-subtitle/issues)
 
-## 用户文档
+这里汇总用户指南、实现说明、测试与发布记录。**功能以当前代码和 README 为准；规划文件不代表已经交付。**
 
-- [透明桌面悬浮字幕](features/desktop-subtitle-overlay.md)：实际交互、显示策略、外观与已知限制。
-- [常见问题 FAQ](FAQ.md)：系统要求、API Key、权限、收费、安装与数据安全。
-- [变更记录](../CHANGELOG.md)：已实现的代码变更，非未来承诺。
-- [发布与安装状态](release.md)：为什么目前没有官方 DMG；未来签名、公证与验收要求。
+## 使用 Echo
 
-## 技术与开发
-
-- [当前架构](architecture.md)：macOS 采集、PCM、Soniox、字幕与持久化。
-- [数据模型](data-model.md)：字幕、Speaker、纠正历史、Archive 与 SRT 时间线。
-- [悬浮字幕验收](testing/desktop-subtitle-overlay.md)：隔离验证和真实 GUI 待验收项目。
-- [自动化测试](../tests/README.md)：隔离测试范围和不能替代的真实设备验收。
-- [CI 构建](https://github.com/resnowh/echo-mac-subtitle/actions/workflows/ci.yml)：macOS Debug/Release 与无设备依赖测试。
-
-## 规划与平台状态
-
-- [路线图入口](roadmap/README.md)：**历史设计方案**及当前状态说明；它不是功能完成清单。
-- [Mac 优先的桌面实施方案](roadmap/07-Mac优先的桌面实施方案.md)：较新的桌面设计方向。
-- [macOS 分发规划](roadmap/06-正式分发与上线计划.md)：发布验收细目。
-
-### 平台现状
-
-| 平台 | 代码位置 | 状态 |
+| 文档 | 适合谁 | 内容 |
 | --- | --- | --- |
-| macOS | `main` | 开发预览；未发布公证安装包 |
-| Windows | `feature/windows-preview` | 独立原生预览；未正式发布 |
-| Android / iOS | 规划文档 | 尚未实现 |
+| [快速开始](../README.md#使用-echo) | 第一次接触 Echo | 系统要求、API Key、从源码运行 |
+| [常见问题](FAQ.md) | 使用者 | 授权、费用、字幕、离线和数据处理 |
+| [悬浮字幕](features/desktop-subtitle-overlay.md) | 需要边看边翻译的用户 | 显示、位置、点击穿透及未验证边界 |
+| [发布与安装](release.md) | 想下载正式版本的用户及维护者 | DMG、签名、公证、验收及发布条件 |
+| [变更记录](../CHANGELOG.md) | 关注进展的用户 | 已实现的功能与修复 |
 
-> 旧规划文档保留原始决策背景，可能引用历史提交、设计提议或未来目标。判断**当前实现**请优先查看 `main` 源码、Windows 分支、[README](../README.md) 和 [CHANGELOG](../CHANGELOG.md)。不要将旧文件中“尚未实现 Windows”等历史陈述当成现状。
+## 技术实现
+
+| 文档 | 内容 |
+| --- | --- |
+| [架构说明](architecture.md) | 音频采集、PCM 混音、Soniox、字幕、Archive |
+| [数据模型](data-model.md) | 字幕、时间轴、Speaker、纠正及持久化 |
+| [悬浮字幕测试](testing/desktop-subtitle-overlay.md) | 隔离测试与真实 Mac GUI 待验收事项 |
+| [自动化测试](../tests/README.md) | 测试执行、覆盖与限制 |
+| [macOS CI](https://github.com/resnowh/echo-mac-subtitle/actions/workflows/ci.yml) | 构建与隔离验证结果 |
+
+## 路线图与平台
+
+- [历史规划总览](roadmap/README.md)：保留设计决策、未来方案及历史上下文。
+- [Mac 优先实施计划](roadmap/07-Mac优先的桌面实施方案.md)：桌面体验目标。
+- [分发与上线计划](roadmap/06-正式分发与上线计划.md)：签名、安装和升级的详细门槛。
+
+| 平台 | 当前状态 |
+| --- | --- |
+| macOS | `main` 开发预览；无经过签名、公证的公开安装包 |
+| Windows | [`feature/windows-preview`](https://github.com/resnowh/echo-mac-subtitle/tree/feature/windows-preview) 原生预览；尚未正式发行 |
+| Android / iOS | 远期规划，未实现 |
+
+**发行前提：** 项目维护者目前尚未加入付费 Apple Developer Program，因此 Developer ID 签名、公证尚未进行；发行工作流准备好并不代表已有正式安装包。
+
+> [!NOTE]
+> `roadmap/` 是历史设计记录，可能包含已改变的技术选型或时间估算。遇到冲突，以当前源码、[项目 README](../README.md)、[变更记录](../CHANGELOG.md) 和 [发布文档](release.md) 的状态为准。
 
 ## 安全反馈
 
-欢迎提交 [GitHub Issues](https://github.com/resnowh/echo-mac-subtitle/issues)；请避免上传 API Key、录音原文、个人信息、完整敏感字幕或含密钥的日志。
+欢迎提交 [GitHub Issues](https://github.com/resnowh/echo-mac-subtitle/issues)。不要上传 API Key、私人录音、真实字幕文本或包含敏感内容的完整日志。
