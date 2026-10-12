@@ -1,5 +1,7 @@
 # Echo macOS 正式分发与验收
 
+> 2026-10-12 状态更新：维护者**尚未加入付费 Apple Developer Program**，因此无法进行真实 Developer ID 签名或 Apple 公证。先保留可重复构建和打包预检流程；不把未经公证的构建作为官方公开下载。
+
 > 2026-10-08：此文档描述**准备中的发布流水线**。截至本文编写时，未完成真实 Developer ID 签名、公证、干净设备安装，也未创建公众 GitHub Release。不要把 CI 的 unsigned Release build 当作最终安装包。
 
 ## 首发范围与原则
@@ -53,9 +55,9 @@
 | 项目 | 状态 |
 |---|---|
 | Debug / Release CI（未签名） | 已通过历史 CI |
-| Universal DMG 预检 | 等本 PR 工作流执行 |
-| Developer ID Application 签名 | 未执行（缺用户证书） |
-| Apple notarization + staple | 未执行（缺公证凭据） |
+| Universal DMG 预检 | 已配置自动预检流水线；具体执行以 Actions 最新结果为准 |
+| Developer ID Application 签名 | 未执行（尚未加入付费 Apple Developer Program） |
+| Apple notarization + staple | 未执行（尚未加入付费 Apple Developer Program） |
 | Hardened Runtime + 真机权限 | 未执行 |
 | 干净机器安装/更新 | 未执行 |
 | 长时录音 / 异常恢复 | 待专门验收 |
