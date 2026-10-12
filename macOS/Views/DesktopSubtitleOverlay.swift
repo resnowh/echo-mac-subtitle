@@ -264,92 +264,157 @@ final class SubtitleOverlayController: NSObject, ObservableObject, NSWindowDeleg
     }
 }
 
+private struct SubtitleContentHeightPreference: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 private struct DesktopSubtitleOverlayView: View {
     @ObservedObject var feed: DesktopSubtitleOverlayFeed
     @ObservedObject var settingsStore: DesktopSubtitleOverlaySettingsStore
     @ObservedObject var controller: SubtitleOverlayController
+
     @State private var visibleState: DesktopSubtitleOverlayState?
     @State private var expirationTask: Task<Void, Never>?
-    @State private var resizeStartWidth: CGFloat?
+    @State private var moveStartFrame: NSRect?
+    @State private var resizeStartFrame: NSRect?
 
     private var settings: DesktopSubtitleOverlaySettings { settingsStore.settings }
 
     var body: some View {
-        VStack(spacing: 5) {
-            if let state = visibleState, state.remainsVisible(at: Date(), retention: settings.retentionSeconds) {
-                subtitleLines(state)
-                    .transition(.opacity)
-            } else if controller.isAdjusting {
-                VStack(spacing: 5) {
-                    if settings.showOriginal {
-                        subtitleText("Original subtitle text", size: settings.originalFontSize, weight: .medium)
-                    }
-                    if settings.showTranslation {
-                        subtitleText("实时双语字幕预览", size: settings.translationFontSize, weight: .regular)
+        ZStack(alignment: .bottomTrailing) {
+            ScrollView(.vertical) {
+                VStack(spacing: 6) {
+                    if let state = visibleState,
+                       state.remainsVisible(at: Date(), retention: settings.retentionSeconds) {
+                        subtitleLines(state)
+                    } else if controller.isAdjusting {
+                        if settings.showOriginal {
+                            subtitleText("Drag to move · resize from the corner",
+                                         size: settings.originalFontSize, weight: .medium,
+                                         colorHex: settings.originalColorHex)
+                        }
+                        if settings.showTranslation {
+                            subtitleText("拖动字幕移动位置，右下角调整宽度和高度",
+                                         size: settings.translationFontSize, weight: .regular,
+                                         colorHex: settings.translationColorHex)
+                        }
                     }
                 }
-                .transition(.opacity)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 12)
+                .background {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.black.opacity(settings.backgroundOpacity))
+                }
+                // Measure unconstrained text (no two-line ellipsis) before the
+                // scroll viewport clips it. The panel grows to available space.
+                .background {
+                    GeometryReader { proxy in
+                        Color.clear.preference(key: SubtitleContentHeightPreference.self,
+                                               value: proxy.size.height)
+                    }
+                }
             }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.horizontal, 18)
-        .padding(.vertical, 8)
-        .opacity(settings.opacity)
-        .overlay {
+            .scrollIndicators(.automatic)
+            .scrollDisabled(controller.isAdjusting)
+            .contentShape(Rectangle())
+            .gesture(controller.isAdjusting ? moveGesture : nil)
+
             if controller.isAdjusting {
-                ZStack(alignment: .bottomTrailing) {
-                    RoundedRectangle(cornerRadius: 5).stroke(.mint.opacity(0.8), lineWidth: 1)
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.mint)
-                        .padding(4)
-                        .gesture(DragGesture(minimumDistance: 1)
-                            .onChanged { value in
-                                if resizeStartWidth == nil { resizeStartWidth = controller.currentPanelWidth }
-                                controller.resize(width: (resizeStartWidth ?? 700) + value.translation.width)
-                            }
-                            .onEnded { _ in resizeStartWidth = nil })
-                }
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(.mint.opacity(0.9), lineWidth: 1.5)
+                    .allowsHitTesting(false)
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 36, height: 36)
+                    .background(.mint, in: RoundedRectangle(cornerRadius: 8))
+                    .contentShape(Rectangle())
+                    .accessibilityLabel("拖动以调整字幕宽度和高度")
+                    .highPriorityGesture(resizeGesture)
             }
         }
         .background(Color.clear)
-        .allowsHitTesting(controller.isAdjusting)
+        .onPreferenceChange(SubtitleContentHeightPreference.self) { height in
+            controller.contentHeightDidChange(height)
+        }
         .onAppear { accept(feed.current) }
         .onChange(of: feed.current) { _, state in accept(state) }
         .onChange(of: settings.retentionSeconds) { _, _ in accept(feed.current) }
         .onDisappear { expirationTask?.cancel() }
     }
 
+    private var moveGesture: some Gesture {
+        DragGesture(minimumDistance: 2)
+            .onChanged { value in
+                if moveStartFrame == nil { moveStartFrame = controller.currentPanelFrame }
+                if let start = moveStartFrame {
+                    controller.move(from: start, translation: value.translation)
+                }
+            }
+            .onEnded { _ in
+                controller.commitPlacement(resized: false)
+                moveStartFrame = nil
+            }
+    }
+
+    private var resizeGesture: some Gesture {
+        DragGesture(minimumDistance: 2)
+            .onChanged { value in
+                if resizeStartFrame == nil { resizeStartFrame = controller.currentPanelFrame }
+                if let start = resizeStartFrame {
+                    controller.resize(from: start, translation: value.translation)
+                }
+            }
+            .onEnded { _ in
+                controller.commitPlacement(resized: true)
+                resizeStartFrame = nil
+            }
+    }
+
     @ViewBuilder private func subtitleLines(_ state: DesktopSubtitleOverlayState) -> some View {
         let showOriginal = settings.showOriginal || !state.translationEnabled || !settings.showTranslation
         if showOriginal && !state.original.isEmpty {
-            subtitleText(state.original, size: settings.originalFontSize, weight: .medium)
+            subtitleText(state.original, size: settings.originalFontSize, weight: .medium,
+                         colorHex: settings.originalColorHex)
         }
         if settings.showTranslation && state.translationEnabled && !state.translation.isEmpty {
-            subtitleText(state.translation, size: settings.translationFontSize, weight: .regular)
+            subtitleText(state.translation, size: settings.translationFontSize, weight: .regular,
+                         colorHex: settings.translationColorHex)
         }
     }
 
-    private func subtitleText(_ value: String, size: Double, weight: Font.Weight) -> some View {
+    private func subtitleText(_ value: String, size: Double, weight: Font.Weight, colorHex: String) -> some View {
         Text(value)
             .font(.system(size: size, weight: weight))
-            .foregroundStyle(.white)
+            .foregroundStyle(Self.color(from: colorHex))
             .multilineTextAlignment(.center)
-            .lineLimit(2)
-            .truncationMode(.tail)
             .fixedSize(horizontal: false, vertical: true)
             .shadow(color: .black.opacity(settings.shadowStrength), radius: 3, x: 0, y: 1)
+            .opacity(settings.opacity)
             .frame(maxWidth: .infinity)
             .accessibilityLabel(value)
+    }
+
+    static func color(from hex: String) -> Color {
+        let text = DesktopSubtitleOverlaySettings.colorHex(hex)
+        let value = Int(text.dropFirst(), radix: 16) ?? 0xFFFFFF
+        return Color(.sRGB, red: Double((value >> 16) & 255) / 255,
+                     green: Double((value >> 8) & 255) / 255,
+                     blue: Double(value & 255) / 255, opacity: 1)
     }
 
     private func accept(_ state: DesktopSubtitleOverlayState?) {
         expirationTask?.cancel()
         guard let state, state.isVisible else {
-            withAnimation(.easeOut(duration: 0.12)) { visibleState = nil }
+            visibleState = nil
             return
         }
-        withAnimation(.easeInOut(duration: 0.12)) { visibleState = state }
+        visibleState = state
         guard state.isFinal, let finalizedAt = state.finalizedAt else { return }
         let remaining = max(0, settings.retentionSeconds - Date().timeIntervalSince(finalizedAt))
         let expectedEntryID = state.entryID
@@ -360,7 +425,7 @@ private struct DesktopSubtitleOverlayView: View {
                   visibleState?.entryID == expectedEntryID,
                   visibleState?.revision == expectedRevision,
                   visibleState?.isFinal == true else { return }
-            withAnimation(.easeOut(duration: 0.12)) { visibleState = nil }
+            visibleState = nil
         }
     }
 }
@@ -376,63 +441,89 @@ struct DesktopSubtitleOverlaySettingsView: View {
                 HStack {
                     Text("悬浮字幕").font(.title2.weight(.semibold))
                     Spacer()
-                    Button("恢复默认") { store.resetAppearance() }
+                    Button("恢复外观默认值") { store.resetAppearance() }
                 }
-                Text("视频字幕式悬浮显示，不是滚动歌词。样式立即生效，不会重新连接 Soniox。")
-                    .font(.callout).foregroundStyle(.secondary)
-                GroupBox("显示内容") {
-                    VStack(alignment: .leading, spacing: 10) {
-                        toggle("启用悬浮字幕", keyPath: \.enabled)
-                        toggle("显示原文", keyPath: \.showOriginal)
-                        toggle("显示译文", keyPath: \.showTranslation)
-                    }.frame(maxWidth: .infinity, alignment: .leading)
+
+                Toggle("启用悬浮字幕", isOn: boolBinding(\.enabled))
+                HStack(spacing: 22) {
+                    Toggle("原文", isOn: boolBinding(\.showOriginal))
+                    Toggle("译文", isOn: boolBinding(\.showTranslation))
                 }
-                GroupBox("外观") {
-                    VStack(alignment: .leading, spacing: 12) {
-                        slider("原文字号", value: \DesktopSubtitleOverlaySettings.originalFontSize, range: 16...48, suffix: " pt")
-                        slider("译文字号", value: \DesktopSubtitleOverlaySettings.translationFontSize, range: 14...44, suffix: " pt")
-                        slider("字幕透明度", value: \DesktopSubtitleOverlaySettings.opacity, range: 0.35...1, suffix: "%", multiplier: 100)
-                        slider("最大宽度", value: \DesktopSubtitleOverlaySettings.widthFraction, range: 0.35...0.95, suffix: "%", multiplier: 100)
-                        slider("定稿保留", value: \DesktopSubtitleOverlaySettings.retentionSeconds, range: 1...15, suffix: " 秒")
-                        slider("文字阴影", value: \DesktopSubtitleOverlaySettings.shadowStrength, range: 0...1, suffix: "%", multiplier: 100)
-                    }.frame(maxWidth: .infinity, alignment: .leading)
+
+                Divider()
+                Text("外观").font(.headline)
+                slider("字体大小", value: \DesktopSubtitleOverlaySettings.originalFontSize,
+                       range: 16...48, suffix: " pt", fontPair: true)
+                HStack(spacing: 22) {
+                    ColorPicker("原文颜色", selection: colorBinding(\.originalColorHex),
+                                supportsOpacity: false)
+                    ColorPicker("译文颜色", selection: colorBinding(\.translationColorHex),
+                                supportsOpacity: false)
                 }
-                GroupBox("位置与交互") {
-                    VStack(alignment: .leading, spacing: 10) {
-                        toggle("点击穿透（不调整时）", keyPath: \.clickThrough)
-                        Toggle("锁定位置", isOn: Binding(
-                            get: { store.settings.positionLocked },
-                            set: { value in
-                                store.update { $0.positionLocked = value }
-                                controller.setAdjusting(!value)
-                            }
-                        ))
-                        HStack {
-                            Text("调整字幕位置和大小")
-                            Spacer()
-                            Button("进入调整模式") {
-                                store.update { $0.enabled = true }
-                                controller.show(model: model, settings: store, adjusting: true)
-                            }
+                slider("背景不透明度", value: \DesktopSubtitleOverlaySettings.backgroundOpacity,
+                       range: 0...0.95, suffix: "%", multiplier: 100)
+
+                Divider()
+                Text("位置与大小").font(.headline)
+                HStack {
+                    Button(controller.isAdjusting ? "完成调整" : "调整位置与大小") {
+                        if controller.isAdjusting {
+                            controller.setAdjusting(false)
+                        } else {
+                            store.update { $0.enabled = true }
+                            controller.show(model: model, settings: store, adjusting: true)
                         }
-                        Button("重置字幕位置") { controller.resetPosition() }
-                    }.frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    Button("重置位置") { controller.resetPosition() }
+                    Button("高度自适应") { controller.resetAutoHeight() }
+                }
+                Text("调整模式下拖动字幕移动，拖动右下角手柄缩放；退出后恢复点击穿透。文字过长时可增加窗口高度或滚动查看。")
+                    .font(.caption).foregroundStyle(.secondary)
+
+                DisclosureGroup("高级选项") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Toggle("非调整模式点击穿透", isOn: boolBinding(\.clickThrough))
+                        slider("定稿保留", value: \DesktopSubtitleOverlaySettings.retentionSeconds,
+                               range: 1...15, suffix: " 秒")
+                        slider("文字不透明度", value: \DesktopSubtitleOverlaySettings.opacity,
+                               range: 0.35...1, suffix: "%", multiplier: 100)
+                        slider("文字阴影", value: \DesktopSubtitleOverlaySettings.shadowStrength,
+                               range: 0...1, suffix: "%", multiplier: 100)
+                    }
+                    .padding(.top, 10)
                 }
             }
             .padding(20)
-            .frame(maxWidth: 540, alignment: .leading)
+            .frame(maxWidth: 510, alignment: .leading)
         }
-        .frame(width: 540, height: 600)
+        .frame(width: 530, height: 510)
     }
 
-    private func toggle(_ title: String, keyPath: WritableKeyPath<DesktopSubtitleOverlaySettings, Bool>) -> some View {
-        Toggle(title, isOn: Binding(
-            get: { store.settings[keyPath: keyPath] },
-            set: { value in store.update { $0[keyPath: keyPath] = value } }
-        ))
+    private func boolBinding(_ path: WritableKeyPath<DesktopSubtitleOverlaySettings, Bool>) -> Binding<Bool> {
+        Binding(
+            get: { store.settings[keyPath: path] },
+            set: { newValue in store.update { $0[keyPath: path] = newValue } }
+        )
     }
 
-    private func slider(_ title: String, value keyPath: WritableKeyPath<DesktopSubtitleOverlaySettings, Double>, range: ClosedRange<Double>, suffix: String, multiplier: Double = 1) -> some View {
+    private func colorBinding(_ path: WritableKeyPath<DesktopSubtitleOverlaySettings, String>) -> Binding<Color> {
+        Binding(
+            get: { DesktopSubtitleOverlayView.color(from: store.settings[keyPath: path]) },
+            set: { value in
+                guard let rgba = NSColor(value).usingColorSpace(.deviceRGB) else { return }
+                let red = Int((rgba.redComponent * 255).rounded())
+                let green = Int((rgba.greenComponent * 255).rounded())
+                let blue = Int((rgba.blueComponent * 255).rounded())
+                let hex = String(format: "#%02X%02X%02X", red, green, blue)
+                store.update { $0[keyPath: path] = hex }
+            }
+        )
+    }
+
+    private func slider(_ title: String,
+                        value keyPath: WritableKeyPath<DesktopSubtitleOverlaySettings, Double>,
+                        range: ClosedRange<Double>,
+                        suffix: String, multiplier: Double = 1, fontPair: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack {
                 Text(title)
@@ -442,7 +533,12 @@ struct DesktopSubtitleOverlaySettingsView: View {
             }
             Slider(value: Binding(
                 get: { store.settings[keyPath: keyPath] },
-                set: { value in store.update { $0[keyPath: keyPath] = value } }
+                set: { value in
+                    store.update {
+                        $0[keyPath: keyPath] = value
+                        if fontPair { $0.translationFontSize = max(14, value - 2) }
+                    }
+                }
             ), in: range)
         }
     }
