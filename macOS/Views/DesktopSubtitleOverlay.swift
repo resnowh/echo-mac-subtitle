@@ -143,7 +143,7 @@ final class SubtitleOverlayController: NSObject, ObservableObject, NSWindowDeleg
         gestureInProgress = true
         let visible = screen(for: settings).visibleFrame
         let width = min(max(start.width + translation.width, min(280, visible.width)), visible.width)
-        let height = min(max(start.height - translation.height, 90), max(90, visible.height * 0.85))
+        let height = min(max(start.height + translation.height, 90), max(90, visible.height * 0.85))
         // Bottom-right grip: keep top-left anchored as the user drags.
         let x = min(max(start.minX, visible.minX), visible.maxX - width)
         let y = min(max(start.maxY - height, visible.minY), visible.maxY - height)
@@ -277,6 +277,8 @@ private struct DesktopSubtitleOverlayView: View {
     @ObservedObject var controller: SubtitleOverlayController
 
     @State private var visibleState: DesktopSubtitleOverlayState?
+    @State private var recentState: DesktopSubtitleOverlayPrevious?
+    @State private var recentExpirationTask: Task<Void, Never>?
     @State private var expirationTask: Task<Void, Never>?
     @State private var moveStartFrame: NSRect?
     @State private var resizeStartFrame: NSRect?
@@ -285,44 +287,66 @@ private struct DesktopSubtitleOverlayView: View {
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            ScrollView(.vertical) {
-                VStack(spacing: 6) {
-                    if let state = visibleState,
-                       state.remainsVisible(at: Date(), retention: settings.retentionSeconds) {
-                        subtitleLines(state)
-                    } else if controller.isAdjusting {
-                        if settings.showOriginal {
-                            subtitleText("Drag to move · resize from the corner",
-                                         size: settings.originalFontSize, weight: .medium,
-                                         colorHex: settings.originalColorHex)
+            VStack(spacing: 0) {
+                if controller.isAdjusting {
+                    HStack(spacing: 8) {
+                        Image(systemName: "hand.draw")
+                        Text("拖动此处移动字幕")
+                        Spacer()
+                    }
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .frame(height: 34)
+                    .background(.mint.opacity(0.85), in: RoundedRectangle(cornerRadius: 8))
+                    .contentShape(Rectangle())
+                    .gesture(moveGesture)
+                    .padding(.bottom, 4)
+                }
+
+                ScrollView(.vertical) {
+                    VStack(spacing: 12) {
+                        if let previous = recentState,
+                           previous.remainsVisible(at: Date(), retention: settings.retentionSeconds) {
+                            VStack(spacing: 5) {
+                                subtitleLines(previous.state)
+                            }
+                            .opacity(0.8)
                         }
-                        if settings.showTranslation {
-                            subtitleText("拖动字幕移动位置，右下角调整宽度和高度",
-                                         size: settings.translationFontSize, weight: .regular,
-                                         colorHex: settings.translationColorHex)
+                        if let state = visibleState,
+                           state.remainsVisible(at: Date(), retention: settings.retentionSeconds) {
+                            VStack(spacing: 5) { subtitleLines(state) }
+                        } else if controller.isAdjusting && recentState == nil {
+                            if settings.showOriginal {
+                                subtitleText("Original subtitle text",
+                                             size: settings.originalFontSize, weight: .medium,
+                                             colorHex: settings.originalColorHex)
+                            }
+                            if settings.showTranslation {
+                                subtitleText("实时双语字幕预览",
+                                             size: settings.translationFontSize, weight: .regular,
+                                             colorHex: settings.translationColorHex)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 12)
+                    .background {
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Color.black.opacity(settings.backgroundOpacity))
+                    }
+                    // Intrinsic height is measured inside the scroll view,
+                    // not truncated by the window's current viewport height.
+                    .background {
+                        GeometryReader { proxy in
+                            Color.clear.preference(key: SubtitleContentHeightPreference.self,
+                                                   value: proxy.size.height)
                         }
                     }
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, 18)
-                .padding(.vertical, 12)
-                .background {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.black.opacity(settings.backgroundOpacity))
-                }
-                // Measure unconstrained text (no two-line ellipsis) before the
-                // scroll viewport clips it. The panel grows to available space.
-                .background {
-                    GeometryReader { proxy in
-                        Color.clear.preference(key: SubtitleContentHeightPreference.self,
-                                               value: proxy.size.height)
-                    }
-                }
+                .scrollIndicators(.automatic)
             }
-            .scrollIndicators(.automatic)
-            .scrollDisabled(controller.isAdjusting)
-            .contentShape(Rectangle())
-            .gesture(controller.isAdjusting ? moveGesture : nil)
 
             if controller.isAdjusting {
                 RoundedRectangle(cornerRadius: 10)
@@ -334,6 +358,7 @@ private struct DesktopSubtitleOverlayView: View {
                     .frame(width: 36, height: 36)
                     .background(.mint, in: RoundedRectangle(cornerRadius: 8))
                     .contentShape(Rectangle())
+                    .help("拖动以调整字幕宽度和高度")
                     .accessibilityLabel("拖动以调整字幕宽度和高度")
                     .highPriorityGesture(resizeGesture)
             }
@@ -342,10 +367,20 @@ private struct DesktopSubtitleOverlayView: View {
         .onPreferenceChange(SubtitleContentHeightPreference.self) { height in
             controller.contentHeightDidChange(height)
         }
-        .onAppear { accept(feed.current) }
+        .onAppear {
+            accept(feed.current)
+            acceptRecent(feed.previous)
+        }
         .onChange(of: feed.current) { _, state in accept(state) }
-        .onChange(of: settings.retentionSeconds) { _, _ in accept(feed.current) }
-        .onDisappear { expirationTask?.cancel() }
+        .onChange(of: feed.previous) { _, state in acceptRecent(state) }
+        .onChange(of: settings.retentionSeconds) { _, _ in
+            accept(feed.current)
+            acceptRecent(feed.previous)
+        }
+        .onDisappear {
+            expirationTask?.cancel()
+            recentExpirationTask?.cancel()
+        }
     }
 
     private var moveGesture: some Gesture {
@@ -406,6 +441,26 @@ private struct DesktopSubtitleOverlayView: View {
         return Color(.sRGB, red: Double((value >> 16) & 255) / 255,
                      green: Double((value >> 8) & 255) / 255,
                      blue: Double(value & 255) / 255, opacity: 1)
+    }
+
+    private func acceptRecent(_ state: DesktopSubtitleOverlayPrevious?) {
+        recentExpirationTask?.cancel()
+        guard let state, state.remainsVisible(at: Date(), retention: settings.retentionSeconds) else {
+            recentState = nil
+            return
+        }
+        recentState = state
+        let remaining = max(0, settings.retentionSeconds -
+                            Date().timeIntervalSince(state.replacedAt))
+        let expectedEntryID = state.state.entryID
+        let expectedReplaceTime = state.replacedAt
+        recentExpirationTask = Task {
+            try? await Task.sleep(for: .seconds(remaining))
+            guard !Task.isCancelled,
+                  recentState?.state.entryID == expectedEntryID,
+                  recentState?.replacedAt == expectedReplaceTime else { return }
+            recentState = nil
+        }
     }
 
     private func accept(_ state: DesktopSubtitleOverlayState?) {
