@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 struct DesktopSubtitleOverlaySettings: Codable, Equatable {
@@ -110,7 +111,10 @@ struct DesktopSubtitleOverlayReducer {
     mutating func update(_ entry: SubtitleEntry, translationEnabled: Bool, at date: Date = Date()) {
         let original = entry.english.trimmingCharacters(in: .whitespacesAndNewlines)
         let translation = entry.chinese.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !original.isEmpty || (translationEnabled && !translation.isEmpty) else { return }
+        guard !original.isEmpty || (translationEnabled && !translation.isEmpty) else {
+            if current?.entryID == entry.id { current = nil }
+            return
+        }
         let sameEntry = current?.entryID == entry.id
         // New meaningful text on an already-finalized entry (e.g. late translation
         // or a manual correction) must remain readable for a full retention window.
@@ -118,6 +122,7 @@ struct DesktopSubtitleOverlayReducer {
         let textChanged = sameEntry &&
             (current?.original != original || current?.translation != translation ||
              current?.translationEnabled != translationEnabled)
+        guard !sameEntry || textChanged else { return }
         let wasFinal = sameEntry && (current?.isFinal ?? false)
         let previousFinalizedAt = sameEntry ? current?.finalizedAt : nil
         current = DesktopSubtitleOverlayState(
@@ -133,11 +138,31 @@ struct DesktopSubtitleOverlayReducer {
 
     mutating func finalize(_ entry: SubtitleEntry, translationEnabled: Bool, at date: Date = Date()) {
         update(entry, translationEnabled: translationEnabled, at: date)
-        guard current?.entryID == entry.id else { return }
+        guard current?.entryID == entry.id, current?.isFinal == false else { return }
         current?.isFinal = true
         current?.finalizedAt = date
         current?.revision = UUID()
     }
 
     mutating func clear() { current = nil }
+}
+
+/// Pure placement policy, shared with isolated multi-display regression checks.
+enum DesktopSubtitleOverlayLayout {
+    static func screenIndex(for frame: CGRect, screens: [CGRect]) -> Int? {
+        screens.indices.filter { screens[$0].intersects(frame) }.max { lhs, rhs in
+            let left = screens[lhs].intersection(frame)
+            let right = screens[rhs].intersection(frame)
+            return left.width * left.height < right.width * right.height
+        }
+    }
+
+    static func frame(in visible: CGRect, settings: DesktopSubtitleOverlaySettings, height: CGFloat) -> CGRect {
+        let height = min(height, visible.height)
+        let width = min(max(visible.width * settings.widthFraction, 280), visible.width)
+        return CGRect(
+            x: min(max(visible.minX + visible.width * settings.normalizedX - width / 2, visible.minX), visible.maxX - width),
+            y: min(max(visible.minY + visible.height * settings.normalizedBottom, visible.minY), visible.maxY - height),
+            width: width, height: height)
+    }
 }
