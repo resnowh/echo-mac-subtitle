@@ -43,7 +43,7 @@ struct DesktopSubtitleOverlaySettings: Codable, Equatable {
         originalFontSize = Self.validated(try values.decodeIfPresent(Double.self, forKey: .originalFontSize), range: 16...48, fallback: 26)
         translationFontSize = Self.validated(try values.decodeIfPresent(Double.self, forKey: .translationFontSize), range: 14...44, fallback: 24)
         opacity = Self.validated(try values.decodeIfPresent(Double.self, forKey: .opacity), range: 0.35...1, fallback: 1)
-        backgroundOpacity = Self.validated(try values.decodeIfPresent(Double.self, forKey: .backgroundOpacity), range: 0...0.95, fallback: 0)
+        backgroundOpacity = Self.validated(try values.decodeIfPresent(Double.self, forKey: .backgroundOpacity), range: 0...1, fallback: 0)
         originalColorHex = Self.colorHex(try values.decodeIfPresent(String.self, forKey: .originalColorHex))
         translationColorHex = Self.colorHex(try values.decodeIfPresent(String.self, forKey: .translationColorHex))
         if let height = try values.decodeIfPresent(Double.self, forKey: .preferredHeightFraction) {
@@ -69,7 +69,7 @@ struct DesktopSubtitleOverlaySettings: Codable, Equatable {
         result.originalFontSize = Self.validated(originalFontSize, range: 16...48, fallback: 26)
         result.translationFontSize = Self.validated(translationFontSize, range: 14...44, fallback: 24)
         result.opacity = Self.validated(opacity, range: 0.35...1, fallback: 1)
-        result.backgroundOpacity = Self.validated(backgroundOpacity, range: 0...0.95, fallback: 0)
+        result.backgroundOpacity = Self.validated(backgroundOpacity, range: 0...1, fallback: 0)
         result.originalColorHex = Self.colorHex(originalColorHex)
         result.translationColorHex = Self.colorHex(translationColorHex)
         if let height = preferredHeightFraction {
