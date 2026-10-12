@@ -4,7 +4,7 @@
 
 ### 可以直接下载 Echo 吗？
 
-目前**没有公开、经 Apple Developer ID 签名并公证的 macOS DMG**。macOS 开发版本可以从源码在 Xcode 构建。不要将普通 CI 的 unsigned build 视为已经验证可公开安装的版本。发布准备参见 [release.md](release.md)。
+目前**没有公开、经 Apple Developer ID 签名并公证的 macOS DMG**。维护者尚未加入付费 Apple Developer Program，暂时无法执行正式 Developer ID 签名与公证。macOS 开发版本可以从源码在 Xcode 构建。不要将普通 CI 的 unsigned build 视为已经验证可公开安装的版本。发布准备参见 [release.md](release.md)。
 
 ### 支持哪些系统？
 
