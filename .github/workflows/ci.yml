@@ -17,6 +17,9 @@ jobs:
       - name: Check PCM and loopback WebSocket transport
         run: python3 tests/run_stream_checks.py
 
+      - name: Check isolated floating subtitle UI
+        run: python3 tests/run_overlay_checks.py
+
       - name: Build Debug
         run: >-
           xcodebuild

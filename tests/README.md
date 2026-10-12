@@ -24,3 +24,13 @@ If Command Line Tools and Xcode are different installations, set `DEVELOPER_DIR`
 Passing these tests or compiling Debug/Release **does not verify** physical microphone or ScreenCaptureKit capture, real network latency, Soniox accuracy, macOS window/Space/fullscreen behavior, sleep/wake recovery on hardware, or long-session UX. Those require separate real-device acceptance tests.
 
 Do not run `build_mac.command` or restart/replace Echo merely to test while an active recording is in progress; that script automatically opens the built app.
+
+## Isolated floating subtitle checks
+
+`python3 tests/run_overlay_checks.py` compiles the production SwiftUI overlay
+with a feed-only model and a disposable UserDefaults suite. It checks resetting
+placement while disabled, exiting adjustment mode, and contiguous latest-line
+selection. Pass an output directory to render large bilingual and narrow
+adjustment previews into PNGs using hidden offscreen windows. It never launches
+Echo, activates a visible window, opens audio devices, or connects to Soniox.
+See `docs/desktop-subtitle-review.md` for coverage and remaining system checks.

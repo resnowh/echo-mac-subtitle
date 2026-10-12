@@ -85,9 +85,13 @@ struct ContentView: View {
                             desktopSubtitleController.hide()
                         }
                     }
-                    Button("调整位置和大小") {
-                        desktopSubtitleSettings.update { $0.enabled = true }
-                        desktopSubtitleController.show(model: model, settings: desktopSubtitleSettings, adjusting: true)
+                    Button(desktopSubtitleController.isAdjusting ? "完成字幕调整" : "调整位置和大小") {
+                        if desktopSubtitleController.isAdjusting {
+                            desktopSubtitleController.finishAdjusting()
+                        } else {
+                            desktopSubtitleSettings.update { $0.enabled = true }
+                            desktopSubtitleController.show(model: model, settings: desktopSubtitleSettings, adjusting: true)
+                        }
                     }
                     Divider()
                     Button(desktopSubtitleSettings.settings.positionLocked ? "解锁位置" : "锁定位置") {
