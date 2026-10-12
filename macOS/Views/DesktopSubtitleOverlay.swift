@@ -516,7 +516,7 @@ struct DesktopSubtitleOverlaySettingsView: View {
                                 supportsOpacity: false)
                 }
                 slider("背景不透明度", value: \DesktopSubtitleOverlaySettings.backgroundOpacity,
-                       range: 0...0.95, suffix: "%", multiplier: 100)
+                       range: 0...1, suffix: "%", multiplier: 100)
 
                 Divider()
                 Text("位置与大小").font(.headline)
