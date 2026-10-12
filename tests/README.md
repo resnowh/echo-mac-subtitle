@@ -21,3 +21,13 @@ real recording, Soniox service or running Echo instance are used.
 This does not validate physical microphone/ScreenCaptureKit behavior,
 real network latency, UI scrolling or sleep/wake. Those require manual
 verification when the user's active recording can safely be stopped.
+
+## Isolated floating subtitle checks
+
+`python3 tests/run_overlay_checks.py` compiles the production SwiftUI overlay
+with a feed-only model and a disposable UserDefaults suite. It checks resetting
+placement while disabled, exiting adjustment mode, and contiguous latest-line
+selection. Pass an output directory to render large bilingual and narrow
+adjustment previews into PNGs using hidden offscreen windows. It never launches
+Echo, activates a visible window, opens audio devices, or connects to Soniox.
+See `docs/desktop-subtitle-review.md` for coverage and remaining system checks.
