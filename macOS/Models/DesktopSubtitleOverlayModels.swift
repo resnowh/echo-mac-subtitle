@@ -137,7 +137,11 @@ struct DesktopSubtitleOverlayPrevious: Equatable {
     var replacedAt: Date
 
     func remainsVisible(at date: Date, retention: TimeInterval) -> Bool {
-        date.timeIntervalSince(replacedAt) < retention
+        // Do not resurrect a sentence that had already expired before
+        // its successor finally arrived after a long pause.
+        if state.isFinal, let finalizedAt = state.finalizedAt,
+           replacedAt.timeIntervalSince(finalizedAt) >= retention { return false }
+        return date.timeIntervalSince(replacedAt) < retention
     }
 }
 
