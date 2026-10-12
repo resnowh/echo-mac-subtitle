@@ -1,0 +1,58 @@
+{
+  "cases" : [
+    {
+      "id" : "semantic-endpoint-overrides-empty-and-untranslated-state",
+      "trigger" : "endpoint"
+    },
+    {
+      "id" : "silence-inclusive-threshold",
+      "trigger" : "silence"
+    },
+    {
+      "id" : "silence-below-time-threshold",
+      "trigger" : "none"
+    },
+    {
+      "id" : "silence-below-word-threshold",
+      "trigger" : "none"
+    },
+    {
+      "id" : "wait-for-enabled-translation",
+      "trigger" : "none"
+    },
+    {
+      "id" : "silence-finalizes-after-translation-arrives",
+      "trigger" : "silence"
+    },
+    {
+      "id" : "disabled-silence-fallback",
+      "trigger" : "none"
+    },
+    {
+      "id" : "long-segment-inclusive-word-and-time-thresholds",
+      "trigger" : "longSegment"
+    },
+    {
+      "id" : "long-segment-below-word-threshold",
+      "trigger" : "none"
+    },
+    {
+      "id" : "long-segment-below-time-threshold",
+      "trigger" : "none"
+    },
+    {
+      "id" : "disabled-long-segment-fallback",
+      "trigger" : "none"
+    },
+    {
+      "id" : "silence-precedes-long-segment-when-both-match",
+      "trigger" : "silence"
+    },
+    {
+      "id" : "unicode-whitespace-word-count",
+      "trigger" : "silence"
+    }
+  ],
+  "macSourceCommit" : "5a6d5d0f3f3459b5d72f569694fcf77ceb62f1a4",
+  "transcriptModelsSha256" : "df58cd7e79a5d52ed0db79981b45f0c52d6162601ee6b25b4ab8baf1fb4b8f60"
+}

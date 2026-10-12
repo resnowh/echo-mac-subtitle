@@ -1,0 +1,29 @@
+# A28 AI correction and retranslation request parity baseline
+
+核验日期：2026-10-09  
+Mac source baseline: `origin/main` `ae0359dc90da0ccb5e526a275da1747954a49a4f`  
+范围：DeepSeek subtitle correction/retranslation request and response contract. No Mac source was changed, no Echo app was launched, and no cloud request or user transcript was used.
+
+## Source inventory
+
+| Data item | Source | Recorded behavior | Limit |
+|---|---|---|---|
+| Request body | `macOS/Services/DeepSeekService.swift`, `correctionRequest` | Uses `deepseek-v4-flash`, disables thinking, includes JSON-only system instruction and JSON payload with source, translation, up to 3,000 context characters and 4,000 term characters | Request construction is covered locally, not against a live service |
+| Request intent | Same method | Translation-only requests require source to remain byte-for-byte unchanged; proofreading uses neighboring context only for judgment, without merging context into current subtitle | Prompts guide a remote model but cannot guarantee output quality |
+| Scheduler | `macOS/ViewModels/SpeechViewModel.swift`, `requestCorrection` / `runNextCorrection` | One request at a time; manual work is inserted before queued automatic work; pending queue maximum is 20; duplicate queued subtitle IDs are ignored | Windows queue contract is unit-tested; live dispatcher/UI ordering has not been exercised |
+| Response shape | `DeepSeekService.decodeCorrection` and `CorrectionSuggestion` | Requires `source`, `translation`, `reason`, and `uncertain`; rejects incomplete/nonconforming results before showing suggestions | Synthetic JSON checks only |
+| Windows implementation | `windows/Echo.Windows/Services/SubtitleCorrectionService.cs`, `MainPageViewModel.cs`, `Core/Transcript.cs` | Uses fixed Mac model, matching intent-specific instructions, `thinking.type=disabled`, manual-first priority queue, and required response fields; a manual request promotes the same subtitle's pending automatic job | Live UI and actual service response remain unverified |
+| Synthetic checks | `windows/Echo.CoreChecks/Program.cs` | Asserts fixed model, bearer header, thinking configuration, separate intent instructions, exact input source in retranslation payload, manual-first ordering including promotion, duplicate/capacity behavior, and rejection when `uncertain` is absent | No network access is used |
+
+## Protocol sources
+
+- [DeepSeek Thinking Mode](https://api-docs.deepseek.com/guides/thinking_mode/) documents the OpenAI-compatible `thinking: { "type": "enabled/disabled" }` switch.
+- [DeepSeek Chat Completions API](https://api-docs.deepseek.com/api/create-chat-completion/) documents `thinking` as a request object and JSON object response mode.
+- Checked 2026-10-09. These references confirm the request field syntax, not model availability, response quality, or app-specific behavior.
+
+## Verification record
+
+- CoreChecks validate locally constructed request JSON; no API key is transmitted.
+- Missing `uncertain` fails deserialization instead of silently becoming `false`.
+- The full existing check suite and Release x64 build are run for the implementation commit.
+- No cloud response, runtime user interaction, or Mac app behavior was exercised.

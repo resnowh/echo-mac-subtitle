@@ -1,0 +1,5 @@
+Local HEAD before A70: 76af76562ac4b9c95d16b66ca824ab50d873c41f
+Fetched origin/feature/windows-mac-parity: 79b44672a878d6f6c7a335e9010b15915e7a51a8
+origin/main: ae0359dc90da0ccb5e526a275da1747954a49a4f
+PR #5 reported head: 76af76562ac4b9c95d16b66ca824ab50d873c41f
+PR URL: https://github.com/resnowh/echo-mac-subtitle/pull/5

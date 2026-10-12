@@ -1,0 +1,194 @@
+PASS: main-window minimum and ideal sizes match Mac in DIPs, scale with DPI, and fit a smaller work area
+PASS: new and legacy preferences default to the Mac dark theme when no explicit theme is stored
+PASS: recognition mode keeps the last preferred language when switching to automatic and migrates legacy settings
+PASS: audio input mode defaults to Mac microphone, persists, and repairs unsupported values
+PASS: AI correction recognition snapshots become stale when any Mac-equivalent language or speaker option changes
+PASS: WASAPI microphone readiness accepts silent packets and marks converted output only after valid samples are buffered
+PASS: AI correction results are discarded when recognition settings change while the request is in flight
+PASS: new-content summaries are limited to segments created since the current recording session began
+PASS: AI summaries submit archive-aware bilingual transcript chunks with scope-specific Mac prompts
+PASS: live audio mode switching keeps only the capture routes required by the selected mode
+PASS: audio input mode remains available during recording and routes selections through the live switch handler
+PASS: subtitle correction editor exposes dated history, bounded scrolling, and inline term addition like Mac
+PASS: theme choices and main-window cycling follow the Mac light, dark, system order
+PASS: desktop subtitle overlay defaults match the Mac visual baseline
+PASS: overlay placement scales with DPI, supports negative multi-monitor origins, and clamps to short work areas
+PASS: native overlay recomputes its placement when Windows reports display or work-area changes
+PASS: hiding the native overlay exits adjustment mode as Mac hide does
+PASS: native subtitle overlay is an unowned, topmost window shown without activating or following main-window minimization
+PASS: closing the main window disposes the overlay timers, feed subscription, and native HWND
+PASS: overlay monitor identity round-trips while older settings remain compatible
+PASS: overlay settings retain a visible language and repair invalid persisted values
+PASS: overlay visibility matches Mac when translation is disabled, when only translation is selected, and when both language switches are off
+PASS: native DirectWrite overlay uses a bounded two-line layout with Mac-equivalent tail ellipsis for text and shadows
+PASS: native overlay constrains each subtitle line to at most two DirectWrite lines
+PASS: recording actions, archive picker, and live status expose contextual Narrator names
+PASS: recognition settings expose Mac-equivalent automatic/preferred modes and group preferred-language controls
+PASS: the main toolbar does not show a permanent return-to-latest button when Mac only shows it for unread content
+PASS: recognition mode persists the preferred language while automatic mode omits hints and hides strict-language controls
+PASS: overlay menu exposes Mac-equivalent lock/unlock and appearance saves preserve the current adjustment mode
+PASS: transcript follow state tracks direct, wheel and keyboard scrolling separately from content layout changes
+PASS: settings preserve an unreadable DPAPI secret until the user replaces it
+PASS: new transcript content stays followed when the user is at the live end
+PASS: content growth and passive view changes do not resume following after the user scrolls into history
+PASS: returning to the live end clears the new-content hint and resumes following
+PASS: settings panel keeps the Mac 520x560 DIP target, fits short work areas, and constrains its accessible scroll viewer to a star-sized row
+PASS: overlay feed presents a provisional bilingual subtitle
+PASS: identical updates do not extend the final subtitle retention window
+PASS: meaningful late translation resets the final subtitle retention window
+PASS: overlay feed clears stale subtitle state
+PASS: AI summary panel visibility matches Mac auto-summary, existing-summary and status conditions
+PASS: summary markdown blocks match the Mac title, heading, bullet, and paragraph rules across Windows line endings
+PASS: segmentation defaults match the Mac settings baseline
+PASS: segmentation settings persist in the existing Windows preferences file
+PASS: transcript day headers match the Mac cross-day rule and require adjacent wall-clock dates
+PASS: invalid segmentation preferences recover to safe defaults
+PASS: Soniox automatic-language request removes both hints and strict mode, carries endpoint settings, and omits disabled translation
+PASS: source-language selection and strict preference match Mac specified/automatic transitions without applying strict restriction to auto mode
+PASS: Soniox request preserves the Mac economics context, vocabulary, and translation pairs
+PASS: Soniox request appends normalized user terms with Mac line, length, and count limits and serializes valid context JSON
+PASS: Soniox custom terms truncate by Unicode text elements like Swift Character without splitting combining marks or ZWJ emoji
+PASS: inline correction terms trim input, normalize blank lines, reject case-insensitive duplicates and enforce the 100-term Mac limit
+PASS: inline correction term field uses the Mac 80-character limit measured in Unicode text elements
+PASS: audio meter computes Mac-scaled RMS over only valid captured samples
+PASS: audio meter samples at 20 Hz, attacks quickly and decays slowly like Mac
+PASS: audio waveform retains the newest 48 samples in order
+PASS: audio waveform history resets cleanly between recording sessions
+PASS: quiet-time tracking treats empty and endpoint responses as activity like Mac, but excludes finished and error responses
+PASS: Soniox control parsing accepts only boolean finished and string error messages while retaining error-code frames
+PASS: segmentation policy requires its thresholds, waits for enabled translation, and gives semantic endpoints priority
+PASS: Windows segmentation policy matches 13 Mac-source cases for endpoint precedence, silence/long thresholds, translation wait, and Unicode whitespace
+PASS: segmentation token/session event 1 preserves the Mac final rows, text, timestamps, metadata, and fallback timing
+PASS: segmentation token/session event 2 preserves the Mac final rows, text, timestamps, metadata, and fallback timing
+PASS: segmentation token/session event 3 preserves the Mac final rows, text, timestamps, metadata, and fallback timing
+PASS: segmentation token/session event 4 preserves the Mac final rows, text, timestamps, metadata, and fallback timing
+PASS: segmentation token/session event 5 preserves the Mac final rows, text, timestamps, metadata, and fallback timing
+PASS: segmentation token/session event 6 preserves the Mac final rows, text, timestamps, metadata, and fallback timing
+PASS: segmentation token/session event 7 preserves the Mac final rows, text, timestamps, metadata, and fallback timing
+PASS: segmentation token/session event 8 preserves the Mac final rows, text, timestamps, metadata, and fallback timing
+PASS: segmentation token/session event 9 preserves the Mac final rows, text, timestamps, metadata, and fallback timing
+PASS: Windows token assembler and production session finalizer match 9 Mac production session snapshots
+PASS: local segmentation finalizes the active subtitle through the shared finalization path
+PASS: speech after a local fallback begins a fresh subtitle without duplicating the prior phrase
+PASS: provisional replacement without duplicated prefix
+PASS: translation arriving before the endpoint stays paired, and the next response starts a new row
+PASS: DeepSeek correction requests match Mac thinking and distinguish translation-only from contextual proofreading instructions
+PASS: manual correction jobs jump ahead of pending automatic jobs, including promotion of a matching queued job
+PASS: DeepSeek correction response requires the Mac Codable uncertain field instead of silently defaulting to false
+PASS: multiple endpoint markers in one response finalize once after the complete bilingual response, matching Mac
+PASS: empty endpoint markers do not advance the cursor or create blank transcript rows
+PASS: economics terminology normalization follows the Mac strong-context rules without changing ambiguous contexts
+PASS: calculus and truncated-hand recognition corrections apply only in the Mac phrase contexts
+PASS: recognized transcript and its translation apply paired Mac calculus corrections while preserving ordinary tax text
+PASS: saving only the edited field preserves the current translation and leaves it open to live updates
+PASS: field-level undo restores the exact pre-edit pair and locks both restored values
+PASS: manual source lock preserves correction while live recognition updates raw text and unlocked translation
+PASS: undo restores prior subtitle and locks the restored human choice
+PASS: late recognition cannot overwrite text after undo
+PASS: one response-level endpoint advances both transcript and translation before the next response
+PASS: transcript final boundary triggers a single opt-in correction job
+PASS: final speaker change across responses splits rows, retains language and finalizes each turn once like Mac
+PASS: provisional language stays stable until final, null metadata is ignored, and non-string speaker/language values are rejected
+PASS: each Mac-style response replaces provisional source and translation as one snapshot, preventing stale opposite-lane text
+PASS: Mac production Soniox fixture response 1 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: Mac production Soniox fixture response 2 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: Mac production Soniox fixture response 3 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: Mac production Soniox fixture response 4 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: Mac production Soniox fixture response 5 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: Mac production Soniox fixture response 6 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: Mac production Soniox fixture response 7 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: Mac production Soniox fixture response 8 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: Mac production Soniox fixture response 9 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: Mac production Soniox fixture response 10 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: Mac production Soniox fixture response 11 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: Mac production Soniox fixture response 12 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: Mac production Soniox fixture response 13 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: Mac production Soniox fixture response 14 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: Mac production Soniox fixture response 15 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: Mac production Soniox fixture response 16 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: Mac production Soniox fixture response 17 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: Mac production Soniox fixture response 18 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: archive selection order follows Mac updatedAt descending semantics
+PASS: new Windows archive title follows the Mac Chinese title and local month-day time format
+PASS: background persistence snapshot is isolated from later edits and keeps archive metadata
+PASS: SRT preserves segment wall-clock gap and translation
+PASS: archive SRT export sorts unordered segments by wall clock and clamps overlaps so cue times never move backward
+PASS: anonymous speaker and detected language survive archive round trip, while SRT keeps the Mac speaker-line format
+PASS: archive summary, incremental signatures, legacy JSON fields and Apple reference date round trip
+PASS: summary selection excludes unchanged entries incrementally while current-segment and whole-archive scopes stay distinct
+PASS: new-content summaries exclude unsummarized historical segments while whole-archive summaries retain them
+PASS: legacy archive without language or speaker loads without inferred metadata and retains its UTC cross-midnight timestamp through SRT export
+PASS: Swift Codable-shaped archive preserves Apple epoch and correction history, and Windows SRT matches Mac speaker, offset, and millisecond formatting
+PASS: Swift-shaped multi-segment archive round trip preserves segment IDs, wall-clock gaps, metadata, and cross-segment SRT order
+PASS: Windows correction history still reads existing ISO-8601 revision dates after enabling Apple epoch dates
+PASS: atomic archive replacement flushes data, preserves the last good file and backup on replace failure, and cleans temporary writes
+PASS: simulated disk-full during a partial temp write preserves the previous archive, removes the temp file and reports actionable guidance
+PASS: forced writer exit before atomic replace preserves the previous archive and the next save removes only the dead process temp file
+PASS: ACL denial while creating an archive temp file preserves the previous archive without leaving a partial temp file
+PASS: ACL denial at atomic replace preserves the previous archive; restoring the test ACL allows orphan cleanup
+PASS: a slow archive writer keeps one newest pending full snapshot, coalesces 9,999 checkpoints and flushes all 10,000 entries after failure
+PASS: splitting moves a completed segment and preserves its text in a separate archive
+PASS: split rollback restores the original segment order and incremental summary state
+PASS: moving an archive to recycle area preserves both JSON and backup contents
+PASS: correction source, lock and undo history survive Mac-compatible archive round trip
+PASS: long transcript chunks stay bounded without dropping Unicode text
+PASS: AI summary transcript preserves numbered bilingual text and Mac local timestamp formatting across midnight
+PASS: AI summary transcript derives Mac wall-clock times from archive segment start when entry timestamps are absent
+PASS: incremental and full-summary prompts match Mac scope guidance and include the bilingual transcript
+A16 synthetic 2-hour archive: entries=7200, JSON=2501561 bytes, SRT=565471 bytes, snapshot+JSON+parse+SRT=84 ms
+PASS: two-hour synthetic archive snapshot, JSON round trip and SRT export preserve all 7200 entries and the final timestamp
+A16 atomic disk save: JSON=2501561 bytes, write+flush+replace+reload=84 ms, backupEntries=1
+PASS: two-hour synthetic archive is durably replaced and reloaded while the previous checkpoint remains in backup
+A67 synthetic 2-hour Soniox stream: responses=14400, rows=7200, JSON=2587961 bytes, SRT=659071 bytes, stream+roundtrip+SRT=184 ms
+PASS: two-hour synthetic Soniox provisional/final stream preserves 7200 bilingual rows, timestamps, metadata, and SRT output
+PASS: Apple date reference is not Unix time
+PASS: network retry policy is bounded and excludes service/device errors
+PASS: current-user DPAPI credential round trip
+PASS: saving unrelated settings preserves a DPAPI secret that could not be decrypted
+PASS: a replacement API key encrypts normally after an unreadable stored value
+PASS: clearing a readable API key keeps the normal empty-field behavior
+PASS: malformed archive is rejected rather than silently imported
+PASS: out-of-range archive dates are rejected before UI formatting
+PASS: duplicate subtitle IDs are rejected before summary processing
+PASS: HTTP 401 handshake failure is not retried
+PASS: HTTP 503 handshake failure uses the bounded retry policy
+PASS: Soniox WebSocket uses Authorization Bearer without placing the API key in config and gives actionable, non-retryable auth/quota errors
+PASS: Soniox string error_message without error_code is surfaced as a service error and never reaches transcript parsing
+PASS: non-boolean finished is ignored safely and a later finished:true completes the stop handshake
+PASS: service diagnostics remove line breaks from remote messages and request IDs before showing them in the status line
+PASS: user cancellation during reconnect is not mistaken for a connection timeout
+PASS: an unexpected close after audio starts is reported as a transient failure eligible for bounded reconnection
+PASS: dual-input drift correction responds to buffer direction, stays bounded and preserves fractional frame adjustments
+PASS: dual-input mixing averages overlapping samples, keeps a surviving source at full level during underrun, and clamps PCM range
+PASS: dual-input mixing emits silence only when neither capture source supplied the output sample
+PASS: Mac-compatible mono conversion selects the first (left) channel instead of averaging stereo
+PASS: Mac-compatible mono conversion preserves the first stereo channel even when the right channel is phase-inverted
+PASS: Mac audio conversion output identifies the production AVAudioConverter baseline and matching source fixture
+Mac/Windows audio case mono-48k-440hz: Mac=15994, Windows=16000, bestLag=1.2, correlation=0.999970, relativeRmsDifference=0.251%
+PASS: Mac/Windows PCM conversion "mono-48k-440hz" matches frame count, timing, waveform correlation, and level tolerance
+Mac/Windows audio case stereo-44k-downmix: Mac=15994, Windows=16000, bestLag=1.2, correlation=0.999951, relativeRmsDifference=0.640%
+PASS: Mac/Windows PCM conversion "stereo-44k-downmix" matches frame count, timing, waveform correlation, and level tolerance
+Mac/Windows audio case mono-48k-delayed-523hz: Mac=15994, Windows=16000, bestLag=1.2, correlation=0.999955, relativeRmsDifference=0.354%
+PASS: Mac/Windows PCM conversion "mono-48k-delayed-523hz" matches frame count, timing, waveform correlation, and level tolerance
+Mac/Windows audio case stereo-48k-phase-cancel: Mac=15994, Windows=16000, bestLag=1.3, correlation=0.999864, relativeRmsDifference=1.698%
+PASS: Mac/Windows PCM conversion "stereo-48k-phase-cancel" matches frame count, timing, waveform correlation, and level tolerance
+A03 synthetic resample samples: 44.1 kHz stereo=16000, 48 kHz mono=16000
+PASS: 44.1 kHz stereo and 48 kHz mono sources resample to one second of 16 kHz mono within 0.01 seconds
+A03 delayed source: expected onset=2400 samples, measured=2402
+PASS: a 150 ms later-starting 48 kHz source retains its offset within the 50 ms timeline tolerance
+PASS: capture prebuffer reports starvation as unavailable frames and copies span-based PCM before the callback returns
+PASS: a prepared audio source drops overlapping startup samples before the live mode switch commits
+PASS: pre-connect audio storage is capped at 2.5 seconds and overrun becomes an explicit failure
+PASS: one-hour simulated independent capture clocks at plus/minus 500 ppm keep queues inside the one-second safety bound
+PASS: audio endpoint policy follows multimedia defaults and reports loss of the explicitly selected endpoint
+PASS: endpoint notifications ignore active/unknown devices, unrelated flows and roles, and unchanged default IDs
+PASS: microphone access denial gives Windows privacy guidance while unrelated capture errors retain their original message
+PASS: sleep recovery restores only a recording that was intended before sleep and can be cancelled by the user
+PASS: ten simulated sleep/wake cycles recover an intended session, while a user stop after wake cancels pending recovery
+PASS: synthetic microphone startup retries after a missing first frame while keeping one recognition WebSocket
+PASS: synthetic live audio switch preparation failure keeps the old input running and sends audio on the same recognition WebSocket
+PASS: synthetic default microphone change restarts capture on the new endpoint while preserving the recognition WebSocket and audio flow
+PASS: synthetic default microphone switch retries a candidate with no first frame before replacing the active capture
+PASS: synthetic microphone startup and default-device switch both wait for converted PCM before reporting readiness
+PASS: synthetic raw microphone input without converted PCM fails explicitly without a duplicate recognition connection
+Completed 184 checks. No cloud calls; no audio was saved.

@@ -1,0 +1,237 @@
+name: Windows CI
+
+on:
+  push:
+    branches:
+      - main
+      - feature/windows-mac-parity
+  pull_request:
+
+jobs:
+  generate-mac-archive-fixture:
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Compile the parity harness with production Mac Archive and SRT sources
+        run: xcrun swiftc -parse-as-library -O -o "$RUNNER_TEMP/archive-parity-checks" macOS/Models/TranscriptModels.swift macOS/Storage/TranscriptArchiveStore.swift macOS/Services/SRTExporter.swift windows/MacParityChecks/ArchiveParityChecks.swift
+
+      - name: Generate a Mac-encoded two-segment fixture
+        run: '"$RUNNER_TEMP/archive-parity-checks" generate "$RUNNER_TEMP/echo-mac-archive-fixture"'
+
+      - name: Upload Mac production fixture
+        uses: actions/upload-artifact@v4
+        with:
+          name: echo-mac-archive-fixture
+          path: |
+            ${{ runner.temp }}/echo-mac-archive-fixture/mac-archive.json
+            ${{ runner.temp }}/echo-mac-archive-fixture/mac-archive.srt
+          if-no-files-found: error
+
+  generate-mac-soniox-runtime-fixture:
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Extract unchanged production Soniox methods
+        run: python3 windows/MacParityChecks/generate_soniox_runtime_harness.py macOS/ViewModels/SpeechViewModel.swift "$RUNNER_TEMP/soniox-runtime-checks.swift"
+
+      - name: Compile the production handler harness with Mac transcript models
+        run: xcrun swiftc -parse-as-library -O -o "$RUNNER_TEMP/soniox-runtime-checks" macOS/Models/TranscriptModels.swift "$RUNNER_TEMP/soniox-runtime-checks.swift"
+
+      - name: Hash the Mac production ViewModel source
+        id: mac-source-hash
+        run: echo "sha256=$(shasum -a 256 macOS/ViewModels/SpeechViewModel.swift | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+
+      - name: Run synthetic Soniox responses through Mac production handler
+        env:
+          ECHO_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: '"$RUNNER_TEMP/soniox-runtime-checks" windows/Echo.CoreChecks/Fixtures/soniox-mac-parity-sequence.json "$RUNNER_TEMP/mac-soniox-runtime.json"'
+
+      - name: Upload Mac production Soniox fixture
+        uses: actions/upload-artifact@v4
+        with:
+          name: echo-mac-soniox-runtime-fixture
+          path: ${{ runner.temp }}/mac-soniox-runtime.json
+          if-no-files-found: error
+
+      - name: Run production Mac token handler and timer on a fixed segmentation session
+        env:
+          ECHO_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          ECHO_SPEECH_VIEW_MODEL_SHA256: ${{ steps.mac-source-hash.outputs.sha256 }}
+        run: '"$RUNNER_TEMP/soniox-runtime-checks" windows/Echo.CoreChecks/Fixtures/segmentation-session-parity.json "$RUNNER_TEMP/mac-segmentation-session.json"'
+
+      - name: Upload Mac production segmentation session result
+        uses: actions/upload-artifact@v4
+        with:
+          name: echo-mac-segmentation-session-fixture
+          path: ${{ runner.temp }}/mac-segmentation-session.json
+          if-no-files-found: error
+
+      - name: Run two-hour synthetic stream through Mac production handler
+        env:
+          ECHO_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: '"$RUNNER_TEMP/soniox-runtime-checks" windows/Echo.CoreChecks/Fixtures/soniox-two-hour-stress-mode.json "$RUNNER_TEMP/mac-soniox-stress.json"'
+
+      - name: Upload Mac production two-hour Soniox result
+        uses: actions/upload-artifact@v4
+        with:
+          name: echo-mac-soniox-stress-fixture
+          path: ${{ runner.temp }}/mac-soniox-stress.json
+          if-no-files-found: error
+
+  generate-mac-segmentation-fixture:
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Compile a harness against the Mac production segmentation policy
+        run: xcrun swiftc -parse-as-library -O -o "$RUNNER_TEMP/segmentation-policy-checks" macOS/Models/TranscriptModels.swift windows/MacParityChecks/SegmentationPolicyChecks.swift
+
+      - name: Generate fixed-boundary results from the Mac production policy
+        run: |
+          ECHO_MAC_SOURCE_COMMIT="$(git log -1 --format=%H -- macOS/Models/TranscriptModels.swift)" \
+          ECHO_MAC_TRANSCRIPT_MODELS_SHA256="$(shasum -a 256 macOS/Models/TranscriptModels.swift | cut -d ' ' -f 1)" \
+          "$RUNNER_TEMP/segmentation-policy-checks" windows/Echo.CoreChecks/Fixtures/segmentation-policy-parity.json "$RUNNER_TEMP/mac-segmentation-policy.json"
+
+      - name: Upload Mac production segmentation results
+        uses: actions/upload-artifact@v4
+        with:
+          name: echo-mac-segmentation-policy-fixture
+          path: ${{ runner.temp }}/mac-segmentation-policy.json
+          if-no-files-found: error
+
+  generate-mac-audio-conversion-fixture:
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Hash the Mac production conversion sources
+        id: mac-audio-source
+        run: |
+          echo "audio_capture_sha256=$(shasum -a 256 macOS/Audio/AudioCapture.swift | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "speech_view_model_sha256=$(shasum -a 256 macOS/ViewModels/SpeechViewModel.swift | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+
+      - name: Extract the unchanged Mac production converter into the parity harness
+        run: python3 windows/MacParityChecks/generate_audio_conversion_harness.py macOS/Audio/AudioCapture.swift "$RUNNER_TEMP/audio-conversion-checks.swift"
+
+      - name: Compile the production converter parity harness
+        run: xcrun swiftc -parse-as-library -O -o "$RUNNER_TEMP/audio-conversion-checks" "$RUNNER_TEMP/audio-conversion-checks.swift"
+
+      - name: Generate Mac production PCM16 reference output
+        env:
+          ECHO_MAC_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          ECHO_MAC_AUDIO_CAPTURE_SHA256: ${{ steps.mac-audio-source.outputs.audio_capture_sha256 }}
+          ECHO_MAC_SPEECH_VIEW_MODEL_SHA256: ${{ steps.mac-audio-source.outputs.speech_view_model_sha256 }}
+        run: '"$RUNNER_TEMP/audio-conversion-checks" windows/Echo.CoreChecks/Fixtures/audio-conversion-inputs.json "$RUNNER_TEMP/mac-audio-conversion.json"'
+
+      - name: Upload Mac production PCM16 conversion output
+        uses: actions/upload-artifact@v4
+        with:
+          name: echo-mac-audio-conversion-fixture
+          path: ${{ runner.temp }}/mac-audio-conversion.json
+          if-no-files-found: error
+
+  build-and-check:
+    needs: [generate-mac-archive-fixture, generate-mac-soniox-runtime-fixture, generate-mac-segmentation-fixture, generate-mac-audio-conversion-fixture]
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore locked dependencies
+        run: dotnet restore windows/Echo.Windows/Echo.Windows.csproj --locked-mode -p:Platform=x64
+
+      - name: Restore core check dependencies
+        run: dotnet restore windows/Echo.CoreChecks/Echo.CoreChecks.csproj --locked-mode
+
+      - name: Download Mac production Archive fixture
+        uses: actions/download-artifact@v4
+        with:
+          name: echo-mac-archive-fixture
+          path: windows/Echo.CoreChecks/Fixtures/Runtime
+
+      - name: Download Mac production Soniox fixture
+        uses: actions/download-artifact@v4
+        with:
+          name: echo-mac-soniox-runtime-fixture
+          path: windows/Echo.CoreChecks/Fixtures/MacRuntime
+
+      - name: Download Mac production two-hour Soniox result
+        uses: actions/download-artifact@v4
+        with:
+          name: echo-mac-soniox-stress-fixture
+          path: windows/Echo.CoreChecks/Fixtures/MacStress
+
+      - name: Download Mac production segmentation results
+        uses: actions/download-artifact@v4
+        with:
+          name: echo-mac-segmentation-policy-fixture
+          path: windows/Echo.CoreChecks/Fixtures/MacSegmentation
+
+      - name: Download Mac production segmentation session result
+        uses: actions/download-artifact@v4
+        with:
+          name: echo-mac-segmentation-session-fixture
+          path: windows/Echo.CoreChecks/Fixtures/MacSegmentationSession
+
+      - name: Download Mac production PCM16 conversion output
+        uses: actions/download-artifact@v4
+        with:
+          name: echo-mac-audio-conversion-fixture
+          path: windows/Echo.CoreChecks/Fixtures/MacAudioConversion
+
+      - name: Run core checks including Mac Archive and Soniox production output
+        env:
+          ECHO_MAC_ARCHIVE_FIXTURE: windows/Echo.CoreChecks/Fixtures/Runtime/mac-archive.json
+          ECHO_MAC_SONIOX_FIXTURE: windows/Echo.CoreChecks/Fixtures/MacRuntime/mac-soniox-runtime.json
+          ECHO_MAC_SONIOX_STRESS_FIXTURE: windows/Echo.CoreChecks/Fixtures/MacStress/mac-soniox-stress.json
+          ECHO_MAC_SEGMENTATION_FIXTURE: windows/Echo.CoreChecks/Fixtures/MacSegmentation/mac-segmentation-policy.json
+          ECHO_MAC_SEGMENTATION_SESSION_FIXTURE: windows/Echo.CoreChecks/Fixtures/MacSegmentationSession/mac-segmentation-session.json
+          ECHO_MAC_AUDIO_CONVERSION_FIXTURE: windows/Echo.CoreChecks/Fixtures/MacAudioConversion/mac-audio-conversion.json
+        run: dotnet run --project windows/Echo.CoreChecks -c Release --no-restore
+
+      - name: Upload Windows Archive round trip
+        uses: actions/upload-artifact@v4
+        with:
+          name: echo-windows-archive-roundtrip
+          path: windows/Echo.CoreChecks/Fixtures/Runtime/windows-roundtrip.json
+          if-no-files-found: error
+
+      - name: Build Release x64
+        run: dotnet build windows/Echo.Windows/Echo.Windows.csproj -c Release -p:Platform=x64 -p:PublishReadyToRun=false --no-restore
+
+  verify-mac-archive-roundtrip:
+    needs: build-and-check
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Download Mac fixture and Windows round trip
+        uses: actions/download-artifact@v4
+        with:
+          pattern: echo-*-archive-*
+          path: ${{ runner.temp }}/echo-archive-parity
+          merge-multiple: true
+
+      - name: Compile the parity harness with production Mac Archive and SRT sources
+        run: xcrun swiftc -parse-as-library -O -o "$RUNNER_TEMP/archive-parity-checks" macOS/Models/TranscriptModels.swift macOS/Storage/TranscriptArchiveStore.swift macOS/Services/SRTExporter.swift windows/MacParityChecks/ArchiveParityChecks.swift
+
+      - name: Verify Windows JSON with the production Mac decoder and SRT exporter
+        run: '"$RUNNER_TEMP/archive-parity-checks" verify "$RUNNER_TEMP/echo-archive-parity"'

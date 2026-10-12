@@ -1,0 +1,22 @@
+[
+  {
+    "name": "Test window reduced to a 430x360 DIP viewport",
+    "status": "PASS",
+    "detail": "DPI=144; window=430x360 DIP"
+  },
+  {
+    "name": "Settings header and Complete button remain visible in the reduced viewport",
+    "status": "PASS",
+    "detail": "SaveSettings.offscreen=False; SettingsSections.offscreen=False"
+  },
+  {
+    "name": "Long segmentation settings scroll into view while Complete remains reachable",
+    "status": "PASS",
+    "detail": "ResetSegmentation.offscreen=False; SaveSettings.offscreen=False"
+  },
+  {
+    "name": "Constrained settings screenshot captured",
+    "status": "PASS",
+    "detail": "docs\\sources\\windows-a46-responsive-settings-ui-2026-10-10\\constrained-settings.png"
+  }
+]

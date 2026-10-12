@@ -1,0 +1,47 @@
+Source: macOS/ViewModels/SpeechViewModel.swift (read-only), lines 91-95
+    private let microphoneStartupRetryDelay: TimeInterval = 0.45
+    private let microphoneStartupRetryLimit = 2
+    private let microphoneFirstBufferTimeout: TimeInterval = 1.2
+    private let microphoneConversionTimeout: TimeInterval = 2.5
+    private var isRecoveringAudioCapture = false
+
+Source: macOS/ViewModels/SpeechViewModel.swift (read-only), lines 605-614
+                    #if DEBUG
+                    guard self.microphoneConvertedPCMAttemptID != attemptID else {
+                        return
+                    }
+                    self.microphoneConvertedPCMAttemptID = attemptID
+                    #endif
+                    self.microphoneConvertedPCMReceived = true
+                    self.updateMicrophoneCaptureStateIfReady()
+                    #if DEBUG
+                    MicrophoneLifecycleLog.mark("converted PCM produced frames=\(buffer.frameLength)")
+
+Source: macOS/ViewModels/SpeechViewModel.swift (read-only), lines 678-704
+    private func scheduleMicrophoneConversionHealthCheck(
+        sessionID: UUID,
+        attemptID: UUID,
+        onFailure: @escaping (Error) -> Void
+    ) {
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self,
+                  self.activeSessionID == sessionID,
+                  self.microphoneStartupAttemptID == attemptID,
+                  self.isRecording,
+                  self.microphoneTapInstalled else { return }
+            guard self.microphoneRawCallbackReceived, !self.microphoneConvertedPCMReceived else { return }
+            #if DEBUG
+            MicrophoneLifecycleLog.mark("conversion health timeout raw callback healthy")
+            #endif
+            let error = NSError(
+                domain: "Echo",
+                code: 6,
+                userInfo: [NSLocalizedDescriptionKey: "麦克风已连接，但音频转换失败。"]
+            )
+            self.audioCaptureState = .failed(error.localizedDescription)
+            self.stopMicrophoneCapture()
+            onFailure(error)
+        }
+        microphoneConversionHealthWorkItem?.cancel()
+        microphoneConversionHealthWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + microphoneConversionTimeout, execute: workItem)

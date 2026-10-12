@@ -1,0 +1,976 @@
+{
+  "events" : [
+    {
+      "expected" : [
+        {
+          "chinese" : "会",
+          "end" : 1.3999999999999999,
+          "english" : "Meet",
+          "language" : "en",
+          "speaker" : "Speaker 4",
+          "start" : 1
+        }
+      ],
+      "expectedFinalizations" : 0,
+      "message" : {
+        "tokens" : [
+          {
+            "end_ms" : 1400,
+            "is_final" : false,
+            "language" : "en",
+            "speaker" : "4",
+            "start_ms" : 1000,
+            "text" : "Meet"
+          },
+          {
+            "is_final" : false,
+            "text" : "会",
+            "translation_status" : "translation"
+          }
+        ]
+      }
+    },
+    {
+      "expected" : [
+        {
+          "chinese" : "",
+          "end" : 1.8,
+          "english" : "Meeting",
+          "language" : "en",
+          "speaker" : "Speaker 4",
+          "start" : 1
+        }
+      ],
+      "expectedFinalizations" : 0,
+      "message" : {
+        "tokens" : [
+          {
+            "end_ms" : 1800,
+            "is_final" : false,
+            "language" : "ja",
+            "speaker" : "5",
+            "start_ms" : 1000,
+            "text" : "Meeting"
+          }
+        ]
+      }
+    },
+    {
+      "expected" : [
+        {
+          "chinese" : "",
+          "end" : 2.2000000000000002,
+          "english" : "Meeting started.",
+          "language" : "ja",
+          "speaker" : "Speaker 5",
+          "start" : 1
+        }
+      ],
+      "expectedFinalizations" : 0,
+      "message" : {
+        "tokens" : [
+          {
+            "end_ms" : 2200,
+            "is_final" : true,
+            "language" : "ja",
+            "speaker" : "5",
+            "start_ms" : 1000,
+            "text" : "Meeting started."
+          }
+        ]
+      }
+    },
+    {
+      "expected" : [
+        {
+          "chinese" : "会议开始了。",
+          "end" : 2.2000000000000002,
+          "english" : "Meeting started.",
+          "language" : "ja",
+          "speaker" : "Speaker 5",
+          "start" : 1
+        }
+      ],
+      "expectedFinalizations" : 1,
+      "message" : {
+        "tokens" : [
+          {
+            "is_final" : true,
+            "text" : "会议开始了。",
+            "translation_status" : "translation"
+          },
+          {
+            "is_final" : true,
+            "text" : "<end>"
+          },
+          {
+            "is_final" : true,
+            "text" : "<fin>"
+          }
+        ]
+      }
+    },
+    {
+      "expected" : [
+        {
+          "chinese" : "会议开始了。",
+          "end" : 2.2000000000000002,
+          "english" : "Meeting started.",
+          "language" : "ja",
+          "speaker" : "Speaker 5",
+          "start" : 1
+        },
+        {
+          "chinese" : "第一位。第二位。",
+          "end" : 8,
+          "english" : "First speaker.Second speaker.",
+          "language" : "ja",
+          "speaker" : "Speaker 2",
+          "start" : 6
+        }
+      ],
+      "expectedFinalizations" : 2,
+      "message" : {
+        "tokens" : [
+          {
+            "end_ms" : 7000,
+            "is_final" : true,
+            "language" : "en",
+            "speaker" : "1",
+            "start_ms" : 6000,
+            "text" : "First speaker."
+          },
+          {
+            "end_ms" : 8000,
+            "is_final" : true,
+            "language" : "ja",
+            "speaker" : "2",
+            "start_ms" : 7200,
+            "text" : "Second speaker."
+          },
+          {
+            "is_final" : true,
+            "text" : "第一位。",
+            "translation_status" : "translation"
+          },
+          {
+            "is_final" : true,
+            "text" : "第二位。",
+            "translation_status" : "translation"
+          },
+          {
+            "is_final" : true,
+            "text" : "<end>"
+          }
+        ]
+      }
+    },
+    {
+      "expected" : [
+        {
+          "chinese" : "会议开始了。",
+          "end" : 2.2000000000000002,
+          "english" : "Meeting started.",
+          "language" : "ja",
+          "speaker" : "Speaker 5",
+          "start" : 1
+        },
+        {
+          "chinese" : "第一位。第二位。",
+          "end" : 8,
+          "english" : "First speaker.Second speaker.",
+          "language" : "ja",
+          "speaker" : "Speaker 2",
+          "start" : 6
+        },
+        {
+          "chinese" : "第三位。",
+          "end" : 10,
+          "english" : "Third speaker.",
+          "language" : "en",
+          "speaker" : "Speaker 3",
+          "start" : 9
+        }
+      ],
+      "expectedFinalizations" : 2,
+      "message" : {
+        "tokens" : [
+          {
+            "end_ms" : 10000,
+            "is_final" : true,
+            "language" : "en",
+            "speaker" : "3",
+            "start_ms" : 9000,
+            "text" : "Third speaker."
+          },
+          {
+            "is_final" : true,
+            "text" : "第三位。",
+            "translation_status" : "translation"
+          }
+        ]
+      }
+    },
+    {
+      "expected" : [
+        {
+          "chinese" : "会议开始了。",
+          "end" : 2.2000000000000002,
+          "english" : "Meeting started.",
+          "language" : "ja",
+          "speaker" : "Speaker 5",
+          "start" : 1
+        },
+        {
+          "chinese" : "第一位。第二位。",
+          "end" : 8,
+          "english" : "First speaker.Second speaker.",
+          "language" : "ja",
+          "speaker" : "Speaker 2",
+          "start" : 6
+        },
+        {
+          "chinese" : "第三位。",
+          "end" : 10,
+          "english" : "Third speaker.",
+          "language" : "en",
+          "speaker" : "Speaker 3",
+          "start" : 9
+        },
+        {
+          "chinese" : "第四位。",
+          "end" : 11,
+          "english" : "Fourth speaker.",
+          "language" : "ja",
+          "speaker" : "Speaker 4",
+          "start" : 10.5
+        }
+      ],
+      "expectedFinalizations" : 4,
+      "message" : {
+        "tokens" : [
+          {
+            "end_ms" : 11000,
+            "is_final" : true,
+            "language" : "ja",
+            "speaker" : "4",
+            "start_ms" : 10500,
+            "text" : "Fourth speaker."
+          },
+          {
+            "is_final" : true,
+            "text" : "第四位。",
+            "translation_status" : "translation"
+          },
+          {
+            "is_final" : true,
+            "text" : "<end>"
+          }
+        ]
+      }
+    },
+    {
+      "expected" : [
+        {
+          "chinese" : "会议开始了。",
+          "end" : 2.2000000000000002,
+          "english" : "Meeting started.",
+          "language" : "ja",
+          "speaker" : "Speaker 5",
+          "start" : 1
+        },
+        {
+          "chinese" : "第一位。第二位。",
+          "end" : 8,
+          "english" : "First speaker.Second speaker.",
+          "language" : "ja",
+          "speaker" : "Speaker 2",
+          "start" : 6
+        },
+        {
+          "chinese" : "第三位。",
+          "end" : 10,
+          "english" : "Third speaker.",
+          "language" : "en",
+          "speaker" : "Speaker 3",
+          "start" : 9
+        },
+        {
+          "chinese" : "第四位。",
+          "end" : 11,
+          "english" : "Fourth speaker.",
+          "language" : "ja",
+          "speaker" : "Speaker 4",
+          "start" : 10.5
+        }
+      ],
+      "expectedFinalizations" : 4,
+      "message" : {
+        "tokens" : [
+          {
+            "end_ms" : 12500,
+            "is_final" : true,
+            "language" : "fr",
+            "speaker" : "9",
+            "start_ms" : 12000,
+            "text" : 42
+          }
+        ]
+      }
+    },
+    {
+      "expected" : [
+        {
+          "chinese" : "会议开始了。",
+          "end" : 2.2000000000000002,
+          "english" : "Meeting started.",
+          "language" : "ja",
+          "speaker" : "Speaker 5",
+          "start" : 1
+        },
+        {
+          "chinese" : "第一位。第二位。",
+          "end" : 8,
+          "english" : "First speaker.Second speaker.",
+          "language" : "ja",
+          "speaker" : "Speaker 2",
+          "start" : 6
+        },
+        {
+          "chinese" : "第三位。",
+          "end" : 10,
+          "english" : "Third speaker.",
+          "language" : "en",
+          "speaker" : "Speaker 3",
+          "start" : 9
+        },
+        {
+          "chinese" : "第四位。",
+          "end" : 11,
+          "english" : "Fourth speaker.",
+          "language" : "ja",
+          "speaker" : "Speaker 4",
+          "start" : 10.5
+        },
+        {
+          "chinese" : "",
+          "end" : 12,
+          "english" : "malformed metadata remains provisional",
+          "start" : 11.5
+        }
+      ],
+      "expectedFinalizations" : 4,
+      "message" : {
+        "tokens" : [
+          {
+            "end_ms" : 12000,
+            "is_final" : "true",
+            "language" : 8,
+            "speaker" : 3,
+            "start_ms" : 11500,
+            "text" : "malformed metadata remains provisional",
+            "translation_status" : 17
+          }
+        ]
+      }
+    },
+    {
+      "expected" : [
+        {
+          "chinese" : "会议开始了。",
+          "end" : 2.2000000000000002,
+          "english" : "Meeting started.",
+          "language" : "ja",
+          "speaker" : "Speaker 5",
+          "start" : 1
+        },
+        {
+          "chinese" : "第一位。第二位。",
+          "end" : 8,
+          "english" : "First speaker.Second speaker.",
+          "language" : "ja",
+          "speaker" : "Speaker 2",
+          "start" : 6
+        },
+        {
+          "chinese" : "第三位。",
+          "end" : 10,
+          "english" : "Third speaker.",
+          "language" : "en",
+          "speaker" : "Speaker 3",
+          "start" : 9
+        },
+        {
+          "chinese" : "第四位。",
+          "end" : 11,
+          "english" : "Fourth speaker.",
+          "language" : "ja",
+          "speaker" : "Speaker 4",
+          "start" : 10.5
+        },
+        {
+          "chinese" : "",
+          "end" : 12,
+          "english" : "settled after malformed fields",
+          "start" : 11.5
+        }
+      ],
+      "expectedFinalizations" : 4,
+      "message" : {
+        "tokens" : [
+          {
+            "end_ms" : false,
+            "is_final" : true,
+            "language" : 4,
+            "speaker" : [
+
+            ],
+            "start_ms" : "invalid",
+            "text" : "settled after malformed fields"
+          }
+        ]
+      }
+    },
+    {
+      "expected" : [
+        {
+          "chinese" : "会议开始了。",
+          "end" : 2.2000000000000002,
+          "english" : "Meeting started.",
+          "language" : "ja",
+          "speaker" : "Speaker 5",
+          "start" : 1
+        },
+        {
+          "chinese" : "第一位。第二位。",
+          "end" : 8,
+          "english" : "First speaker.Second speaker.",
+          "language" : "ja",
+          "speaker" : "Speaker 2",
+          "start" : 6
+        },
+        {
+          "chinese" : "第三位。",
+          "end" : 10,
+          "english" : "Third speaker.",
+          "language" : "en",
+          "speaker" : "Speaker 3",
+          "start" : 9
+        },
+        {
+          "chinese" : "第四位。",
+          "end" : 11,
+          "english" : "Fourth speaker.",
+          "language" : "ja",
+          "speaker" : "Speaker 4",
+          "start" : 10.5
+        },
+        {
+          "chinese" : "畸形字段后正常到达的译文",
+          "end" : 12,
+          "english" : "settled after malformed fields",
+          "start" : 11.5
+        }
+      ],
+      "expectedFinalizations" : 4,
+      "message" : {
+        "tokens" : [
+          {
+            "is_final" : true,
+            "text" : 23
+          },
+          {
+            "is_final" : true,
+            "text" : "畸形字段后正常到达的译文",
+            "translation_status" : "translation"
+          }
+        ]
+      }
+    },
+    {
+      "expected" : [
+        {
+          "chinese" : "会议开始了。",
+          "end" : 2.2000000000000002,
+          "english" : "Meeting started.",
+          "language" : "ja",
+          "speaker" : "Speaker 5",
+          "start" : 1
+        },
+        {
+          "chinese" : "第一位。第二位。",
+          "end" : 8,
+          "english" : "First speaker.Second speaker.",
+          "language" : "ja",
+          "speaker" : "Speaker 2",
+          "start" : 6
+        },
+        {
+          "chinese" : "第三位。",
+          "end" : 10,
+          "english" : "Third speaker.",
+          "language" : "en",
+          "speaker" : "Speaker 3",
+          "start" : 9
+        },
+        {
+          "chinese" : "第四位。",
+          "end" : 11,
+          "english" : "Fourth speaker.",
+          "language" : "ja",
+          "speaker" : "Speaker 4",
+          "start" : 10.5
+        },
+        {
+          "chinese" : "畸形字段后正常到达的译文",
+          "end" : 12,
+          "english" : "settled after malformed fields",
+          "start" : 11.5
+        }
+      ],
+      "expectedFinalizations" : 5,
+      "message" : {
+        "tokens" : [
+          {
+            "is_final" : true,
+            "text" : "<end>"
+          }
+        ]
+      }
+    },
+    {
+      "expected" : [
+        {
+          "chinese" : "会议开始了。",
+          "end" : 2.2000000000000002,
+          "english" : "Meeting started.",
+          "language" : "ja",
+          "speaker" : "Speaker 5",
+          "start" : 1
+        },
+        {
+          "chinese" : "第一位。第二位。",
+          "end" : 8,
+          "english" : "First speaker.Second speaker.",
+          "language" : "ja",
+          "speaker" : "Speaker 2",
+          "start" : 6
+        },
+        {
+          "chinese" : "第三位。",
+          "end" : 10,
+          "english" : "Third speaker.",
+          "language" : "en",
+          "speaker" : "Speaker 3",
+          "start" : 9
+        },
+        {
+          "chinese" : "第四位。",
+          "end" : 11,
+          "english" : "Fourth speaker.",
+          "language" : "ja",
+          "speaker" : "Speaker 4",
+          "start" : 10.5
+        },
+        {
+          "chinese" : "畸形字段后正常到达的译文",
+          "end" : 12,
+          "english" : "settled after malformed fields",
+          "start" : 11.5
+        }
+      ],
+      "expectedFinalizations" : 5,
+      "message" : {
+        "tokens" : [
+          {
+            "is_final" : true,
+            "text" : "this whole token array should be ignored"
+          },
+          "not-a-token-object"
+        ]
+      }
+    },
+    {
+      "expected" : [
+        {
+          "chinese" : "会议开始了。",
+          "end" : 2.2000000000000002,
+          "english" : "Meeting started.",
+          "language" : "ja",
+          "speaker" : "Speaker 5",
+          "start" : 1
+        },
+        {
+          "chinese" : "第一位。第二位。",
+          "end" : 8,
+          "english" : "First speaker.Second speaker.",
+          "language" : "ja",
+          "speaker" : "Speaker 2",
+          "start" : 6
+        },
+        {
+          "chinese" : "第三位。",
+          "end" : 10,
+          "english" : "Third speaker.",
+          "language" : "en",
+          "speaker" : "Speaker 3",
+          "start" : 9
+        },
+        {
+          "chinese" : "第四位。",
+          "end" : 11,
+          "english" : "Fourth speaker.",
+          "language" : "ja",
+          "speaker" : "Speaker 4",
+          "start" : 10.5
+        },
+        {
+          "chinese" : "畸形字段后正常到达的译文",
+          "end" : 12,
+          "english" : "settled after malformed fields",
+          "start" : 11.5
+        },
+        {
+          "chinese" : "",
+          "end" : 13.6,
+          "english" : "microeconomic theory and microeconomic model",
+          "start" : 13
+        }
+      ],
+      "expectedFinalizations" : 6,
+      "message" : {
+        "tokens" : [
+          {
+            "end_ms" : 13600,
+            "is_final" : true,
+            "start_ms" : 13000,
+            "text" : "micro economic theory and macroeconomic model"
+          },
+          {
+            "is_final" : true,
+            "text" : "<end>"
+          }
+        ]
+      }
+    },
+    {
+      "expected" : [
+        {
+          "chinese" : "会议开始了。",
+          "end" : 2.2000000000000002,
+          "english" : "Meeting started.",
+          "language" : "ja",
+          "speaker" : "Speaker 5",
+          "start" : 1
+        },
+        {
+          "chinese" : "第一位。第二位。",
+          "end" : 8,
+          "english" : "First speaker.Second speaker.",
+          "language" : "ja",
+          "speaker" : "Speaker 2",
+          "start" : 6
+        },
+        {
+          "chinese" : "第三位。",
+          "end" : 10,
+          "english" : "Third speaker.",
+          "language" : "en",
+          "speaker" : "Speaker 3",
+          "start" : 9
+        },
+        {
+          "chinese" : "第四位。",
+          "end" : 11,
+          "english" : "Fourth speaker.",
+          "language" : "ja",
+          "speaker" : "Speaker 4",
+          "start" : 10.5
+        },
+        {
+          "chinese" : "畸形字段后正常到达的译文",
+          "end" : 12,
+          "english" : "settled after malformed fields",
+          "start" : 11.5
+        },
+        {
+          "chinese" : "",
+          "end" : 13.6,
+          "english" : "microeconomic theory and microeconomic model",
+          "start" : 13
+        },
+        {
+          "chinese" : "",
+          "end" : 14.699999999999999,
+          "english" : "macroeconomic growth with a macroeconomic class",
+          "start" : 14
+        }
+      ],
+      "expectedFinalizations" : 7,
+      "message" : {
+        "tokens" : [
+          {
+            "end_ms" : 14700,
+            "is_final" : true,
+            "start_ms" : 14000,
+            "text" : "macroeconomic growth with a microeconomic class"
+          },
+          {
+            "is_final" : true,
+            "text" : "<end>"
+          }
+        ]
+      }
+    },
+    {
+      "expected" : [
+        {
+          "chinese" : "会议开始了。",
+          "end" : 2.2000000000000002,
+          "english" : "Meeting started.",
+          "language" : "ja",
+          "speaker" : "Speaker 5",
+          "start" : 1
+        },
+        {
+          "chinese" : "第一位。第二位。",
+          "end" : 8,
+          "english" : "First speaker.Second speaker.",
+          "language" : "ja",
+          "speaker" : "Speaker 2",
+          "start" : 6
+        },
+        {
+          "chinese" : "第三位。",
+          "end" : 10,
+          "english" : "Third speaker.",
+          "language" : "en",
+          "speaker" : "Speaker 3",
+          "start" : 9
+        },
+        {
+          "chinese" : "第四位。",
+          "end" : 11,
+          "english" : "Fourth speaker.",
+          "language" : "ja",
+          "speaker" : "Speaker 4",
+          "start" : 10.5
+        },
+        {
+          "chinese" : "畸形字段后正常到达的译文",
+          "end" : 12,
+          "english" : "settled after malformed fields",
+          "start" : 11.5
+        },
+        {
+          "chinese" : "",
+          "end" : 13.6,
+          "english" : "microeconomic theory and microeconomic model",
+          "start" : 13
+        },
+        {
+          "chinese" : "",
+          "end" : 14.699999999999999,
+          "english" : "macroeconomic growth with a macroeconomic class",
+          "start" : 14
+        },
+        {
+          "chinese" : "税收导数",
+          "end" : 15.699999999999999,
+          "english" : "The first derivative and derivative function",
+          "start" : 15
+        }
+      ],
+      "expectedFinalizations" : 8,
+      "message" : {
+        "tokens" : [
+          {
+            "end_ms" : 15700,
+            "is_final" : true,
+            "start_ms" : 15000,
+            "text" : "The first duty and duty function"
+          },
+          {
+            "is_final" : true,
+            "text" : "税收关税",
+            "translation_status" : "translation"
+          },
+          {
+            "is_final" : true,
+            "text" : "<end>"
+          }
+        ]
+      }
+    },
+    {
+      "expected" : [
+        {
+          "chinese" : "会议开始了。",
+          "end" : 2.2000000000000002,
+          "english" : "Meeting started.",
+          "language" : "ja",
+          "speaker" : "Speaker 5",
+          "start" : 1
+        },
+        {
+          "chinese" : "第一位。第二位。",
+          "end" : 8,
+          "english" : "First speaker.Second speaker.",
+          "language" : "ja",
+          "speaker" : "Speaker 2",
+          "start" : 6
+        },
+        {
+          "chinese" : "第三位。",
+          "end" : 10,
+          "english" : "Third speaker.",
+          "language" : "en",
+          "speaker" : "Speaker 3",
+          "start" : 9
+        },
+        {
+          "chinese" : "第四位。",
+          "end" : 11,
+          "english" : "Fourth speaker.",
+          "language" : "ja",
+          "speaker" : "Speaker 4",
+          "start" : 10.5
+        },
+        {
+          "chinese" : "畸形字段后正常到达的译文",
+          "end" : 12,
+          "english" : "settled after malformed fields",
+          "start" : 11.5
+        },
+        {
+          "chinese" : "",
+          "end" : 13.6,
+          "english" : "microeconomic theory and microeconomic model",
+          "start" : 13
+        },
+        {
+          "chinese" : "",
+          "end" : 14.699999999999999,
+          "english" : "macroeconomic growth with a macroeconomic class",
+          "start" : 14
+        },
+        {
+          "chinese" : "税收导数",
+          "end" : 15.699999999999999,
+          "english" : "The first derivative and derivative function",
+          "start" : 15
+        },
+        {
+          "chinese" : "",
+          "end" : 16.600000000000001,
+          "english" : "The duty is owed by Han",
+          "start" : 16
+        }
+      ],
+      "expectedFinalizations" : 9,
+      "message" : {
+        "tokens" : [
+          {
+            "end_ms" : 16600,
+            "is_final" : true,
+            "start_ms" : 16000,
+            "text" : "The duty is owed by Han"
+          },
+          {
+            "is_final" : true,
+            "text" : "<end>"
+          }
+        ]
+      }
+    },
+    {
+      "expected" : [
+        {
+          "chinese" : "会议开始了。",
+          "end" : 2.2000000000000002,
+          "english" : "Meeting started.",
+          "language" : "ja",
+          "speaker" : "Speaker 5",
+          "start" : 1
+        },
+        {
+          "chinese" : "第一位。第二位。",
+          "end" : 8,
+          "english" : "First speaker.Second speaker.",
+          "language" : "ja",
+          "speaker" : "Speaker 2",
+          "start" : 6
+        },
+        {
+          "chinese" : "第三位。",
+          "end" : 10,
+          "english" : "Third speaker.",
+          "language" : "en",
+          "speaker" : "Speaker 3",
+          "start" : 9
+        },
+        {
+          "chinese" : "第四位。",
+          "end" : 11,
+          "english" : "Fourth speaker.",
+          "language" : "ja",
+          "speaker" : "Speaker 4",
+          "start" : 10.5
+        },
+        {
+          "chinese" : "畸形字段后正常到达的译文",
+          "end" : 12,
+          "english" : "settled after malformed fields",
+          "start" : 11.5
+        },
+        {
+          "chinese" : "",
+          "end" : 13.6,
+          "english" : "microeconomic theory and microeconomic model",
+          "start" : 13
+        },
+        {
+          "chinese" : "",
+          "end" : 14.699999999999999,
+          "english" : "macroeconomic growth with a macroeconomic class",
+          "start" : 14
+        },
+        {
+          "chinese" : "税收导数",
+          "end" : 15.699999999999999,
+          "english" : "The first derivative and derivative function",
+          "start" : 15
+        },
+        {
+          "chinese" : "",
+          "end" : 16.600000000000001,
+          "english" : "The duty is owed by Han",
+          "start" : 16
+        },
+        {
+          "chinese" : "",
+          "end" : 17.5,
+          "english" : "on the other hand",
+          "start" : 17
+        }
+      ],
+      "expectedFinalizations" : 10,
+      "message" : {
+        "tokens" : [
+          {
+            "end_ms" : 17500,
+            "is_final" : true,
+            "start_ms" : 17000,
+            "text" : "on the other han"
+          },
+          {
+            "is_final" : true,
+            "text" : "<end>"
+          }
+        ]
+      }
+    }
+  ],
+  "source" : "macOS\/ViewModels\/SpeechViewModel.swift production method extraction",
+  "sourceCommit" : "6063d3d0908977c77ffd6e2314724f578eafd593"
+}

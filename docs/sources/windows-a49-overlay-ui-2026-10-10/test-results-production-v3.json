@@ -1,0 +1,42 @@
+[
+  {
+    "name": "Overlay is a tool-window and does not activate",
+    "status": "PASS",
+    "detail": "extendedStyle=0x80001A8"
+  },
+  {
+    "name": "Layered style is active for transparent composition",
+    "status": "FAIL",
+    "detail": "extendedStyle=0x80001A8"
+  },
+  {
+    "name": "Overlay remains above the main window in z-order",
+    "status": "PASS",
+    "detail": "Compared by adjacent top-level window order."
+  },
+  {
+    "name": "Overlay visibility matches test expectation",
+    "status": "PASS",
+    "detail": "Window is visible."
+  },
+  {
+    "name": "Click-through state matches test expectation",
+    "status": "PASS",
+    "detail": "expected=True; actual=True"
+  },
+  {
+    "name": "Synthetic original text is visible to UI Automation",
+    "status": "PASS",
+    "detail": "OriginalShadow Text \"Echo overlay preview\" (353,1227 1854x52)\n\nFound 1 elements (--depth 4). Use the first token as selector, e.g.: winapp ui \ninvoke OriginalShadow -a <app>\nUse -i to only show interactive elements."
+  },
+  {
+    "name": "Synthetic translated text is visible to UI Automation",
+    "status": "PASS",
+    "detail": "TranslationShadow Text \"双语悬浮字幕预览\" (353,1282 1854x47)\n\nFound 1 elements (--depth 4). Use the first token as selector, e.g.: winapp ui \ninvoke TranslationShadow -a <app>\nUse -i to only show interactive elements."
+  },
+  {
+    "name": "Overlay-only screenshot captured",
+    "status": "PASS",
+    "detail": "D:\\ProgramData\\WorkSpace\\EchoWindowsParity\\docs\\sources\\windows-a49-overlay-ui-2026-10-10\\overlay-production-v3.png"
+  }
+]

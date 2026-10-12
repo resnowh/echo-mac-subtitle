@@ -1,0 +1,35 @@
+enum TranscriptSegmentationPolicy {
+    enum Trigger: Equatable {
+        case endpoint
+        case silence
+        case longSegment
+    }
+
+    static func trigger(
+        text: String,
+        elapsed: TimeInterval,
+        quiet: TimeInterval,
+        config: TranscriptSegmentationConfig,
+        endpointReached: Bool = false,
+        translationEnabled: Bool = false,
+        translationReady: Bool = true
+    ) -> Trigger? {
+        // A semantic endpoint is authoritative and is never blocked by local
+        // fallback settings or a not-yet-arrived translation.
+        if endpointReached { return .endpoint }
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !translationEnabled || translationReady else { return nil }
+        let words = text.split(whereSeparator: \.isWhitespace).count
+        if config.localSilenceFallbackEnabled,
+           words >= config.localSilenceMinimumWordCount,
+           quiet >= config.localSilenceThresholdSeconds {
+            return .silence
+        }
+        if config.longSegmentFallbackEnabled,
+           words >= config.longSegmentWordThreshold,
+           elapsed >= config.longSegmentDurationThresholdSeconds {
+            return .longSegment
+        }
+        return nil
+    }
+}

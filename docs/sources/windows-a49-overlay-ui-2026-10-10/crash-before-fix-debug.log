@@ -1,0 +1,79 @@
+﻿First-chance exception: Breakpoint (0x80000003) at 0x7FFF6FB82239
+First-chance exception: Exception (0x04242420) at 0x7FFF6D2141CA
+[Debug] onecoreuap\internal\sdk\inc\WindowsAppRuntimeInsights.h(59)\Microsoft.UI.Windowing.Core.dll!00007FFE23E02048: (caller: 00007FFE23E02E8C) LogHr(1) tid(15234) 8007007E 找不到指定的模块。
+    Msg:[Unable to load resource dll. Microsoft.WindowsAppRuntime.Insights.Resource.dll] 
+First-chance exception: Exception (0x40080201) at 0x7FFF6D2141CA
+[Debug] onecoreuap\internal\sdk\inc\WindowsAppRuntimeInsights.h(59)\Microsoft.UI.Input.dll!00007FFDF09D1212: (caller: 00007FFDF09D5CAC) LogHr(1) tid(15234) 8007007E 找不到指定的模块。
+    Msg:[Unable to load resource dll. Microsoft.WindowsAppRuntime.Insights.Resource.dll] 
+[Debug] onecore\internal\sdk\inc\wil/resource.h(967)\dwmcorei.dll!00007FFDC08C1436: (caller: 00007FFDC08C9E25) ReturnNt(1) tid(15488) C0000022 
+[Debug] onecoreuap\internal\sdk\inc\WindowsAppRuntimeInsights.h(59)\Microsoft.UI.Windowing.dll!00007FFDFB0E6908: (caller: 00007FFDFB0E73D0) LogHr(1) tid(15234) 8007007E 找不到指定的模块。
+    Msg:[Unable to load resource dll. Microsoft.WindowsAppRuntime.Insights.Resource.dll] 
+[Debug] onecoreuap\windows\frameworkudk\warppal.cpp(783)\Microsoft.Internal.WarpPal.dll!00007FFF671FEFBC: (caller: 00007FFF1A8EF35F) ReturnHr(1) tid(15488) 80004002 不支持此接口
+[Debug] onecoreuap\windows\frameworkudk\warppal.cpp(783)\Microsoft.Internal.WarpPal.dll!00007FFF671FEFBC: (caller: 00007FFF1A8EF35F) ReturnHr(2) tid(15234) 80004002 不支持此接口
+[Debug] onecoreuap\windows\frameworkudk\warppal.cpp(783)\Microsoft.Internal.WarpPal.dll!00007FFF671FEFBC: (caller: 00007FFF1A8EF35F) ReturnHr(3) tid(15234) 80004002 不支持此接口
+First-chance exception: C++ Exception (0xE06D7363) at 0x7FFF6D2141CA
+[CrashDump] Saved first-chance context for thread 86580 (0xE06D7363) at 0x7FFF6D2141CA
+First-chance exception: C++ Exception (0xE06D7363) at 0x7FFF6D2141CA
+First-chance exception: C++ Exception (0xE06D7363) at 0x7FFF6D2141CA
+First-chance exception: C++ Exception (0xE06D7363) at 0x7FFF6D2141CA
+First-chance exception: C++ Exception (0xE06D7363) at 0x7FFF6D2141CA
+First-chance exception: C++ Exception (0xE06D7363) at 0x7FFF6D2141CA
+First-chance exception: C++ Exception (0xE06D7363) at 0x7FFF6D2141CA
+First-chance exception: C++ Exception (0xE06D7363) at 0x7FFF6D2141CA
+First-chance exception: C++ Exception (0xE06D7363) at 0x7FFF6D2141CA
+First-chance exception: C++ Exception (0xE06D7363) at 0x7FFF6D2141CA
+First-chance exception: C++ Exception (0xE06D7363) at 0x7FFF6D2141CA
+First-chance exception: C++ Exception (0xE06D7363) at 0x7FFF6D2141CA
+First-chance exception: C++ Exception (0xE06D7363) at 0x7FFF6D2141CA
+First-chance exception: C++ Exception (0xE06D7363) at 0x7FFF6D2141CA
+First-chance exception: C++ Exception (0xE06D7363) at 0x7FFF6D2141CA
+First-chance exception: C++ Exception (0xE06D7363) at 0x7FFF6D2141CA
+First-chance exception: C++ Exception (0xE06D7363) at 0x7FFF6D2141CA
+First-chance exception: C++ Exception (0xE06D7363) at 0x7FFF6D2141CA
+First-chance exception: CLR Exception (0xE0434352) at 0x7FFF6D2141CA
+First-chance exception: CLR Exception (0xE0434352) at 0x7FFF6D2141CA
+First-chance exception: CLR Exception (0xE0434352) at 0x7FFF6D2141CA
+First-chance exception: Exception (0x40080201) at 0x7FFF6D2141CA
+[Debug] onecoreuap\windows\frameworkudk\warppal.cpp(783)\Microsoft.Internal.WarpPal.dll!00007FFF671FEFBC: (caller: 00007FFF679511CE) ReturnHr(4) tid(15488) 80004002 不支持此接口
+[Debug] onecoreuap\windows\frameworkudk\warppal.cpp(783)\Microsoft.Internal.WarpPal.dll!00007FFF671FEFBC: (caller: 00007FFF679511CE) ReturnHr(5) tid(15488) 80004002 不支持此接口
+First-chance exception: Exception (0x40080201) at 0x7FFF6D2141CA
+First-chance exception: C++ Exception (0xE06D7363) at 0x7FFF6D2141CA
+First-chance exception: CLR Exception (0xE0434352) at 0x7FFF6D2141CA
+First-chance exception: Exception (0x40080201) at 0x7FFF6D2141CA
+First-chance exception: Exception (0x40080201) at 0x7FFF6D2141CA
+Second-chance exception (crash): Exception (0xC000027B) at 0x7FFDFE137DE6
+
+
+=== Crash Analysis (2026-10-10 02:50:19) ===
+CLR Version: 10.0.1226.42308
+Target Architecture: X64
+
+Exception Type: System.InvalidCastException
+Message: 句柄无效。
+
+HResult: 0x80004002
+
+Exception Stack Trace:
+  C:\Users\HENRY\AppData\Local\Temp\EchoWindowsA49UiTest-b381e96b1f2a4783bf5cb68ef9752152\Echo.Windows\bin\x64\Debug\net10.0-windows10.0.26100.0\win-x64\AppX\System.Private.CoreLib.dll!System.Runtime.InteropServices.Marshal.ThrowExceptionForHR
+  C:\Users\HENRY\AppData\Local\Temp\EchoWindowsA49UiTest-b381e96b1f2a4783bf5cb68ef9752152\Echo.Windows\bin\x64\Debug\net10.0-windows10.0.26100.0\win-x64\AppX\WinRT.Runtime.dll!WinRT.IObjectReference.Runtime]]
+  C:\Users\HENRY\AppData\Local\Temp\EchoWindowsA49UiTest-b381e96b1f2a4783bf5cb68ef9752152\Echo.Windows\bin\x64\Debug\net10.0-windows10.0.26100.0\win-x64\AppX\WinRT.Runtime.dll!System.Collections.Generic.IReadOnlyListImpl<System.__Canon>.Make_IEnumerableObjRef
+  C:\Users\HENRY\AppData\Local\Temp\EchoWindowsA49UiTest-b381e96b1f2a4783bf5cb68ef9752152\Echo.Windows\bin\x64\Debug\net10.0-windows10.0.26100.0\win-x64\AppX\WinRT.Runtime.dll!System.Collections.Generic.IReadOnlyListImpl<System.__Canon>.get_iEnumerableObjRef
+  C:\Users\HENRY\AppData\Local\Temp\EchoWindowsA49UiTest-b381e96b1f2a4783bf5cb68ef9752152\Echo.Windows\bin\x64\Debug\net10.0-windows10.0.26100.0\win-x64\AppX\WinRT.Runtime.dll!System.Collections.Generic.IReadOnlyListImpl<System.__Canon>.GetEnumerator
+  C:\Users\HENRY\AppData\Local\Temp\EchoWindowsA49UiTest-b381e96b1f2a4783bf5cb68ef9752152\Echo.Windows\bin\x64\Debug\net10.0-windows10.0.26100.0\win-x64\AppX\Echo.Windows.dll!Echo_Windows.DesktopSubtitleOverlayWindow.SavedOrCurrentDisplayArea in DesktopSubtitleOverlayWindow.xaml.cs:181
+  C:\Users\HENRY\AppData\Local\Temp\EchoWindowsA49UiTest-b381e96b1f2a4783bf5cb68ef9752152\Echo.Windows\bin\x64\Debug\net10.0-windows10.0.26100.0\win-x64\AppX\Echo.Windows.dll!Echo_Windows.DesktopSubtitleOverlayWindow.PlaceOnCurrentDisplay in DesktopSubtitleOverlayWindow.xaml.cs:163
+  C:\Users\HENRY\AppData\Local\Temp\EchoWindowsA49UiTest-b381e96b1f2a4783bf5cb68ef9752152\Echo.Windows\bin\x64\Debug\net10.0-windows10.0.26100.0\win-x64\AppX\Echo.Windows.dll!Echo_Windows.DesktopSubtitleOverlayWindow+<>c__DisplayClass41_0.<DisplayAreaWatcher_Changed>b__0 in DesktopSubtitleOverlayWindow.xaml.cs:231
+  C:\Users\HENRY\AppData\Local\Temp\EchoWindowsA49UiTest-b381e96b1f2a4783bf5cb68ef9752152\Echo.Windows\bin\x64\Debug\net10.0-windows10.0.26100.0\win-x64\AppX\Microsoft.InteractiveExperiences.Projection.dll!ABI.Microsoft.UI.Dispatching.DispatcherQueueHandler.Do_Abi_Invoke
+
+=== All Threads ===
+
+Thread 60152 (Managed ID: 1):
+
+Thread 86580 (Managed ID: 2):
+  C:\Users\HENRY\AppData\Local\Temp\EchoWindowsA49UiTest-b381e96b1f2a4783bf5cb68ef9752152\Echo.Windows\bin\x64\Debug\net10.0-windows10.0.26100.0\win-x64\AppX\Microsoft.WinUI.dll!ABI.Microsoft.UI.Xaml.IApplicationStaticsMethods.Start
+  C:\Users\HENRY\AppData\Local\Temp\EchoWindowsA49UiTest-b381e96b1f2a4783bf5cb68ef9752152\Echo.Windows\bin\x64\Debug\net10.0-windows10.0.26100.0\win-x64\AppX\Microsoft.WinUI.dll!Microsoft.UI.Xaml.Application.Start
+  C:\Users\HENRY\AppData\Local\Temp\EchoWindowsA49UiTest-b381e96b1f2a4783bf5cb68ef9752152\Echo.Windows\bin\x64\Debug\net10.0-windows10.0.26100.0\win-x64\AppX\Echo.Windows.dll!Echo_Windows.Program.Main in App.g.i.cs:33
+
+Thread 51300 (Managed ID: 3):
+
+WinUI Triage: skipped — the triage child process exited with code -1073740791.
+

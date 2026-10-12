@@ -1,0 +1,49 @@
+name: Windows Signed Release Candidate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  signed-msix:
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore locked dependencies
+        run: dotnet restore windows/Echo.Windows/Echo.Windows.csproj --locked-mode -p:Platform=x64
+
+      - name: Build Release x64
+        run: dotnet build windows/Echo.Windows/Echo.Windows.csproj -c Release -p:Platform=x64 -p:PublishReadyToRun=false --no-restore
+
+      - name: Package and verify trusted signature
+        shell: pwsh
+        env:
+          ECHO_WINDOWS_SIGNING_PFX_BASE64: ${{ secrets.WINDOWS_SIGNING_PFX_BASE64 }}
+          ECHO_WINDOWS_SIGNING_PFX_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PFX_PASSWORD }}
+        run: |
+          $buildRoot = Join-Path $env:GITHUB_WORKSPACE 'windows/Echo.Windows/bin/x64/Release/net10.0-windows10.0.26100.0/win-x64'
+          $packagePath = Join-Path $env:RUNNER_TEMP "Echo-Windows-$env:GITHUB_RUN_ID-x64.msix"
+          $result = & ./windows/package-release-candidate.ps1 -BuildOutputPath $buildRoot -OutputPath $packagePath
+          $metadata = $result | ConvertTo-Json -Depth 4
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value '## Windows signed candidate'
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value 'The MSIX signature, timestamp, package identity, and executable payload were verified on a hosted Windows runner.'
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "``````json`n$metadata`n``````"
+
+      - name: Upload signed MSIX candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: echo-windows-signed-msix-${{ github.run_id }}
+          path: ${{ runner.temp }}/Echo-Windows-${{ github.run_id }}-x64.msix
+          if-no-files-found: error
+          retention-days: 30
