@@ -5,6 +5,7 @@ import Foundation
 /// Audio meters and other high-frequency SpeechViewModel state are not observed.
 final class DesktopSubtitleOverlayFeed: ObservableObject {
     @Published private(set) var current: DesktopSubtitleOverlayState?
+    @Published private(set) var previous: DesktopSubtitleOverlayPrevious?
     private var reducer = DesktopSubtitleOverlayReducer()
     private let minimumPublishInterval: TimeInterval = 0.05
     private var lastPublishUptime: TimeInterval = 0
@@ -78,8 +79,8 @@ final class DesktopSubtitleOverlayFeed: ObservableObject {
     }
 
     private func publishReducerState() {
-        guard current != reducer.current else { return }
-        current = reducer.current
+        if current != reducer.current { current = reducer.current }
+        if previous != reducer.previous { previous = reducer.previous }
     }
 
     private func isCurrentGeneration(_ value: UUID) -> Bool {
