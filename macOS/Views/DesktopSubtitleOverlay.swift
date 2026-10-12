@@ -129,21 +129,23 @@ final class SubtitleOverlayController: NSObject, ObservableObject, NSWindowDeleg
 
     // SwiftUI gestures explicitly move the panel; background dragging was
     // unreliable because the hosting view and scroll content consume events.
-    func move(from start: NSRect, translation: CGSize) {
+    func move(from start: NSRect, mouseStart: NSPoint, mouseNow: NSPoint) {
         guard isAdjusting, let panel else { return }
         gestureInProgress = true
-        let origin = NSPoint(x: start.minX + translation.width, y: start.minY - translation.height)
+        let origin = NSPoint(x: start.minX + mouseNow.x - mouseStart.x,
+                             y: start.minY + mouseNow.y - mouseStart.y)
         applyingFrame = true
         panel.setFrameOrigin(origin)
         applyingFrame = false
     }
 
-    func resize(from start: NSRect, translation: CGSize) {
+    func resize(from start: NSRect, mouseStart: NSPoint, mouseNow: NSPoint) {
         guard isAdjusting, let panel, let settings = settingsStore?.settings else { return }
         gestureInProgress = true
         let visible = screen(for: settings).visibleFrame
-        let width = min(max(start.width + translation.width, min(280, visible.width)), visible.width)
-        let height = min(max(start.height + translation.height, 90), max(90, visible.height * 0.85))
+        // Screen-space cursor deltas remain stable as the window moves/resizes.
+        let width = min(max(start.width + mouseNow.x - mouseStart.x, min(280, visible.width)), visible.width)
+        let height = min(max(start.height + mouseStart.y - mouseNow.y, 90), max(90, visible.height * 0.85))
         // Bottom-right grip: keep top-left anchored as the user drags.
         let x = min(max(start.minX, visible.minX), visible.maxX - width)
         let y = min(max(start.maxY - height, visible.minY), visible.maxY - height)
@@ -281,7 +283,9 @@ private struct DesktopSubtitleOverlayView: View {
     @State private var recentExpirationTask: Task<Void, Never>?
     @State private var expirationTask: Task<Void, Never>?
     @State private var moveStartFrame: NSRect?
+    @State private var moveStartMouse: NSPoint?
     @State private var resizeStartFrame: NSRect?
+    @State private var resizeStartMouse: NSPoint?
 
     private var settings: DesktopSubtitleOverlaySettings { settingsStore.settings }
 
@@ -386,28 +390,36 @@ private struct DesktopSubtitleOverlayView: View {
     private var moveGesture: some Gesture {
         DragGesture(minimumDistance: 2)
             .onChanged { value in
-                if moveStartFrame == nil { moveStartFrame = controller.currentPanelFrame }
-                if let start = moveStartFrame {
-                    controller.move(from: start, translation: value.translation)
+                if moveStartFrame == nil {
+                    moveStartFrame = controller.currentPanelFrame
+                    moveStartMouse = NSEvent.mouseLocation
+                }
+                if let start = moveStartFrame, let mouseStart = moveStartMouse {
+                    controller.move(from: start, mouseStart: mouseStart, mouseNow: NSEvent.mouseLocation)
                 }
             }
             .onEnded { _ in
                 controller.commitPlacement(resized: false)
                 moveStartFrame = nil
+                moveStartMouse = nil
             }
     }
 
     private var resizeGesture: some Gesture {
         DragGesture(minimumDistance: 2)
             .onChanged { value in
-                if resizeStartFrame == nil { resizeStartFrame = controller.currentPanelFrame }
-                if let start = resizeStartFrame {
-                    controller.resize(from: start, translation: value.translation)
+                if resizeStartFrame == nil {
+                    resizeStartFrame = controller.currentPanelFrame
+                    resizeStartMouse = NSEvent.mouseLocation
+                }
+                if let start = resizeStartFrame, let mouseStart = resizeStartMouse {
+                    controller.resize(from: start, mouseStart: mouseStart, mouseNow: NSEvent.mouseLocation)
                 }
             }
             .onEnded { _ in
                 controller.commitPlacement(resized: true)
                 resizeStartFrame = nil
+                resizeStartMouse = nil
             }
     }
 
