@@ -4,7 +4,11 @@ import SwiftUI
 final class DesktopSubtitleOverlaySettingsStore: ObservableObject {
     @Published private(set) var settings: DesktopSubtitleOverlaySettings
 
-    init() { settings = .load() }
+    private let defaults: UserDefaults
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        settings = .load(from: defaults)
+    }
 
     func update(_ change: (inout DesktopSubtitleOverlaySettings) -> Void) {
         var next = settings
@@ -13,20 +17,22 @@ final class DesktopSubtitleOverlaySettingsStore: ObservableObject {
         next = next.validated()
         guard next != settings else { return }
         settings = next
-        next.save()
+        next.save(to: defaults)
     }
 
     func resetAppearance() {
-        update { current in
-            let enabled = current.enabled
-            let screenID = current.screenID
-            let x = current.normalizedX
-            let bottom = current.normalizedBottom
-            current = .defaults
-            current.enabled = enabled
-            current.screenID = screenID
-            current.normalizedX = x
-            current.normalizedBottom = bottom
+        update {
+            $0.showOriginal = true
+            $0.showTranslation = true
+            $0.originalFontSize = 26
+            $0.translationFontSize = 24
+            $0.opacity = 1
+            $0.backgroundOpacity = 0
+            $0.originalColorHex = "#FFFFFF"
+            $0.translationColorHex = "#FFFFFF"
+            $0.shadowStrength = 0.35
+            $0.widthFraction = 0.75
+            $0.preferredHeightFraction = nil
         }
     }
 
@@ -52,10 +58,12 @@ final class SubtitleOverlayController: NSObject, ObservableObject, NSWindowDeleg
     private var applyingFrame = false
     private var gestureInProgress = false
     private var screenChangeObserver: NSObjectProtocol?
-    private var lastAppliedWidthFraction: Double?
+    private var lastAppliedSettings: DesktopSubtitleOverlaySettings?
+    private let presentsWindows: Bool
     private var measuredContentHeight: CGFloat = 140
 
-    override init() {
+    init(presentsWindows: Bool = true) {
+        self.presentsWindows = presentsWindows
         super.init()
         screenChangeObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
@@ -79,10 +87,10 @@ final class SubtitleOverlayController: NSObject, ObservableObject, NSWindowDeleg
         retainedSpeechModel = model
         settingsStore = settings
         if panel == nil { createPanel(model: model, settings: settings) }
-        isAdjusting = adjusting
+        isAdjusting = adjusting || !settings.settings.positionLocked
         updateInteraction()
         updateFrame(forceDefault: false)
-        panel?.orderFrontRegardless()
+        if presentsWindows { panel?.orderFrontRegardless() }
     }
 
     func hide() {
@@ -102,19 +110,25 @@ final class SubtitleOverlayController: NSObject, ObservableObject, NSWindowDeleg
         if !value && gestureInProgress { commitPlacement(resized: false) }
         isAdjusting = value
         updateInteraction()
-        if value { panel.orderFrontRegardless() }
-        if !value { updateFrame(forceDefault: false) }
+        if value && presentsWindows { panel.orderFrontRegardless() }
+        updateFrame(forceDefault: false)
     }
 
     func refresh(settings: DesktopSubtitleOverlaySettings) {
         guard let panel else { return }
         if !settings.enabled { hide(); return }
-        updateInteraction()
-        if !gestureInProgress &&
-            (lastAppliedWidthFraction.map { abs($0 - settings.widthFraction) > 0.001 } ?? true) {
-            updateFrame(forceDefault: false)
+        if let previous = lastAppliedSettings, previous.positionLocked != settings.positionLocked {
+            isAdjusting = !settings.positionLocked
         }
-        if !panel.isVisible { panel.orderFrontRegardless() }
+        updateInteraction()
+        if !gestureInProgress && lastAppliedSettings != settings { updateFrame(forceDefault: false) }
+        if presentsWindows && !panel.isVisible { panel.orderFrontRegardless() }
+    }
+
+    func finishAdjusting() {
+        if gestureInProgress { commitPlacement(resized: false) }
+        settingsStore?.update { $0.positionLocked = true }
+        setAdjusting(false)
     }
 
     func resetPosition() {
@@ -142,10 +156,13 @@ final class SubtitleOverlayController: NSObject, ObservableObject, NSWindowDeleg
     func resize(from start: NSRect, mouseStart: NSPoint, mouseNow: NSPoint) {
         guard isAdjusting, let panel, let settings = settingsStore?.settings else { return }
         gestureInProgress = true
-        let visible = screen(for: settings).visibleFrame
+        guard let screen = screen(for: settings) else { return }
+        let visible = screen.visibleFrame
         // Screen-space cursor deltas remain stable as the window moves/resizes.
-        let width = min(max(start.width + mouseNow.x - mouseStart.x, min(280, visible.width)), visible.width)
-        let height = min(max(start.height + mouseStart.y - mouseNow.y, 90), max(90, visible.height * 0.85))
+        let width = min(max(start.width + mouseNow.x - mouseStart.x,
+                            min(visible.width * 0.95, max(280, visible.width * 0.35))), visible.width * 0.95)
+        let minimumHeight = DesktopSubtitleOverlayText.lineHeight(settings.originalFontSize) + (settings.showTranslation ? DesktopSubtitleOverlayText.lineHeight(settings.translationFontSize) : 0) + 67
+        let height = min(max(start.height + mouseStart.y - mouseNow.y, minimumHeight), visible.height * 0.85)
         // Bottom-right grip: keep top-left anchored as the user drags.
         let x = min(max(start.minX, visible.minX), visible.maxX - width)
         let y = min(max(start.maxY - height, visible.minY), visible.maxY - height)
@@ -158,10 +175,13 @@ final class SubtitleOverlayController: NSObject, ObservableObject, NSWindowDeleg
     func commitPlacement(resized: Bool) {
         guard let panel, let store = settingsStore else { gestureInProgress = false; return }
         gestureInProgress = false
-        let screen = NSScreen.screens.max {
-            $0.frame.intersection(panel.frame).width * $0.frame.intersection(panel.frame).height <
-            $1.frame.intersection(panel.frame).width * $1.frame.intersection(panel.frame).height
-        } ?? screen(for: store.settings)
+        let screens = NSScreen.screens
+        guard let index = DesktopSubtitleOverlayLayout.screenIndex(for: panel.frame, screens: screens.map(\.frame)),
+              screens.indices.contains(index) else {
+            updateFrame(forceDefault: false)
+            return
+        }
+        let screen = screens[index]
         let visible = screen.visibleFrame
         let width = min(panel.frame.width, visible.width)
         let height = min(panel.frame.height, visible.height * 0.85)
@@ -173,33 +193,22 @@ final class SubtitleOverlayController: NSObject, ObservableObject, NSWindowDeleg
         panel.setFrame(NSRect(origin: origin, size: NSSize(width: width, height: height)),
                        display: true, animate: false)
         applyingFrame = false
-        store.update {
-            $0.screenID = Self.screenID(screen)
-            $0.normalizedX = min(max((origin.x + width / 2 - visible.minX) / visible.width, 0), 1)
-            $0.normalizedBottom = min(max((origin.y - visible.minY) / visible.height, 0), 1)
-            $0.widthFraction = min(max(width / visible.width, 0.35), 0.95)
-            if resized { $0.preferredHeightFraction = min(max(height / visible.height, 0.1), 0.85) }
-        }
-        lastAppliedWidthFraction = store.settings.widthFraction
-        if !resized { updateFrame(forceDefault: false) }
+        var placement = store.settings
+        placement.screenID = Self.screenID(screen)
+        placement.normalizedX = min(max((origin.x + width / 2 - visible.minX) / visible.width, 0), 1)
+        placement.normalizedBottom = min(max((origin.y - visible.minY) / visible.height, 0), 1)
+        placement.widthFraction = min(max(width / visible.width, 0.35), 0.95)
+        if resized { placement.preferredHeightFraction = min(max(height / visible.height, 0.1), 0.85) }
+        lastAppliedSettings = placement
+        store.update { $0 = placement }
+        updateFrame(forceDefault: false)
     }
 
     func contentHeightDidChange(_ value: CGFloat) {
-        guard value.isFinite, value > 0 else { return }
+        guard value.isFinite, value > 0, abs(measuredContentHeight - value) > 1 else { return }
         measuredContentHeight = value
-        guard let panel, let settings = settingsStore?.settings,
-              settings.preferredHeightFraction == nil, !gestureInProgress, !isAdjusting else { return }
-        let visible = screen(for: settings).visibleFrame
-        let height = min(max(value, 72), visible.height * 0.85)
-        guard abs(panel.frame.height - height) > 2 else { return }
-        let origin = NSPoint(
-            x: panel.frame.minX,
-            y: min(max(panel.frame.minY, visible.minY), visible.maxY - height)
-        )
-        applyingFrame = true
-        panel.setFrame(NSRect(origin: origin, size: NSSize(width: panel.frame.width, height: height)),
-                       display: true, animate: false)
-        applyingFrame = false
+        guard settingsStore?.settings.preferredHeightFraction == nil, !gestureInProgress else { return }
+        updateFrame(forceDefault: false)
     }
 
     private func createPanel(model: SpeechViewModel, settings: DesktopSubtitleOverlaySettingsStore) {
@@ -236,10 +245,12 @@ final class SubtitleOverlayController: NSObject, ObservableObject, NSWindowDeleg
 
     private func updateFrame(forceDefault: Bool) {
         guard let panel, let settings = settingsStore?.settings, !gestureInProgress else { return }
-        let visible = screen(for: settings).visibleFrame
+        guard let screen = screen(for: settings) else { return }
+        let visible = screen.visibleFrame
         let width = min(max(visible.width * settings.widthFraction, min(280, visible.width)), visible.width)
+        let minimumReadingHeight = DesktopSubtitleOverlayText.lineHeight(settings.originalFontSize) + (settings.showTranslation ? DesktopSubtitleOverlayText.lineHeight(settings.translationFontSize) : 0) + 29
         let height = min(max(settings.preferredHeightFraction.map { visible.height * $0 }
-                             ?? measuredContentHeight, 72), visible.height * 0.85)
+                             ?? (measuredContentHeight + (isAdjusting ? 38 : 0)), minimumReadingHeight + (isAdjusting ? 38 : 0)), visible.height * 0.85)
         let xFraction = forceDefault ? 0.5 : settings.normalizedX
         let bottomFraction = forceDefault ? 0.09 : settings.normalizedBottom
         let origin = NSPoint(
@@ -252,13 +263,13 @@ final class SubtitleOverlayController: NSObject, ObservableObject, NSWindowDeleg
         panel.setFrame(NSRect(origin: origin, size: NSSize(width: width, height: height)),
                        display: true, animate: false)
         applyingFrame = false
-        lastAppliedWidthFraction = settings.widthFraction
+        lastAppliedSettings = settings
     }
 
-    private func screen(for settings: DesktopSubtitleOverlaySettings) -> NSScreen {
+    private func screen(for settings: DesktopSubtitleOverlaySettings) -> NSScreen? {
         if let screenID = settings.screenID,
            let match = NSScreen.screens.first(where: { Self.screenID($0) == screenID }) { return match }
-        return NSScreen.main ?? NSScreen.screens[0]
+        return NSScreen.main ?? NSScreen.screens.first
     }
 
     private static func screenID(_ screen: NSScreen) -> String? {
@@ -273,7 +284,7 @@ private struct SubtitleContentHeightPreference: PreferenceKey {
     }
 }
 
-private struct DesktopSubtitleOverlayView: View {
+struct DesktopSubtitleOverlayView: View {
     @ObservedObject var feed: DesktopSubtitleOverlayFeed
     @ObservedObject var settingsStore: DesktopSubtitleOverlaySettingsStore
     @ObservedObject var controller: SubtitleOverlayController
@@ -294,62 +305,72 @@ private struct DesktopSubtitleOverlayView: View {
             VStack(spacing: 0) {
                 if controller.isAdjusting {
                     HStack(spacing: 8) {
-                        Image(systemName: "hand.draw")
-                        Text("拖动此处移动字幕")
-                        Spacer()
+                        HStack {
+                            Image(systemName: "hand.draw")
+                            Text("拖动此处移动字幕")
+                            Spacer()
+                        }
+                        .contentShape(Rectangle())
+                        .gesture(moveGesture)
+                        Button("完成") { controller.finishAdjusting() }
+                            .buttonStyle(.borderedProminent)
+                            .tint(.white.opacity(0.2))
+                            .help("保存位置并返回实时字幕")
                     }
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 12)
                     .frame(height: 34)
                     .background(.mint.opacity(0.85), in: RoundedRectangle(cornerRadius: 8))
-                    .contentShape(Rectangle())
-                    .gesture(moveGesture)
                     .padding(.bottom, 4)
                 }
 
-                ScrollView(.vertical) {
-                    VStack(spacing: 12) {
-                        if let previous = recentState,
-                           previous.remainsVisible(at: Date(), retention: settings.retentionSeconds) {
-                            VStack(spacing: 5) {
-                                subtitleLines(previous.state)
+                if controller.isAdjusting {
+                    ScrollView(.vertical) {
+                        VStack(spacing: 12) {
+                            if let previous = recentState,
+                               previous.remainsVisible(at: Date(), retention: settings.retentionSeconds) {
+                                VStack(spacing: 5) {
+                                    subtitleLines(previous.state)
+                                }
+                                .opacity(0.8)
                             }
-                            .opacity(0.8)
+                            if let state = visibleState,
+                               state.remainsVisible(at: Date(), retention: settings.retentionSeconds) {
+                                VStack(spacing: 5) { subtitleLines(state) }
+                            } else if controller.isAdjusting && recentState == nil {
+                                if settings.showOriginal {
+                                    subtitleText("Original subtitle text",
+                                                 size: settings.originalFontSize, weight: .medium,
+                                                 colorHex: settings.originalColorHex)
+                                }
+                                if settings.showTranslation {
+                                    subtitleText("实时双语字幕预览",
+                                                 size: settings.translationFontSize, weight: .regular,
+                                                 colorHex: settings.translationColorHex)
+                                }
+                            }
                         }
-                        if let state = visibleState,
-                           state.remainsVisible(at: Date(), retention: settings.retentionSeconds) {
-                            VStack(spacing: 5) { subtitleLines(state) }
-                        } else if controller.isAdjusting && recentState == nil {
-                            if settings.showOriginal {
-                                subtitleText("Original subtitle text",
-                                             size: settings.originalFontSize, weight: .medium,
-                                             colorHex: settings.originalColorHex)
-                            }
-                            if settings.showTranslation {
-                                subtitleText("实时双语字幕预览",
-                                             size: settings.translationFontSize, weight: .regular,
-                                             colorHex: settings.translationColorHex)
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 12)
+                        .background {
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(Color.black.opacity(settings.backgroundOpacity))
+                        }
+                        // Intrinsic height is measured inside the scroll view,
+                        // not truncated by the window's current viewport height.
+                        .background {
+                            GeometryReader { proxy in
+                                Color.clear.preference(key: SubtitleContentHeightPreference.self,
+                                                       value: proxy.size.height)
                             }
                         }
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 12)
-                    .background {
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(Color.black.opacity(settings.backgroundOpacity))
-                    }
-                    // Intrinsic height is measured inside the scroll view,
-                    // not truncated by the window's current viewport height.
-                    .background {
-                        GeometryReader { proxy in
-                            Color.clear.preference(key: SubtitleContentHeightPreference.self,
-                                                   value: proxy.size.height)
-                        }
-                    }
+                    .scrollIndicators(.automatic)
+                } else {
+                    watchingContent
                 }
-                .scrollIndicators(.automatic)
             }
 
             if controller.isAdjusting {
@@ -385,6 +406,50 @@ private struct DesktopSubtitleOverlayView: View {
             expirationTask?.cancel()
             recentExpirationTask?.cancel()
         }
+    }
+
+    // Each language keeps its own contiguous tail, so a long translation can
+    // never push the latest original out of a short, click-through window.
+    private var watchingContent: some View {
+        // Prefer one complete pair; an older translation must not accompany a new original.
+        let states = [visibleState ?? recentState?.state].compactMap { $0 }
+        let original = states.map(\.original).filter { !$0.isEmpty }.joined(separator: "\n")
+        let translation = states.filter(\.translationEnabled).map(\.translation)
+            .filter { !$0.isEmpty }.joined(separator: "\n")
+        let showOriginal = !original.isEmpty && (settings.showOriginal || !settings.showTranslation || translation.isEmpty)
+        let showTranslation = settings.showTranslation && !translation.isEmpty
+        let lineHeight = (showOriginal ? DesktopSubtitleOverlayText.lineHeight(settings.originalFontSize) : 0)
+            + (showTranslation ? DesktopSubtitleOverlayText.lineHeight(settings.translationFontSize) : 0)
+        return GeometryReader { geometry in
+            let lines = max(1, min(2, Int(max(0, geometry.size.height - 29) / max(1, lineHeight))))
+            VStack(spacing: 5) {
+                if showOriginal {
+                    watchingText(original, size: settings.originalFontSize, weight: .medium,
+                                 colorHex: settings.originalColorHex, width: geometry.size.width - 36, lines: lines)
+                }
+                if showTranslation {
+                    watchingText(translation, size: settings.translationFontSize, weight: .regular,
+                                 colorHex: settings.translationColorHex, width: geometry.size.width - 36, lines: lines)
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
+            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .bottom)
+            .background {
+                if showOriginal || showTranslation {
+                    RoundedRectangle(cornerRadius: 10).fill(Color.black.opacity(settings.backgroundOpacity))
+                }
+            }
+            .preference(key: SubtitleContentHeightPreference.self, value: lineHeight * 2 + 29)
+        }
+    }
+
+    private func watchingText(_ value: String, size: Double, weight: Font.Weight,
+                              colorHex: String, width: CGFloat, lines: Int) -> some View {
+        let font = NSFont.systemFont(ofSize: size, weight: weight == .medium ? .medium : .regular)
+        return subtitleText(DesktopSubtitleOverlayText.latestLines(value, font: font, width: width, count: lines),
+                            size: size, weight: weight, colorHex: colorHex)
+            .accessibilityLabel(value)
     }
 
     private var moveGesture: some Gesture {
@@ -424,7 +489,7 @@ private struct DesktopSubtitleOverlayView: View {
     }
 
     @ViewBuilder private func subtitleLines(_ state: DesktopSubtitleOverlayState) -> some View {
-        let showOriginal = settings.showOriginal || !state.translationEnabled || !settings.showTranslation
+        let showOriginal = settings.showOriginal || !state.translationEnabled || !settings.showTranslation || state.translation.isEmpty
         if showOriginal && !state.original.isEmpty {
             subtitleText(state.original, size: settings.originalFontSize, weight: .medium,
                          colorHex: settings.originalColorHex)
@@ -535,16 +600,19 @@ struct DesktopSubtitleOverlaySettingsView: View {
                 HStack {
                     Button(controller.isAdjusting ? "完成调整" : "调整位置与大小") {
                         if controller.isAdjusting {
-                            controller.setAdjusting(false)
+                            controller.finishAdjusting()
                         } else {
                             store.update { $0.enabled = true }
                             controller.show(model: model, settings: store, adjusting: true)
                         }
                     }
-                    Button("重置位置") { controller.resetPosition() }
-                    Button("高度自适应") { controller.resetAutoHeight() }
+                    Button("重置位置") { store.resetPosition(); controller.resetPosition() }
+                    Button("高度自适应") {
+                        store.update { $0.preferredHeightFraction = nil }
+                        controller.resetAutoHeight()
+                    }
                 }
-                Text("调整模式下拖动字幕移动，拖动右下角手柄缩放；退出后恢复点击穿透。文字过长时可增加窗口高度或滚动查看。")
+                Text("拖动顶部移动字幕，右下角调整大小。观看时自动跟随最新内容；调整时可滚动回看，点击“完成”后返回最新字幕。")
                     .font(.caption).foregroundStyle(.secondary)
 
                 DisclosureGroup("高级选项") {
@@ -603,10 +671,35 @@ struct DesktopSubtitleOverlaySettingsView: View {
                 set: { value in
                     store.update {
                         $0[keyPath: keyPath] = value
-                        if fontPair { $0.translationFontSize = max(14, value - 2) }
+                        if fontPair { $0.translationFontSize = min(44, max(14, value - 2)) }
                     }
                 }
             ), in: range)
         }
+    }
+}
+
+/// Keep a contiguous live reading window, rather than truncating the middle
+/// between SwiftUI's first line and its head-truncated last line.
+enum DesktopSubtitleOverlayText {
+    static func lineHeight(_ size: CGFloat) -> CGFloat {
+        NSLayoutManager().defaultLineHeight(for: .systemFont(ofSize: size))
+    }
+    static func latestLines(_ value: String, font: NSFont, width: CGFloat, count: Int = 2) -> String {
+        guard !value.isEmpty, width > 0 else { return value }
+        let storage = NSTextStorage(string: value, attributes: [.font: font])
+        let layout = NSLayoutManager()
+        let container = NSTextContainer(size: NSSize(width: width, height: .greatestFiniteMagnitude))
+        container.lineFragmentPadding = 0
+        layout.addTextContainer(container)
+        storage.addLayoutManager(layout)
+        let glyphs = layout.glyphRange(for: container)
+        var lines: [NSRange] = []
+        layout.enumerateLineFragments(forGlyphRange: glyphs) { _, _, _, range, _ in
+            lines.append(range)
+        }
+        guard lines.count > max(1, count) else { return value }
+        let characters = layout.characterRange(forGlyphRange: lines[lines.count - max(1, count)], actualGlyphRange: nil)
+        return (value as NSString).substring(from: characters.location)
     }
 }

@@ -1634,7 +1634,8 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         guard !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               source != entries[index].english || translation != entries[index].chinese else { return }
         entries[index].edit(source: source, translation: translation)
-        if desktopSubtitleOverlayFeed.current?.entryID == id, isRecording {
+        if isRecording && (desktopSubtitleOverlayFeed.current?.entryID == id ||
+                           desktopSubtitleOverlayFeed.previous?.state.entryID == id) {
             desktopSubtitleOverlayFeed.update(entries[index], translationEnabled: activeRecognitionConfig.translationEnabled)
         }
         correctionSuggestions[id] = nil
@@ -1646,7 +1647,8 @@ final class SpeechViewModel: NSObject, ObservableObject, @unchecked Sendable {
         guard let index = entries.firstIndex(where: { $0.id == id }),
               entries[index].correction?.history.isEmpty == false else { return }
         entries[index].undoCorrection()
-        if desktopSubtitleOverlayFeed.current?.entryID == id, isRecording {
+        if isRecording && (desktopSubtitleOverlayFeed.current?.entryID == id ||
+                           desktopSubtitleOverlayFeed.previous?.state.entryID == id) {
             desktopSubtitleOverlayFeed.update(entries[index], translationEnabled: activeRecognitionConfig.translationEnabled)
         }
         correctionSuggestions[id] = nil

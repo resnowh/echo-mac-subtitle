@@ -85,15 +85,21 @@ struct ContentView: View {
                             desktopSubtitleController.hide()
                         }
                     }
-                    Button(desktopSubtitleController.isAdjusting ? "完成调整" : "调整位置和大小") {
+                    Button(desktopSubtitleController.isAdjusting ? "完成字幕调整" : "调整位置和大小") {
                         if desktopSubtitleController.isAdjusting {
-                            desktopSubtitleController.setAdjusting(false)
+                            desktopSubtitleController.finishAdjusting()
                         } else {
                             desktopSubtitleSettings.update { $0.enabled = true }
                             desktopSubtitleController.show(model: model, settings: desktopSubtitleSettings, adjusting: true)
                         }
                     }
                     Divider()
+                    Button(desktopSubtitleSettings.settings.positionLocked ? "解锁位置" : "锁定位置") {
+                        let unlock = desktopSubtitleSettings.settings.positionLocked
+                        desktopSubtitleSettings.update { $0.positionLocked = !unlock }
+                        desktopSubtitleController.setAdjusting(unlock)
+                        desktopSubtitleController.refresh(settings: desktopSubtitleSettings.settings)
+                    }
                     Toggle("点击穿透", isOn: Binding(
                         get: { desktopSubtitleSettings.settings.clickThrough },
                         set: { value in desktopSubtitleSettings.update { $0.clickThrough = value } }

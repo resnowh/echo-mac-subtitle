@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 enum CorrectionChecks {
@@ -338,9 +339,17 @@ enum CorrectionChecks {
         reducer.update(lateTranslated, translationEnabled: true, at: Date(timeIntervalSince1970: 110))
         precondition(reducer.current?.remainsVisible(at: Date(timeIntervalSince1970: 111), retention: 5) == false,
                      "Identical finalized updates must not reset expiry")
+        let unchangedRevision = reducer.current?.revision
+        reducer.finalize(lateTranslated, translationEnabled: true, at: Date(timeIntervalSince1970: 112))
+        precondition(reducer.current?.finalizedAt == Date(timeIntervalSince1970: 106),
+                     "Duplicate final callbacks must not revive expired subtitles")
+        precondition(reducer.current?.revision == unchangedRevision,
+                     "Identical callbacks must not animate or republish subtitles")
         let replacement = SubtitleEntry(id: UUID(), start: 1, end: 2, english: "Next", chinese: "下一句")
         reducer.update(replacement, translationEnabled: true)
         precondition(reducer.current?.entryID == replacement.id && reducer.current?.isFinal == false)
+        reducer.update(SubtitleEntry(id: replacement.id, start: 1, end: 2, english: " ", chinese: ""), translationEnabled: true)
+        precondition(reducer.current == nil, "Removing the displayed text must not leave a stale overlay")
         reducer.clear()
         precondition(reducer.current == nil)
 
@@ -392,6 +401,15 @@ enum CorrectionChecks {
                      migrated.preferredHeightFraction == nil &&
                      migrated.originalColorHex == "#FFFFFF")
         precondition(safe.showOriginal || safe.showTranslation, "At least one language remains visible")
+        let displays = [CGRect(x: 0, y: 0, width: 1440, height: 900),
+                        CGRect(x: 1440, y: -200, width: 1920, height: 1080)]
+        precondition(DesktopSubtitleOverlayLayout.screenIndex(
+            for: CGRect(x: 1400, y: 100, width: 700, height: 150), screens: displays) == 1,
+            "A panel mostly on the second display must be saved to that display")
+        precondition(DesktopSubtitleOverlayLayout.screenIndex(for: .zero, screens: []) == nil)
+        let tinyDisplay = CGRect(x: -200, y: -100, width: 200, height: 120)
+        let fitted = DesktopSubtitleOverlayLayout.frame(in: tinyDisplay, settings: settings, height: 320)
+        precondition(tinyDisplay.contains(fitted), "Recovered placement must fit even a small display")
         let feed = DesktopSubtitleOverlayFeed()
         feed.update(first, translationEnabled: true)
         for index in 0..<10 {
@@ -404,6 +422,20 @@ enum CorrectionChecks {
         feed.clear()
         RunLoop.main.run(until: Date().addingTimeInterval(0.08))
         precondition(feed.current == nil, "A delayed provisional update cannot repopulate a cleared/new session")
+        feed.clear()
+        feed.update(first, translationEnabled: true)
+        feed.finalize(first, translationEnabled: true)
+        feed.update(next, translationEnabled: true)
+        let latestNext = SubtitleEntry(id: next.id, start: 2, end: 4, english: "Opportunity cost updated", chinese: "机会成本")
+        feed.update(latestNext, translationEnabled: true)
+        feed.update(translated, translationEnabled: true)
+        precondition(feed.current?.original == latestNext.english,
+                     "Late preceding translation must flush, not drop, the queued current revision")
+        precondition(feed.previous?.state.translation == translated.chinese)
+        let priorSnapshot = feed.snapshot
+        feed.finalize(translated, translationEnabled: true)
+        precondition(feed.snapshot == priorSnapshot, "Duplicate final of a retained sentence is idempotent")
+        feed.clear()
         print("PASS: live overlay replacement, retained recent sentence, delayed translation pairing, colors, and legacy settings persistence")
     }
 }

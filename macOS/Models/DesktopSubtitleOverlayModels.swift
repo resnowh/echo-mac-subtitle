@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 struct DesktopSubtitleOverlaySettings: Codable, Equatable {
@@ -152,7 +153,11 @@ struct DesktopSubtitleOverlayReducer {
     mutating func update(_ entry: SubtitleEntry, translationEnabled: Bool, at date: Date = Date()) {
         let original = entry.english.trimmingCharacters(in: .whitespacesAndNewlines)
         let translation = entry.chinese.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !original.isEmpty || (translationEnabled && !translation.isEmpty) else { return }
+        guard !original.isEmpty || (translationEnabled && !translation.isEmpty) else {
+            if current?.entryID == entry.id { current = nil }
+            if previous?.state.entryID == entry.id { previous = nil }
+            return
+        }
 
         // Translation may arrive after a new source sentence has started.
         // Update the retained sentence by ID rather than switching the live
@@ -182,11 +187,13 @@ struct DesktopSubtitleOverlayReducer {
     mutating func finalize(_ entry: SubtitleEntry, translationEnabled: Bool, at date: Date = Date()) {
         update(entry, translationEnabled: translationEnabled, at: date)
         if previous?.state.entryID == entry.id, current?.entryID != entry.id {
+            guard previous?.state.isFinal == false else { return }
             previous?.state.isFinal = true
+            previous?.state.revision = UUID()
             previous?.state.finalizedAt = date
             return
         }
-        guard current?.entryID == entry.id else { return }
+        guard current?.entryID == entry.id, current?.isFinal == false else { return }
         current?.isFinal = true
         current?.finalizedAt = date
         current?.revision = UUID()
@@ -206,6 +213,7 @@ struct DesktopSubtitleOverlayReducer {
         let textChanged = sameEntry &&
             (prior?.original != original || prior?.translation != translation ||
              prior?.translationEnabled != translationEnabled)
+        if sameEntry && !textChanged, let prior { return prior }
         let wasFinal = sameEntry && (prior?.isFinal ?? false)
         return DesktopSubtitleOverlayState(
             entryID: entry.id,
@@ -217,4 +225,29 @@ struct DesktopSubtitleOverlayReducer {
             finalizedAt: wasFinal && textChanged ? date : (sameEntry ? prior?.finalizedAt : nil)
         )
     }
+}
+
+/// Pure placement policy, shared with isolated multi-display regression checks.
+enum DesktopSubtitleOverlayLayout {
+    static func screenIndex(for frame: CGRect, screens: [CGRect]) -> Int? {
+        screens.indices.filter { screens[$0].intersects(frame) }.max { lhs, rhs in
+            let left = screens[lhs].intersection(frame)
+            let right = screens[rhs].intersection(frame)
+            return left.width * left.height < right.width * right.height
+        }
+    }
+
+    static func frame(in visible: CGRect, settings: DesktopSubtitleOverlaySettings, height: CGFloat) -> CGRect {
+        let height = min(height, visible.height)
+        let width = min(max(visible.width * settings.widthFraction, 280), visible.width)
+        return CGRect(
+            x: min(max(visible.minX + visible.width * settings.normalizedX - width / 2, visible.minX), visible.maxX - width),
+            y: min(max(visible.minY + visible.height * settings.normalizedBottom, visible.minY), visible.maxY - height),
+            width: width, height: height)
+    }
+}
+
+struct DesktopSubtitleOverlaySnapshot: Equatable {
+    var current: DesktopSubtitleOverlayState?
+    var previous: DesktopSubtitleOverlayPrevious?
 }
