@@ -297,6 +297,28 @@ enum CorrectionChecks {
         precondition(reducer.current?.original == "Opportunity cost" && reducer.current?.translation.isEmpty == true,
             "A new original must not inherit the previous entry translation")
 
+        // New sentences must not immediately erase a recently shown line.
+        precondition(reducer.previous?.state.entryID == translated.id)
+        precondition(reducer.previous?.state.translation == "边际成本")
+        precondition(reducer.previous?.remainsVisible(at: Date().addingTimeInterval(3), retention: 5) == true)
+        precondition(reducer.previous?.remainsVisible(at: Date().addingTimeInterval(6), retention: 5) == false)
+        // Late updates of the previous entry may extend its display, but must
+        // never replace the current entry or cross-pair translation lines.
+        let latePrior = SubtitleEntry(id: translated.id, start: 0, end: 2,
+            english: "The marginal cost", chinese: "边际成本的最新译文")
+        reducer.update(latePrior, translationEnabled: true)
+        precondition(reducer.current?.entryID == next.id)
+        precondition(reducer.previous?.state.entryID == translated.id &&
+                     reducer.previous?.state.translation == "边际成本的最新译文")
+        reducer.finalize(latePrior, translationEnabled: true)
+        precondition(reducer.current?.entryID == next.id &&
+                     reducer.previous?.state.isFinal == true)
+        // A third sentence keeps only one predecessor, bounding overlay size.
+        let third = SubtitleEntry(id: UUID(), start: 4, end: 5, english: "Supply curve", chinese: "供给曲线")
+        reducer.update(third, translationEnabled: true)
+        precondition(reducer.previous?.state.entryID == next.id)
+        precondition(reducer.previous?.state.entryID != translated.id)
+
         let originalOnly = SubtitleEntry(id: UUID(), start: 0, end: 1, english: "Hello", chinese: "stale")
         reducer.update(originalOnly, translationEnabled: false)
         precondition(reducer.current?.isVisible == true && reducer.current?.translationEnabled == false)
@@ -342,6 +364,10 @@ enum CorrectionChecks {
         settings.originalFontSize = 32
         settings.translationFontSize = 28
         settings.opacity = 0.8
+        settings.backgroundOpacity = 0.65
+        settings.originalColorHex = "#22BBFF"
+        settings.translationColorHex = "#FFDD55"
+        settings.preferredHeightFraction = 0.3
         settings.widthFraction = 0.7
         settings.retentionSeconds = 7
         settings.clickThrough = false
@@ -349,17 +375,31 @@ enum CorrectionChecks {
         settings.save(to: defaults)
         let restored = DesktopSubtitleOverlaySettings.load(from: defaults)
         precondition(restored == settings && restored.enabled && restored.translationFontSize == 28)
+        precondition(restored.backgroundOpacity == 0.65 && restored.originalColorHex == "#22BBFF" &&
+                     restored.preferredHeightFraction == 0.3)
 
         let outOfRangeJSON: [String: Any] = [
             "showOriginal": false, "showTranslation": false,
             "originalFontSize": 900, "translationFontSize": 24,
-            "opacity": 2, "widthFraction": -1, "retentionSeconds": 500,
+            "opacity": 2, "backgroundOpacity": 9, "originalColorHex": "#GGGGGG",
+            "translationColorHex": "bad", "preferredHeightFraction": -9,
+            "widthFraction": -1, "retentionSeconds": 500,
             "shadowStrength": 0.35, "normalizedX": 4, "normalizedBottom": 0.12
         ]
         defaults.set(try JSONSerialization.data(withJSONObject: outOfRangeJSON), forKey: DesktopSubtitleOverlaySettings.userDefaultsKey)
         let safe = DesktopSubtitleOverlaySettings.load(from: defaults)
         precondition(safe.originalFontSize == 26 && safe.opacity == 1 && safe.widthFraction == 0.75)
         precondition(safe.retentionSeconds == 5 && safe.normalizedX == 0.5)
+        precondition(safe.backgroundOpacity == 0 && safe.originalColorHex == "#FFFFFF")
+        precondition(safe.translationColorHex == "#FFFFFF" && safe.preferredHeightFraction == 0.1)
+        // Legacy JSON predating colors and manual height must still decode.
+        let legacy: [String: Any] = ["enabled": true, "widthFraction": 0.65]
+        defaults.set(try JSONSerialization.data(withJSONObject: legacy),
+                     forKey: DesktopSubtitleOverlaySettings.userDefaultsKey)
+        let migrated = DesktopSubtitleOverlaySettings.load(from: defaults)
+        precondition(migrated.enabled && migrated.backgroundOpacity == 0 &&
+                     migrated.preferredHeightFraction == nil &&
+                     migrated.originalColorHex == "#FFFFFF")
         precondition(safe.showOriginal || safe.showTranslation, "At least one language remains visible")
         let displays = [CGRect(x: 0, y: 0, width: 1440, height: 900),
                         CGRect(x: 1440, y: -200, width: 1920, height: 1080)]
@@ -382,6 +422,20 @@ enum CorrectionChecks {
         feed.clear()
         RunLoop.main.run(until: Date().addingTimeInterval(0.08))
         precondition(feed.current == nil, "A delayed provisional update cannot repopulate a cleared/new session")
-        print("PASS: live overlay replacement, translation pairing, no-translation mode, final retention, and validated settings persistence")
+        feed.clear()
+        feed.update(first, translationEnabled: true)
+        feed.finalize(first, translationEnabled: true)
+        feed.update(next, translationEnabled: true)
+        let latestNext = SubtitleEntry(id: next.id, start: 2, end: 4, english: "Opportunity cost updated", chinese: "机会成本")
+        feed.update(latestNext, translationEnabled: true)
+        feed.update(translated, translationEnabled: true)
+        precondition(feed.current?.original == latestNext.english,
+                     "Late preceding translation must flush, not drop, the queued current revision")
+        precondition(feed.previous?.state.translation == translated.chinese)
+        let priorSnapshot = feed.snapshot
+        feed.finalize(translated, translationEnabled: true)
+        precondition(feed.snapshot == priorSnapshot, "Duplicate final of a retained sentence is idempotent")
+        feed.clear()
+        print("PASS: live overlay replacement, retained recent sentence, delayed translation pairing, colors, and legacy settings persistence")
     }
 }

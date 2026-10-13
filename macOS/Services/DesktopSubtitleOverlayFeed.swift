@@ -4,7 +4,9 @@ import Foundation
 /// A low-frequency, read-only projection of the live subtitle entry.
 /// Audio meters and other high-frequency SpeechViewModel state are not observed.
 final class DesktopSubtitleOverlayFeed: ObservableObject {
-    @Published private(set) var current: DesktopSubtitleOverlayState?
+    @Published private(set) var snapshot = DesktopSubtitleOverlaySnapshot()
+    var current: DesktopSubtitleOverlayState? { snapshot.current }
+    var previous: DesktopSubtitleOverlayPrevious? { snapshot.previous }
     private var reducer = DesktopSubtitleOverlayReducer()
     private let minimumPublishInterval: TimeInterval = 0.05
     private var lastPublishUptime: TimeInterval = 0
@@ -25,6 +27,9 @@ final class DesktopSubtitleOverlayFeed: ObservableObject {
             }
             return
         }
+        // A late update for the preceding entry must not discard a queued
+        // revision of the current sentence.
+        if let pendingEntry, pendingEntry.id != entry.id { flushPending() }
         let newEntry = (pendingEntry?.id ?? current?.entryID) != entry.id
         let elapsed = ProcessInfo.processInfo.systemUptime - lastPublishUptime
         guard !newEntry, elapsed < minimumPublishInterval else {
@@ -58,9 +63,7 @@ final class DesktopSubtitleOverlayFeed: ObservableObject {
     }
 
     func finalize(_ entry: SubtitleEntry, translationEnabled: Bool) {
-        pendingWorkItem?.cancel()
-        pendingWorkItem = nil
-        pendingEntry = nil
+        flushPending()
         reducer.finalize(entry, translationEnabled: translationEnabled)
         publishReducerState()
         lastPublishUptime = ProcessInfo.processInfo.systemUptime
@@ -77,9 +80,17 @@ final class DesktopSubtitleOverlayFeed: ObservableObject {
         publishReducerState()
     }
 
+    private func flushPending() {
+        pendingWorkItem?.cancel()
+        pendingWorkItem = nil
+        guard let entry = pendingEntry else { return }
+        pendingEntry = nil
+        publish(entry, translationEnabled: pendingTranslationEnabled)
+    }
+
     private func publishReducerState() {
-        guard current != reducer.current else { return }
-        current = reducer.current
+        let next = DesktopSubtitleOverlaySnapshot(current: reducer.current, previous: reducer.previous)
+        if snapshot != next { snapshot = next }
     }
 
     private func isCurrentGeneration(_ value: UUID) -> Bool {

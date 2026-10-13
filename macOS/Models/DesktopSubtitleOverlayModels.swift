@@ -10,6 +10,11 @@ struct DesktopSubtitleOverlaySettings: Codable, Equatable {
     var originalFontSize = 26.0
     var translationFontSize = 24.0
     var opacity = 1.0
+    var backgroundOpacity = 0.0
+    var originalColorHex = "#FFFFFF"
+    var translationColorHex = "#FFFFFF"
+    // nil means fit content height dynamically; a value records a user resize.
+    var preferredHeightFraction: Double?
     var widthFraction = 0.75
     var retentionSeconds = 5.0
     var shadowStrength = 0.35
@@ -24,6 +29,7 @@ struct DesktopSubtitleOverlaySettings: Codable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case enabled, showOriginal, showTranslation, originalFontSize, translationFontSize
         case opacity, widthFraction, retentionSeconds, shadowStrength, clickThrough
+        case backgroundOpacity, originalColorHex, translationColorHex, preferredHeightFraction
         case positionLocked, screenID, normalizedX, normalizedBottom
     }
 
@@ -38,6 +44,12 @@ struct DesktopSubtitleOverlaySettings: Codable, Equatable {
         originalFontSize = Self.validated(try values.decodeIfPresent(Double.self, forKey: .originalFontSize), range: 16...48, fallback: 26)
         translationFontSize = Self.validated(try values.decodeIfPresent(Double.self, forKey: .translationFontSize), range: 14...44, fallback: 24)
         opacity = Self.validated(try values.decodeIfPresent(Double.self, forKey: .opacity), range: 0.35...1, fallback: 1)
+        backgroundOpacity = Self.validated(try values.decodeIfPresent(Double.self, forKey: .backgroundOpacity), range: 0...1, fallback: 0)
+        originalColorHex = Self.colorHex(try values.decodeIfPresent(String.self, forKey: .originalColorHex))
+        translationColorHex = Self.colorHex(try values.decodeIfPresent(String.self, forKey: .translationColorHex))
+        if let height = try values.decodeIfPresent(Double.self, forKey: .preferredHeightFraction) {
+            preferredHeightFraction = height.isFinite ? min(max(height, 0.1), 0.85) : nil
+        }
         widthFraction = Self.validated(try values.decodeIfPresent(Double.self, forKey: .widthFraction), range: 0.35...0.95, fallback: 0.75)
         retentionSeconds = Self.validated(try values.decodeIfPresent(Double.self, forKey: .retentionSeconds), range: 1...15, fallback: 5)
         shadowStrength = Self.validated(try values.decodeIfPresent(Double.self, forKey: .shadowStrength), range: 0...1, fallback: 0.35)
@@ -58,6 +70,12 @@ struct DesktopSubtitleOverlaySettings: Codable, Equatable {
         result.originalFontSize = Self.validated(originalFontSize, range: 16...48, fallback: 26)
         result.translationFontSize = Self.validated(translationFontSize, range: 14...44, fallback: 24)
         result.opacity = Self.validated(opacity, range: 0.35...1, fallback: 1)
+        result.backgroundOpacity = Self.validated(backgroundOpacity, range: 0...1, fallback: 0)
+        result.originalColorHex = Self.colorHex(originalColorHex)
+        result.translationColorHex = Self.colorHex(translationColorHex)
+        if let height = preferredHeightFraction {
+            result.preferredHeightFraction = height.isFinite ? min(max(height, 0.1), 0.85) : nil
+        }
         result.widthFraction = Self.validated(widthFraction, range: 0.35...0.95, fallback: 0.75)
         result.retentionSeconds = Self.validated(retentionSeconds, range: 1...15, fallback: 5)
         result.shadowStrength = Self.validated(shadowStrength, range: 0...1, fallback: 0.35)
@@ -76,6 +94,14 @@ struct DesktopSubtitleOverlaySettings: Codable, Equatable {
         guard let data = defaults.data(forKey: userDefaultsKey),
               let value = try? JSONDecoder().decode(Self.self, from: data) else { return .defaults }
         return value.validated()
+    }
+
+    static func colorHex(_ value: String?) -> String {
+        guard let value, value.count == 7, value.first == "#",
+              value.dropFirst().utf8.allSatisfy({
+                  (48...57).contains($0) || (65...70).contains($0) || (97...102).contains($0)
+              }) else { return "#FFFFFF" }
+        return value.uppercased()
     }
 
     private static func validated(_ value: Double?, range: ClosedRange<Double>, fallback: Double) -> Double {
@@ -105,46 +131,100 @@ struct DesktopSubtitleOverlayState: Equatable {
     }
 }
 
+/// The immediately preceding sentence is retained independently of the
+/// current provisional sentence. A replacement must not erase its text.
+struct DesktopSubtitleOverlayPrevious: Equatable {
+    var state: DesktopSubtitleOverlayState
+    var replacedAt: Date
+
+    func remainsVisible(at date: Date, retention: TimeInterval) -> Bool {
+        // Do not resurrect a sentence that had already expired before
+        // its successor finally arrived after a long pause.
+        if state.isFinal, let finalizedAt = state.finalizedAt,
+           replacedAt.timeIntervalSince(finalizedAt) >= retention { return false }
+        return date.timeIntervalSince(replacedAt) < retention
+    }
+}
+
 struct DesktopSubtitleOverlayReducer {
     private(set) var current: DesktopSubtitleOverlayState?
+    private(set) var previous: DesktopSubtitleOverlayPrevious?
 
     mutating func update(_ entry: SubtitleEntry, translationEnabled: Bool, at date: Date = Date()) {
         let original = entry.english.trimmingCharacters(in: .whitespacesAndNewlines)
         let translation = entry.chinese.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !original.isEmpty || (translationEnabled && !translation.isEmpty) else {
             if current?.entryID == entry.id { current = nil }
+            if previous?.state.entryID == entry.id { previous = nil }
             return
         }
-        let sameEntry = current?.entryID == entry.id
-        // New meaningful text on an already-finalized entry (e.g. late translation
-        // or a manual correction) must remain readable for a full retention window.
-        // Identical updates must not indefinitely extend that window.
-        let textChanged = sameEntry &&
-            (current?.original != original || current?.translation != translation ||
-             current?.translationEnabled != translationEnabled)
-        guard !sameEntry || textChanged else { return }
-        let wasFinal = sameEntry && (current?.isFinal ?? false)
-        let previousFinalizedAt = sameEntry ? current?.finalizedAt : nil
-        current = DesktopSubtitleOverlayState(
-            entryID: entry.id,
-            original: original,
-            translation: translation,
-            translationEnabled: translationEnabled,
-            isFinal: wasFinal,
-            revision: UUID(),
-            finalizedAt: wasFinal && textChanged ? date : previousFinalizedAt
-        )
+
+        // Translation may arrive after a new source sentence has started.
+        // Update the retained sentence by ID rather than switching the live
+        // line back to the old sentence or pairing text with the new one.
+        if current?.entryID != entry.id, previous?.state.entryID == entry.id {
+            guard let old = previous else { return }
+            let updated = Self.updatedState(old.state, entry: entry,
+                                            translationEnabled: translationEnabled, at: date)
+            if updated.original != old.state.original ||
+               updated.translation != old.state.translation ||
+               updated.translationEnabled != old.state.translationEnabled {
+                previous = DesktopSubtitleOverlayPrevious(state: updated, replacedAt: date)
+            }
+            return
+        }
+
+        if current?.entryID != entry.id {
+            if let outgoing = current {
+                previous = DesktopSubtitleOverlayPrevious(state: outgoing, replacedAt: date)
+            }
+            current = nil
+        }
+        current = Self.updatedState(current, entry: entry,
+                                    translationEnabled: translationEnabled, at: date)
     }
 
     mutating func finalize(_ entry: SubtitleEntry, translationEnabled: Bool, at date: Date = Date()) {
         update(entry, translationEnabled: translationEnabled, at: date)
+        if previous?.state.entryID == entry.id, current?.entryID != entry.id {
+            guard previous?.state.isFinal == false else { return }
+            previous?.state.isFinal = true
+            previous?.state.revision = UUID()
+            previous?.state.finalizedAt = date
+            return
+        }
         guard current?.entryID == entry.id, current?.isFinal == false else { return }
         current?.isFinal = true
         current?.finalizedAt = date
         current?.revision = UUID()
     }
 
-    mutating func clear() { current = nil }
+    mutating func clear() {
+        current = nil
+        previous = nil
+    }
+
+    private static func updatedState(_ prior: DesktopSubtitleOverlayState?,
+                                     entry: SubtitleEntry, translationEnabled: Bool,
+                                     at date: Date) -> DesktopSubtitleOverlayState {
+        let original = entry.english.trimmingCharacters(in: .whitespacesAndNewlines)
+        let translation = entry.chinese.trimmingCharacters(in: .whitespacesAndNewlines)
+        let sameEntry = prior?.entryID == entry.id
+        let textChanged = sameEntry &&
+            (prior?.original != original || prior?.translation != translation ||
+             prior?.translationEnabled != translationEnabled)
+        if sameEntry && !textChanged, let prior { return prior }
+        let wasFinal = sameEntry && (prior?.isFinal ?? false)
+        return DesktopSubtitleOverlayState(
+            entryID: entry.id,
+            original: original,
+            translation: translation,
+            translationEnabled: translationEnabled,
+            isFinal: wasFinal,
+            revision: UUID(),
+            finalizedAt: wasFinal && textChanged ? date : (sameEntry ? prior?.finalizedAt : nil)
+        )
+    }
 }
 
 /// Pure placement policy, shared with isolated multi-display regression checks.
@@ -165,4 +245,9 @@ enum DesktopSubtitleOverlayLayout {
             y: min(max(visible.minY + visible.height * settings.normalizedBottom, visible.minY), visible.maxY - height),
             width: width, height: height)
     }
+}
+
+struct DesktopSubtitleOverlaySnapshot: Equatable {
+    var current: DesktopSubtitleOverlayState?
+    var previous: DesktopSubtitleOverlayPrevious?
 }
