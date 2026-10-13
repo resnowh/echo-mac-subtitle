@@ -1,38 +1,35 @@
-# Echo 文档中心 / Documentation
+# 文档索引
 
-[返回项目首页](../README.md) · [English README](../README.en.md)
+[项目首页](../README.md) · [English README](../README.en.md) · [Issues](https://github.com/resnowh/echo-mac-subtitle/issues)
 
-## 用户文档
+本文用于导航；实现细节、数据契约和发布要求分别在对应文档维护，不在索引重复。
 
-- [透明桌面悬浮字幕](features/desktop-subtitle-overlay.md)：实际交互、显示策略、外观与已知限制。
-- [常见问题 FAQ](FAQ.md)：系统要求、API Key、权限、收费、安装与数据安全。
-- [变更记录](../CHANGELOG.md)：已实现的代码变更，非未来承诺。
-- [发布与安装状态](release.md)：为什么目前没有官方 DMG；未来签名、公证与验收要求。
+## 使用与功能
 
-## 技术与开发
+| 文档 | 内容 |
+| --- | --- |
+| [常见问题](FAQ.md) | 系统要求、权限、API 费用、存储位置 |
+| [悬浮字幕](features/desktop-subtitle-overlay.md) | 使用方式、同步策略、已知限制 |
+| [变更记录](../CHANGELOG.md) | 已提交功能与修复 |
 
-- [当前架构](architecture.md)：macOS 采集、PCM、Soniox、字幕与持久化。
-- [数据模型](data-model.md)：字幕、Speaker、纠正历史、Archive 与 SRT 时间线。
-- [悬浮字幕验收](testing/desktop-subtitle-overlay.md)：隔离验证和真实 GUI 待验收项目。
-- [自动化测试](../tests/README.md)：隔离测试范围和不能替代的真实设备验收。
-- [CI 构建](https://github.com/resnowh/echo-mac-subtitle/actions/workflows/ci.yml)：macOS Debug/Release 与无设备依赖测试。
+## 开发与测试
 
-## 规划与平台状态
+| 文档 | 内容 |
+| --- | --- |
+| [架构](architecture.md) | macOS 音频、识别、字幕及模块边界 |
+| [数据模型](data-model.md) | SubtitleEntry、Archive、时间线与向后兼容 |
+| [自动化测试](../tests/README.md) | 隔离检查、运行方式及验证边界 |
+| [悬浮字幕验收](testing/desktop-subtitle-overlay.md) | GUI、Space、多显示器的待测项 |
 
-- [路线图入口](roadmap/README.md)：**历史设计方案**及当前状态说明；它不是功能完成清单。
-- [Mac 优先的桌面实施方案](roadmap/07-Mac优先的桌面实施方案.md)：较新的桌面设计方向。
-- [macOS 分发规划](roadmap/06-正式分发与上线计划.md)：发布验收细目。
+## 发布与规划
 
-### 平台现状
+| 文档 | 内容 |
+| --- | --- |
+| [macOS 发布流程](release.md) | DMG、签名、公证和干净设备验收 |
+| [历史规划](roadmap/README.md) | 早期技术决策和待实施方案，**不是当前实现清单** |
 
-| 平台 | 代码位置 | 状态 |
-| --- | --- | --- |
-| macOS | `main` | 开发预览；未发布公证安装包 |
-| Windows | `feature/windows-preview` | 独立原生预览；未正式发布 |
-| Android / iOS | 规划文档 | 尚未实现 |
+**当前范围：** macOS `main` 为主开发版本；Windows 原生预览位于独立 [`feature/windows-preview` 分支](https://github.com/resnowh/echo-mac-subtitle/tree/feature/windows-preview)；移动端尚未实现。没有已发布的公证版 macOS 安装包。
 
-> 旧规划文档保留原始决策背景，可能引用历史提交、设计提议或未来目标。判断**当前实现**请优先查看 `main` 源码、Windows 分支、[README](../README.md) 和 [CHANGELOG](../CHANGELOG.md)。不要将旧文件中“尚未实现 Windows”等历史陈述当成现状。
+**文档维护约定：** 用户可见功能看 [README](../README.md)，实现与不变量看架构/数据模型，测试结论看 [CI](https://github.com/resnowh/echo-mac-subtitle/actions) 与测试文档，发布进度看 [release.md](release.md)。历史规划与现状冲突时，以源码、CI 和当前技术文档为准。
 
-## 安全反馈
-
-欢迎提交 [GitHub Issues](https://github.com/resnowh/echo-mac-subtitle/issues)；请避免上传 API Key、录音原文、个人信息、完整敏感字幕或含密钥的日志。
+反馈问题请使用 [Issues](https://github.com/resnowh/echo-mac-subtitle/issues)，不要提交 API Key、私人录音、原始字幕或含敏感数据的日志。

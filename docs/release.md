@@ -1,6 +1,6 @@
 # Echo macOS 正式分发与验收
 
-> 2026-10-08：此文档描述**准备中的发布流水线**。截至本文编写时，未完成真实 Developer ID 签名、公证、干净设备安装，也未创建公众 GitHub Release。不要把 CI 的 unsigned Release build 当作最终安装包。
+> **状态（2026-10-12）**：维护者尚未加入付费 Apple Developer Program。已具备隔离构建和 DMG 预检流程，但**无法完成正式 Developer ID 签名与公证**；干净设备安装和升级验收也尚未完成，**没有公共 GitHub Release**。CI 产生的未签名 DMG 不属于官方安装包。
 
 ## 首发范围与原则
 
@@ -18,7 +18,7 @@
 
 ## 发布前必须由仓库所有人确认
 
-1. Apple Developer Program 是否为有效付费成员、团队对 Developer ID Application 证书和 App Store Connect Notary API 凭据的实际权限。Xcode 中已有 Development Team ID **不代表有发行证书**。
+1. **目前阻塞**：维护者需要先加入付费 Apple Developer Program，并获得 Developer ID Application 证书及公证权限。Xcode 中已有 Development Team ID **不代表有发行证书**。在此之前无需配置以下 Secrets，也不应运行正式签名流程。
 2. 在仓库 Settings → Environments 创建 `macos-distribution`，设置合适的 required reviewers；避免未经授权即可触发签名。
 3. 在该 Environment 作用域配置以下 secrets（**不要把凭据发给 ChatGPT、写入 PR/Issue 或提交到 Git**）：
    - `APPLE_DEVELOPER_ID_P12_BASE64`：Developer ID Application 的 P12 内容，Base64（只保存在受保护的 Secrets）。
@@ -53,9 +53,9 @@
 | 项目 | 状态 |
 |---|---|
 | Debug / Release CI（未签名） | 已通过历史 CI |
-| Universal DMG 预检 | 等本 PR 工作流执行 |
-| Developer ID Application 签名 | 未执行（缺用户证书） |
-| Apple notarization + staple | 未执行（缺公证凭据） |
+| Universal DMG 预检 | 已通过独立 CI 预检（[样例执行](https://github.com/resnowh/echo-mac-subtitle/actions/runs/38244942787)）；不等于正式签名或公证 |
+| Developer ID Application 签名 | 未执行（尚未加入付费 Apple Developer Program） |
+| Apple notarization + staple | 未执行（尚未加入付费 Apple Developer Program） |
 | Hardened Runtime + 真机权限 | 未执行 |
 | 干净机器安装/更新 | 未执行 |
 | 长时录音 / 异常恢复 | 待专门验收 |

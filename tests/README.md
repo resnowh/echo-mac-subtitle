@@ -1,32 +1,36 @@
-# Isolated stream checks
+# Automated checks (macOS)
 
-`CorrectionChecks.swift` additionally tests field locks, late recognition,
-undo/stale revisions, old/new Archive JSON, cross-segment UUID matching,
-corrected SRT, structured DeepSeek responses, configurable transcript
-segmentation, UserDefaults persistence, and Soniox endpoint request settings.
-No DeepSeek calls are made; these checks do not establish real AI correction
-quality.
+These are **isolated logic and transport tests**. They do not launch Echo, use real audio devices, contact Soniox/DeepSeek, or require API credentials.
 
-Run `python3 tests/run_stream_checks.py` on macOS with Xcode selected.
-If local Command Line Tools and Xcode disagree, set `DEVELOPER_DIR` to the
-installed Xcode developer directory for this command only.
+## Run
 
-The script compiles production PCM and transport sources in a temporary
-directory. It checks 30 minutes of **synthetic** dual-input sample/timeline
-continuity, reset, prebuffer bounds, 20 loopback WebSocket reconnects,
-ordered audio/end-of-stream delivery, cancellation and overflow failure.
-The server binds only to an ephemeral localhost port. No credentials,
-real recording, Soniox service or running Echo instance are used.
+On macOS with Xcode selected:
 
-This does not validate physical microphone/ScreenCaptureKit behavior,
-real network latency, UI scrolling or sleep/wake. Those require manual
-verification when the user's active recording can safely be stopped.
+```bash
+python3 tests/run_stream_checks.py
+```
+
+If Command Line Tools and Xcode are different installations, set `DEVELOPER_DIR` for this command. The script compiles production Swift sources in a temporary directory and runs a loopback WebSocket server on an ephemeral localhost port. See also the [macOS CI workflow](../.github/workflows/ci.yml).
+
+## Coverage
+
+- **Audio and transport**: 30 minutes of synthetic dual-input timeline/PCM continuity, mixer resets, bounded prebuffer, ordered audio/end-of-stream delivery, 20 loopback WebSocket reconnects, cancellation and overflow failure.
+- **Transcript and archive**: field locks, manual correction/undo, stale-revision rejection, old/new Archive JSON, cross-segment UUID matching, corrected SRT, recognition segmentation and endpoint request settings.
+- **AI interfaces**: structured DeepSeek response parsing and rejection of invalid responses; **no live model calls** or model-quality evaluation.
+- **Desktop overlay**: provisional/final updates, original/translation entry pairing, late translation, expiration/clear behavior, display settings and persistence. See [overlay acceptance](../docs/testing/desktop-subtitle-overlay.md).
+
+## Not covered
+
+Passing these tests or compiling Debug/Release **does not verify** physical microphone or ScreenCaptureKit capture, real network latency, Soniox accuracy, macOS window/Space/fullscreen behavior, sleep/wake recovery on hardware, or long-session UX. Those require separate real-device acceptance tests.
+
+Do not run `build_mac.command` or restart/replace Echo merely to test while an active recording is in progress; that script automatically opens the built app.
 
 ## Isolated floating subtitle checks
 
 `python3 tests/run_overlay_checks.py` compiles the production SwiftUI overlay
 with a feed-only model and a disposable UserDefaults suite. It checks resetting
-placement while disabled, exiting adjustment mode, and contiguous latest-line
+placement while disabled, production panel movement and two-axis resize,
+click-through restoration, exiting adjustment mode, and contiguous latest-line
 selection. Pass an output directory to render large bilingual and narrow
 adjustment previews into PNGs using hidden offscreen windows. It never launches
 Echo, activates a visible window, opens audio devices, or connects to Soniox.
