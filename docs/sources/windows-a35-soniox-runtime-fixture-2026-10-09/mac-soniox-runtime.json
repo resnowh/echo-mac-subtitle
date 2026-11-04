@@ -1,0 +1,171 @@
+{
+  "events" : [
+    {
+      "expected" : [
+        {
+          "chinese" : "会",
+          "end" : 1.3999999999999999,
+          "english" : "Meet",
+          "language" : "en",
+          "speaker" : "Speaker 4",
+          "start" : 1
+        }
+      ],
+      "expectedFinalizations" : 0,
+      "message" : {
+        "tokens" : [
+          {
+            "end_ms" : 1400,
+            "is_final" : false,
+            "language" : "en",
+            "speaker" : "4",
+            "start_ms" : 1000,
+            "text" : "Meet"
+          },
+          {
+            "is_final" : false,
+            "text" : "会",
+            "translation_status" : "translation"
+          }
+        ]
+      }
+    },
+    {
+      "expected" : [
+        {
+          "chinese" : "",
+          "end" : 1.8,
+          "english" : "Meeting",
+          "language" : "en",
+          "speaker" : "Speaker 4",
+          "start" : 1
+        }
+      ],
+      "expectedFinalizations" : 0,
+      "message" : {
+        "tokens" : [
+          {
+            "end_ms" : 1800,
+            "is_final" : false,
+            "language" : "ja",
+            "speaker" : "5",
+            "start_ms" : 1000,
+            "text" : "Meeting"
+          }
+        ]
+      }
+    },
+    {
+      "expected" : [
+        {
+          "chinese" : "",
+          "end" : 2.2000000000000002,
+          "english" : "Meeting started.",
+          "language" : "ja",
+          "speaker" : "Speaker 5",
+          "start" : 1
+        }
+      ],
+      "expectedFinalizations" : 0,
+      "message" : {
+        "tokens" : [
+          {
+            "end_ms" : 2200,
+            "is_final" : true,
+            "language" : "ja",
+            "speaker" : "5",
+            "start_ms" : 1000,
+            "text" : "Meeting started."
+          }
+        ]
+      }
+    },
+    {
+      "expected" : [
+        {
+          "chinese" : "会议开始了。",
+          "end" : 2.2000000000000002,
+          "english" : "Meeting started.",
+          "language" : "ja",
+          "speaker" : "Speaker 5",
+          "start" : 1
+        }
+      ],
+      "expectedFinalizations" : 1,
+      "message" : {
+        "tokens" : [
+          {
+            "is_final" : true,
+            "text" : "会议开始了。",
+            "translation_status" : "translation"
+          },
+          {
+            "is_final" : true,
+            "text" : "<end>"
+          },
+          {
+            "is_final" : true,
+            "text" : "<fin>"
+          }
+        ]
+      }
+    },
+    {
+      "expected" : [
+        {
+          "chinese" : "会议开始了。",
+          "end" : 2.2000000000000002,
+          "english" : "Meeting started.",
+          "language" : "ja",
+          "speaker" : "Speaker 5",
+          "start" : 1
+        },
+        {
+          "chinese" : "第一位。第二位。",
+          "end" : 8,
+          "english" : "First speaker.Second speaker.",
+          "language" : "ja",
+          "speaker" : "Speaker 2",
+          "start" : 6
+        }
+      ],
+      "expectedFinalizations" : 2,
+      "message" : {
+        "tokens" : [
+          {
+            "end_ms" : 7000,
+            "is_final" : true,
+            "language" : "en",
+            "speaker" : "1",
+            "start_ms" : 6000,
+            "text" : "First speaker."
+          },
+          {
+            "end_ms" : 8000,
+            "is_final" : true,
+            "language" : "ja",
+            "speaker" : "2",
+            "start_ms" : 7200,
+            "text" : "Second speaker."
+          },
+          {
+            "is_final" : true,
+            "text" : "第一位。",
+            "translation_status" : "translation"
+          },
+          {
+            "is_final" : true,
+            "text" : "第二位。",
+            "translation_status" : "translation"
+          },
+          {
+            "is_final" : true,
+            "text" : "<end>"
+          }
+        ]
+      }
+    }
+  ],
+  "source" : "macOS\/ViewModels\/SpeechViewModel.swift production method extraction",
+  "sourceCommit" : "8ed340d946b575630ebed2689e038ba09140ad55"
+}

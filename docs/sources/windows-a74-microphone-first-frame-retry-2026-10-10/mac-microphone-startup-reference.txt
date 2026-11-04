@@ -1,0 +1,39 @@
+Source: macOS/ViewModels/SpeechViewModel.swift (read-only), lines 91-94
+    private let microphoneStartupRetryDelay: TimeInterval = 0.45
+    private let microphoneStartupRetryLimit = 2
+    private let microphoneFirstBufferTimeout: TimeInterval = 1.2
+    private let microphoneConversionTimeout: TimeInterval = 2.5
+
+Source: macOS/ViewModels/SpeechViewModel.swift (read-only), lines 737-768
+        DispatchQueue.main.asyncAfter(deadline: .now() + microphoneFirstBufferTimeout, execute: workItem)
+    }
+
+    private func scheduleMicrophoneStartupRetry(
+        sessionID: UUID,
+        attempt: Int,
+        error: Error,
+        onReady: @escaping () -> Void,
+        onFailure: @escaping (Error) -> Void
+    ) {
+        guard activeSessionID == sessionID, isRecording, !isSystemSleeping else { return }
+        guard attempt < microphoneStartupRetryLimit else {
+            audioCaptureState = .failed(error.localizedDescription)
+            onFailure(error)
+            return
+        }
+
+        status = "正在准备麦克风…"
+        audioCaptureState = .recovering
+        isRecoveringAudioCapture = true
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.startMicrophoneCaptureWithRetry(
+                sessionID: sessionID,
+                attempt: attempt + 1,
+                onReady: onReady,
+                onFailure: onFailure
+            )
+        }
+        microphoneStartupWorkItem?.cancel()
+        microphoneStartupWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + microphoneStartupRetryDelay, execute: workItem)
+    }

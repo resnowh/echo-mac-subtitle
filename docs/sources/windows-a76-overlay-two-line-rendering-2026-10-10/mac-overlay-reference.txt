@@ -1,0 +1,14 @@
+        Text(value)
+            .font(.system(size: size, weight: weight))
+            .foregroundStyle(.white)
+            .multilineTextAlignment(.center)
+            .lineLimit(2)
+            .truncationMode(.tail)
+            .fixedSize(horizontal: false, vertical: true)
+            .shadow(color: .black.opacity(settings.shadowStrength), radius: 3, x: 0, y: 1)
+            .frame(maxWidth: .infinity)
+            .accessibilityLabel(value)
+    }
+
+    private func accept(_ state: DesktopSubtitleOverlayState?) {
+        expirationTask?.cancel()

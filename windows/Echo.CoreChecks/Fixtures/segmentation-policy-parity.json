@@ -1,0 +1,109 @@
+{
+  "cases": [
+    {
+      "id": "semantic-endpoint-overrides-empty-and-untranslated-state",
+      "text": "",
+      "elapsedSeconds": 0,
+      "quietSeconds": 0,
+      "endpointReached": true,
+      "translationEnabled": true,
+      "translationReady": false,
+      "expectedTrigger": "endpoint"
+    },
+    {
+      "id": "silence-inclusive-threshold",
+      "text": "one two three four five",
+      "elapsedSeconds": 1,
+      "quietSeconds": 4.5,
+      "expectedTrigger": "silence"
+    },
+    {
+      "id": "silence-below-time-threshold",
+      "text": "one two three four five",
+      "elapsedSeconds": 1,
+      "quietSeconds": 4.499,
+      "expectedTrigger": "none"
+    },
+    {
+      "id": "silence-below-word-threshold",
+      "text": "one two three four",
+      "elapsedSeconds": 1,
+      "quietSeconds": 12,
+      "expectedTrigger": "none"
+    },
+    {
+      "id": "wait-for-enabled-translation",
+      "text": "one two three four five",
+      "elapsedSeconds": 1,
+      "quietSeconds": 8,
+      "translationEnabled": true,
+      "translationReady": false,
+      "expectedTrigger": "none"
+    },
+    {
+      "id": "silence-finalizes-after-translation-arrives",
+      "text": "one two three four five",
+      "elapsedSeconds": 1,
+      "quietSeconds": 4.5,
+      "translationEnabled": true,
+      "translationReady": true,
+      "expectedTrigger": "silence"
+    },
+    {
+      "id": "disabled-silence-fallback",
+      "text": "one two three four five",
+      "elapsedSeconds": 1,
+      "quietSeconds": 12,
+      "localSilenceFallbackEnabled": false,
+      "expectedTrigger": "none"
+    },
+    {
+      "id": "long-segment-inclusive-word-and-time-thresholds",
+      "repeatWord": "w",
+      "repeatCount": 80,
+      "elapsedSeconds": 90,
+      "quietSeconds": 0,
+      "expectedTrigger": "longSegment"
+    },
+    {
+      "id": "long-segment-below-word-threshold",
+      "repeatWord": "w",
+      "repeatCount": 79,
+      "elapsedSeconds": 180,
+      "quietSeconds": 0,
+      "expectedTrigger": "none"
+    },
+    {
+      "id": "long-segment-below-time-threshold",
+      "repeatWord": "w",
+      "repeatCount": 80,
+      "elapsedSeconds": 89.999,
+      "quietSeconds": 0,
+      "expectedTrigger": "none"
+    },
+    {
+      "id": "disabled-long-segment-fallback",
+      "repeatWord": "w",
+      "repeatCount": 80,
+      "elapsedSeconds": 120,
+      "quietSeconds": 0,
+      "longSegmentFallbackEnabled": false,
+      "expectedTrigger": "none"
+    },
+    {
+      "id": "silence-precedes-long-segment-when-both-match",
+      "repeatWord": "w",
+      "repeatCount": 80,
+      "elapsedSeconds": 90,
+      "quietSeconds": 4.5,
+      "expectedTrigger": "silence"
+    },
+    {
+      "id": "unicode-whitespace-word-count",
+      "text": "one two　three four five",
+      "elapsedSeconds": 1,
+      "quietSeconds": 4.5,
+      "expectedTrigger": "silence"
+    }
+  ]
+}
