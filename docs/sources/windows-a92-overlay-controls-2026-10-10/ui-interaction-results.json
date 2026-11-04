@@ -1,0 +1,32 @@
+[
+  {
+    "name": "Toolbar control OverlayMoveHandle is visible to UI Automation",
+    "status": "FAIL",
+    "detail": "matches=0"
+  },
+  {
+    "name": "Toolbar control OverlayPositionLock is visible to UI Automation",
+    "status": "FAIL",
+    "detail": "matches=0"
+  },
+  {
+    "name": "Toolbar control OverlayClickThrough is visible to UI Automation",
+    "status": "FAIL",
+    "detail": "matches=0"
+  },
+  {
+    "name": "Toolbar control OverlayOpenSettings is visible to UI Automation",
+    "status": "FAIL",
+    "detail": "matches=0"
+  },
+  {
+    "name": "Toolbar control OverlayClose is visible to UI Automation",
+    "status": "FAIL",
+    "detail": "matches=0"
+  },
+  {
+    "name": "Overlay interaction GUI smoke completed without an unhandled test error",
+    "status": "FAIL",
+    "detail": "❌ No element found matching 'OverlayOpenSettings'. The UI may have changed — re-run 'winapp ui inspect' or 'winapp ui search' to find current elements. Prefer targeting by AutomationId (set via AutomationProperties.AutomationId in XAML) — these survive layout changes."
+  }
+]

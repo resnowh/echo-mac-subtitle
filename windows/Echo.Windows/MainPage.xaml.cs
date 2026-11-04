@@ -591,26 +591,16 @@ public sealed partial class MainPage : Page
         if (settings.Enabled) ShowSubtitleOverlay(); else subtitleOverlayWindow?.HideOverlay();
         UpdateOverlayMenuText();
     }
-    private void AdjustOverlay_Click(object sender, RoutedEventArgs e)
+    private void RestoreOverlayControls_Click(object sender, RoutedEventArgs e)
     {
-        bool wasAdjusting = subtitleOverlayWindow?.IsAdjusting == true;
         var settings = ViewModel.Config.SubtitleOverlay;
         settings.Enabled = true;
+        settings.PositionLocked = false;
+        settings.ClickThrough = false;
         SaveOverlaySettings(settings);
         ShowSubtitleOverlay();
-        subtitleOverlayWindow?.SetAdjusting(!wasAdjusting);
-        UpdateOverlayMenuText();
+        subtitleOverlayWindow?.SetAdjusting(true);
     }
-    private void ToggleOverlayLock_Click(object sender, RoutedEventArgs e)
-    {
-        var settings = ViewModel.Config.SubtitleOverlay;
-        bool unlock = settings.PositionLocked;
-        settings.PositionLocked = !unlock;
-        SaveOverlaySettings(settings);
-        if (settings.Enabled) subtitleOverlayWindow?.SetAdjusting(unlock);
-        UpdateOverlayMenuText();
-    }
-    private async void OverlaySettings_Click(object sender, RoutedEventArgs e) => await ShowOverlaySettingsAsync();
     private void ShowSubtitleOverlay()
     {
         subtitleOverlayWindow ??= new NativeDesktopSubtitleOverlayWindow(
@@ -635,79 +625,6 @@ public sealed partial class MainPage : Page
     private void UpdateOverlayMenuText()
     {
         ToggleOverlayMenuItem.Text = ViewModel.Config.SubtitleOverlay.Enabled ? "关闭悬浮字幕" : "开启悬浮字幕";
-        AdjustOverlayMenuItem.Text = subtitleOverlayWindow?.IsAdjusting == true ? "完成调整" : "调整位置和大小";
-        LockOverlayMenuItem.Text = ViewModel.Config.SubtitleOverlay.PositionLocked ? "解锁位置" : "锁定位置";
-    }
-    private async Task ShowOverlaySettingsAsync()
-    {
-        var current = ViewModel.Config.SubtitleOverlay;
-        bool wasPositionLocked = current.PositionLocked;
-        var enabled = new ToggleSwitch { Header = "启用悬浮字幕", IsOn = current.Enabled };
-        var original = new ToggleSwitch { Header = "显示原文", IsOn = current.ShowOriginal };
-        var translation = new ToggleSwitch { Header = "显示译文", IsOn = current.ShowTranslation };
-        var clickThrough = new ToggleSwitch { Header = "点击穿透（不调整时）", IsOn = current.ClickThrough };
-        var locked = new ToggleSwitch { Header = "锁定位置", IsOn = current.PositionLocked };
-        AutomationProperties.SetAutomationId(enabled, "OverlayEnabled");
-        AutomationProperties.SetAutomationId(original, "OverlayShowOriginal");
-        AutomationProperties.SetAutomationId(translation, "OverlayShowTranslation");
-        AutomationProperties.SetAutomationId(clickThrough, "OverlayClickThrough");
-        AutomationProperties.SetAutomationId(locked, "OverlayPositionLocked");
-        var content = new StackPanel { Spacing = 10, MaxWidth = 540 };
-        content.Children.Add(new TextBlock { Text = "透明字幕浮在其他窗口上方，只读取当前识别结果，不会重新连接 Soniox。", TextWrapping = TextWrapping.Wrap });
-        content.Children.Add(enabled); content.Children.Add(original); content.Children.Add(translation);
-        Slider originalSize = AddOverlaySlider(content, "原文字号", current.OriginalFontSize, 16, 48, " pt");
-        Slider translationSize = AddOverlaySlider(content, "译文字号", current.TranslationFontSize, 14, 44, " pt");
-        Slider opacity = AddOverlaySlider(content, "字幕透明度", current.Opacity * 100, 35, 100, "%");
-        Slider width = AddOverlaySlider(content, "最大宽度", current.WidthFraction * 100, 35, 95, "%");
-        Slider retention = AddOverlaySlider(content, "定稿保留", current.RetentionSeconds, 1, 15, " 秒");
-        Slider shadow = AddOverlaySlider(content, "文字阴影", current.ShadowStrength * 100, 0, 100, "%");
-        content.Children.Add(clickThrough); content.Children.Add(locked);
-        var resetPosition = new Button { Content = "重置字幕位置", HorizontalAlignment = HorizontalAlignment.Left };
-        AutomationProperties.SetAutomationId(resetPosition, "ResetSubtitleOverlayPosition");
-        resetPosition.Click += (_, _) =>
-        {
-            current.DisplayId = null; current.DisplayDeviceName = null; current.NormalizedX = .5; current.NormalizedBottom = .09;
-            SaveOverlaySettings(current);
-            subtitleOverlayWindow?.ApplySettings(current, reposition: true);
-        };
-        content.Children.Add(resetPosition);
-        var dialog = new ContentDialog
-        {
-            Title = "悬浮字幕设置",
-            Content = new ScrollViewer { Content = content, MaxHeight = 560, VerticalScrollBarVisibility = ScrollBarVisibility.Auto },
-            PrimaryButtonText = "完成", SecondaryButtonText = "恢复默认", CloseButtonText = "取消",
-            DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot
-        };
-        ContentDialogResult result = await dialog.ShowAsync();
-        if (result == ContentDialogResult.Secondary)
-        {
-            SaveOverlaySettings(new DesktopSubtitleOverlaySettings { Enabled = current.Enabled,
-                DisplayId = current.DisplayId, DisplayDeviceName = current.DisplayDeviceName,
-                NormalizedX = current.NormalizedX, NormalizedBottom = current.NormalizedBottom });
-            return;
-        }
-        if (result != ContentDialogResult.Primary) return;
-        current.Enabled = enabled.IsOn;
-        current.ShowOriginal = original.IsOn; current.ShowTranslation = translation.IsOn;
-        current.OriginalFontSize = originalSize.Value; current.TranslationFontSize = translationSize.Value;
-        current.Opacity = opacity.Value / 100; current.WidthFraction = width.Value / 100;
-        current.RetentionSeconds = retention.Value; current.ShadowStrength = shadow.Value / 100;
-        current.ClickThrough = clickThrough.IsOn; current.PositionLocked = locked.IsOn;
-        bool positionLockChanged = current.PositionLocked != wasPositionLocked;
-        SaveOverlaySettings(current);
-        if (current.Enabled) ShowSubtitleOverlay(); else subtitleOverlayWindow?.HideOverlay();
-        if (positionLockChanged && current.Enabled) subtitleOverlayWindow?.SetAdjusting(!current.PositionLocked);
-    }
-    private static Slider AddOverlaySlider(StackPanel content, string title, double value, double min, double max, string suffix)
-    {
-        var row = new StackPanel { Spacing = 3 };
-        var label = new TextBlock { Text = $"{title} · {value:0}{suffix}", Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"] };
-        var slider = new Slider { Minimum = min, Maximum = max, Value = value, StepFrequency = 1 };
-        AutomationProperties.SetName(slider, title);
-        AutomationProperties.SetAutomationId(slider, $"Overlay{new string(title.Where(char.IsLetterOrDigit).ToArray())}");
-        slider.ValueChanged += (_, args) => label.Text = $"{title} · {args.NewValue:0}{suffix}";
-        row.Children.Add(label); row.Children.Add(slider); content.Children.Add(row);
-        return slider;
     }
     private void Latest_Click(object sender, RoutedEventArgs e)
     {

@@ -1,0 +1,14 @@
+baseline=d5832dcdcab31d4a8525d47d83e02e6675287426
+branch=feature/windows-overlay-interaction
+worktree=C:\Users\HENRY\AppData\Local\Temp\Echo-WindowsOverlayInteraction
+branchHead=d5832dcdcab31d4a8525d47d83e02e6675287426
+workingTree=M docs/windows/mac-parity-matrix.md
+ M docs/windows/testing.md
+ M windows/Echo.CoreChecks/Echo.CoreChecks.csproj
+ M windows/Echo.CoreChecks/Program.cs
+ M windows/Echo.Windows/MainPage.xaml
+ M windows/Echo.Windows/MainPage.xaml.cs
+ M windows/Echo.Windows/NativeDesktopSubtitleOverlayWindow.cs
+?? docs/sources/windows-a92-overlay-controls-2026-10-10/
+?? docs/windows/overlay-interaction.md
+?? windows/Echo.Windows/OverlayInteractionWindows.cs

@@ -75,7 +75,9 @@ public sealed class NativeDesktopSubtitleOverlayWindow
     private readonly nint anchorWindow;
     private readonly DispatcherQueueTimer expiryTimer;
     private readonly DispatcherQueueTimer publishTimer;
+    private readonly DispatcherQueueTimer hoverTimer;
     private readonly CanvasDevice canvasDevice;
+    private readonly OverlayInteractionWindows interactionWindows;
     private DesktopSubtitleOverlaySettings settings;
     private nint hwnd;
     private DesktopSubtitleOverlayState? visibleState;
@@ -138,6 +140,24 @@ public sealed class NativeDesktopSubtitleOverlayWindow
             pendingState = null;
             if (pending is not null) Accept(pending);
         };
+        interactionWindows = new OverlayInteractionWindows(dispatcherQueue, SetAdjusting,
+            SaveInteractiveSettings, () =>
+            {
+                settings.Enabled = false;
+                settingsChanged(settings);
+                HideOverlay();
+            })
+        {
+            BeginMoveFromToolbar = BeginPointerOperationFromToolbar,
+            ContinueMoveFromToolbar = ContinuePointerOperation,
+            EndMoveFromToolbar = EndPointerOperation,
+            GetAnchorWindow = () => hwnd,
+            MoveByKeyboard = MoveOverlayByKeyboard,
+            saveSettingsPreview = value => ApplySettings(value)
+        };
+        hoverTimer = dispatcherQueue.CreateTimer();
+        hoverTimer.Interval = TimeSpan.FromMilliseconds(90);
+        hoverTimer.Tick += (_, _) => UpdateHoverToolbar();
         feed.PropertyChanged += Feed_PropertyChanged;
         EnsureDib(1, 1);
         ApplySettings(this.settings, reposition: true);
@@ -147,7 +167,10 @@ public sealed class NativeDesktopSubtitleOverlayWindow
 
     public void ShowOverlay()
     {
+        if (isClosed) return;
+        adjusting = !settings.PositionLocked;
         if (feed.Current is { } current) Accept(current);
+        if (!hoverTimer.IsRunning) hoverTimer.Start();
         ShowWindow(hwnd, SwShowNoActivate);
         SetWindowPos(hwnd, HwndTopMost, 0, 0, 0, 0,
             SwpNoActivate | SwpShowWindow | SwpNoSize | SwpNoMove);
@@ -156,6 +179,9 @@ public sealed class NativeDesktopSubtitleOverlayWindow
 
     public void HideOverlay()
     {
+        EndPointerOperation();
+        hoverTimer.Stop();
+        interactionWindows.HideAll();
         if (adjusting) SetAdjusting(false);
         if (hwnd != 0) ShowWindow(hwnd, SwHide);
     }
@@ -163,9 +189,12 @@ public sealed class NativeDesktopSubtitleOverlayWindow
     public void CloseOverlay()
     {
         if (isClosed) return;
+        EndPointerOperation();
         isClosed = true;
         expiryTimer.Stop();
         publishTimer.Stop();
+        hoverTimer.Stop();
+        interactionWindows.Dispose();
         feed.PropertyChanged -= Feed_PropertyChanged;
         if (hwnd != 0)
         {
@@ -178,6 +207,7 @@ public sealed class NativeDesktopSubtitleOverlayWindow
 
     public void SetAdjusting(bool value)
     {
+        EndPointerOperation();
         adjusting = value;
         dragging = false;
         resizing = false;
@@ -196,7 +226,10 @@ public sealed class NativeDesktopSubtitleOverlayWindow
 
     public void ApplySettings(DesktopSubtitleOverlaySettings value, bool reposition = false)
     {
+        if (isClosed) return;
         settings = value.Validate();
+        if (settings.PositionLocked) EndPointerOperation();
+        adjusting = !settings.PositionLocked;
         UpdateInteractionStyle();
         if (reposition) PlaceOnSelectedDisplay(useSavedPosition: true);
         else ResizeToConfiguredWidth();
@@ -207,12 +240,67 @@ public sealed class NativeDesktopSubtitleOverlayWindow
     {
         if (hwnd == 0) return;
         long style = GetWindowLongPointer(hwnd, GwlExStyle).ToInt64();
-        bool transparent = !adjusting && settings.ClickThrough;
+        bool transparent = settings.ClickThrough;
         style = transparent ? style | WsExTransparent : style & ~WsExTransparent;
         style |= WsExLayered | WsExToolWindow | WsExNoActivate;
         SetWindowLongPointer(hwnd, GwlExStyle, new nint(style));
         SetWindowPos(hwnd, 0, 0, 0, 0, 0,
             SwpNoActivate | SwpNoZOrder | SwpNoSize | SwpNoMove | SwpFrameChanged);
+    }
+
+    private void SaveInteractiveSettings(DesktopSubtitleOverlaySettings value)
+    {
+        settings = value.Validate();
+        settingsChanged(settings);
+        ApplySettings(settings);
+    }
+
+    private void UpdateHoverToolbar()
+    {
+        if (isClosed || hwnd == 0 || !IsWindowVisible(hwnd) || !GetWindowRect(hwnd, out NativeRect bounds)) return;
+        if (!GetCursorPos(out PointInt32 cursor)) return;
+        bool overCaption = cursor.X >= bounds.Left && cursor.X < bounds.Right
+            && cursor.Y >= bounds.Top && cursor.Y < bounds.Bottom;
+        bool overControls = interactionWindows.ContainsPoint(cursor.X, cursor.Y);
+        if (overCaption || overControls || interactionWindows.IsSettingsVisible
+            || interactionWindows.HasKeyboardFocus || dragging || resizing)
+        {
+            interactionWindows.ShowToolbar(new RectInt32(bounds.Left, bounds.Top,
+                bounds.Right - bounds.Left, bounds.Bottom - bounds.Top), settings, adjusting);
+            if (interactionWindows.IsSettingsVisible)
+                interactionWindows.UpdateSettingsPosition(new RectInt32(bounds.Left, bounds.Top,
+                    bounds.Right - bounds.Left, bounds.Bottom - bounds.Top));
+        }
+        else
+        {
+            interactionWindows.HideToolbar();
+        }
+    }
+
+    private void BeginPointerOperationFromToolbar()
+    {
+        if (settings.PositionLocked || !GetCursorPos(out dragPointerOrigin)
+            || !GetWindowRect(hwnd, out NativeRect rect)) return;
+        dragging = true;
+        resizing = false;
+        dragWindowOrigin = new PointInt32(rect.Left, rect.Top);
+        // Capture stays on the foreground WinUI drag handle, not this
+        // WS_EX_NOACTIVATE / potentially WS_EX_TRANSPARENT caption HWND.
+        RenderAndPresent();
+    }
+
+    private void MoveOverlayByKeyboard(int deltaX, int deltaY)
+    {
+        if (settings.PositionLocked || hwnd == 0 || !GetWindowRect(hwnd, out NativeRect rect)) return;
+        nint monitor = MonitorFromWindow(hwnd, MonitorDefaultToNearest);
+        if (monitor == 0 || !TryGetMonitorInfo(monitor, out MonitorInfo info)) return;
+        int width = rect.Right - rect.Left;
+        int height = rect.Bottom - rect.Top;
+        int x = Math.Clamp(rect.Left + deltaX, info.WorkArea.Left, Math.Max(info.WorkArea.Left, info.WorkArea.Right - width));
+        int y = Math.Clamp(rect.Top + deltaY, info.WorkArea.Top, Math.Max(info.WorkArea.Top, info.WorkArea.Bottom - height));
+        SetWindowPos(hwnd, HwndTopMost, x, y, width, height, SwpNoActivate | SwpNoZOrder | SwpShowWindow);
+        PersistPlacement(save: true);
+        RenderAndPresent();
     }
 
     private void PlaceOnSelectedDisplay(bool useSavedPosition)
@@ -382,7 +470,7 @@ public sealed class NativeDesktopSubtitleOverlayWindow
         using (CanvasDrawingSession drawing = renderTarget.CreateDrawingSession())
         {
             drawing.Clear(Color.FromArgb(0, 0, 0, 0));
-            if (adjusting)
+            if (dragging)
             {
                 // Nonzero, premultiplied alpha keeps the transparent surface
                 // available for drag hit-testing while remaining visually clear.
@@ -409,8 +497,7 @@ public sealed class NativeDesktopSubtitleOverlayWindow
     {
         DesktopSubtitleOverlayState? state = visibleState;
         bool show = state is { IsVisible: true } && state.RemainsVisible(DateTimeOffset.UtcNow, settings.RetentionSeconds);
-        bool preview = adjusting && !show;
-        if (!show && !preview) return;
+        if (!show) return;
 
         bool showOriginal = show
             ? DesktopSubtitleOverlayPresentation.ShouldShowOriginal(state!, settings)
@@ -418,8 +505,8 @@ public sealed class NativeDesktopSubtitleOverlayWindow
         bool showTranslation = show
             ? DesktopSubtitleOverlayPresentation.ShouldShowTranslation(state!, settings)
             : settings.ShowTranslation;
-        string original = show ? state!.Original : "Original subtitle text";
-        string translation = show ? state!.Translation : "实时双语字幕预览";
+        string original = state!.Original;
+        string translation = state.Translation;
         float scale = (float)dpiScale;
         float horizontal = HorizontalPaddingDip * scale;
         float contentWidth = Math.Max(1, width - 2 * horizontal);
@@ -596,19 +683,18 @@ public sealed class NativeDesktopSubtitleOverlayWindow
                 }
                 OnDpiChanged(lParam);
                 return 0;
-            case WmLButtonDown when adjusting:
+            case WmLButtonDown when !settings.PositionLocked:
                 BeginPointerOperation(lParam);
                 return 0;
-            case WmMouseMove when adjusting && (wParam & MkLButton) != 0:
+            case WmMouseMove when !settings.PositionLocked && (wParam & MkLButton) != 0:
                 ContinuePointerOperation();
                 return 0;
-            case WmLButtonUp when adjusting:
+            case WmLButtonUp:
                 EndPointerOperation();
                 return 0;
             case WmCancelMode:
             case WmCaptureChanged:
-                dragging = false;
-                resizing = false;
+                EndPointerOperation();
                 return 0;
             case WmNcDestroy:
                 if (hwnd != 0) Instances.TryRemove(hwnd, out _);
@@ -629,10 +715,12 @@ public sealed class NativeDesktopSubtitleOverlayWindow
         dragWindowOrigin = new PointInt32(rect.Left, rect.Top);
         resizeStartSize = new SizeInt32(rect.Right - rect.Left, rect.Bottom - rect.Top);
         SetCapture(hwnd);
+        RenderAndPresent();
     }
 
     private void ContinuePointerOperation()
     {
+        if (isClosed || settings.PositionLocked || (!dragging && !resizing)) return;
         if (!GetCursorPos(out PointInt32 pointer)) return;
         nint monitor = MonitorFromWindow(hwnd, MonitorDefaultToNearest);
         if (monitor == 0 || !TryGetMonitorInfo(monitor, out MonitorInfo info)) return;
@@ -665,7 +753,7 @@ public sealed class NativeDesktopSubtitleOverlayWindow
         if (!dragging && !resizing) return;
         dragging = false;
         resizing = false;
-        ReleaseCapture();
+        if (GetCapture() == hwnd) ReleaseCapture();
         PersistPlacement(save: true);
         RenderAndPresent();
     }
@@ -793,8 +881,10 @@ public sealed class NativeDesktopSubtitleOverlayWindow
     [DllImport("user32.dll", EntryPoint = "SetWindowLongW", SetLastError = true)] private static extern int SetWindowLong32(nint hwnd, int index, int value);
     [DllImport("user32.dll", EntryPoint = "SetWindowTextW", CharSet = CharSet.Unicode, SetLastError = true)] private static extern bool SetWindowText(nint hwnd, string text);
     [DllImport("user32.dll", SetLastError = true)] private static extern bool GetWindowRect(nint hwnd, out NativeRect rect);
+    [DllImport("user32.dll")] private static extern bool IsWindowVisible(nint hwnd);
     [DllImport("user32.dll", SetLastError = true)] private static extern nint SetCapture(nint hwnd);
     [DllImport("user32.dll", SetLastError = true)] private static extern bool ReleaseCapture();
+    [DllImport("user32.dll")] private static extern nint GetCapture();
     [DllImport("user32.dll", SetLastError = true)] private static extern bool GetCursorPos(out PointInt32 point);
     [DllImport("user32.dll", SetLastError = true)] private static extern nint MonitorFromWindow(nint hwnd, int flags);
     [DllImport("user32.dll", EntryPoint = "GetMonitorInfoW", CharSet = CharSet.Unicode, SetLastError = true)] private static extern bool GetMonitorInfo(nint monitor, ref MonitorInfo info);

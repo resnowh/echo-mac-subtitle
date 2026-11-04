@@ -1,0 +1,20 @@
+
+Algorithm : SHA256
+Hash      : 05697F2C70A74E31D27BA621DE5DAF93AEE6811D24D5BF4A3AE698853715F0FF
+Path      : D:\ProgramData\WorkSpace\Echo实时翻译\overlay-interaction\windows\Echo.Windows\OverlayInteractionWindows.cs
+
+Algorithm : SHA256
+Hash      : 94CFB3EAD9C780136E7859373F2071C6D8732D3D6D391A6139FEC0A7AE413A02
+Path      : D:\ProgramData\WorkSpace\Echo实时翻译\overlay-interaction\windows\Echo.Windows\NativeDesktopSubtitleOverlayWindow.cs
+
+Algorithm : SHA256
+Hash      : 3FFA5598522B281A3E53625CDB4BE67F5EC2FF85AB47EEBBACE8B55B557C5156
+Path      : D:\ProgramData\WorkSpace\Echo实时翻译\overlay-interaction\windows\Echo.Windows\Core\OverlayPopoverLayout.cs
+
+Algorithm : SHA256
+Hash      : 591FC216D3FB74268A0017189CBD59F73A61C62A28B07C656995916E791BAD3F
+Path      : D:\ProgramData\WorkSpace\Echo实时翻译\overlay-interaction\windows\Echo.CoreChecks\Program.cs
+
+Algorithm : SHA256
+Hash      : 786C4B7D61E0E4F997BA615F7E027CB3C0825E0E338F169D5E5C2FCDB956F41D
+Path      : D:\ProgramData\WorkSpace\Echo实时翻译\overlay-interaction\windows\ui-overlay-interaction-smoke.ps1

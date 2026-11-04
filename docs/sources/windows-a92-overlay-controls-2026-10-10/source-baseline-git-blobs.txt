@@ -1,0 +1,10 @@
+windows/Echo.Windows/NativeDesktopSubtitleOverlayWindow.cs 	1800e2a105c5d0b1789217ab075cf8b9543d6c8d
+windows/Echo.Windows/MainPage.xaml 	3bf53c9c31a409d29081b7728801669c3b13de0c
+windows/Echo.Windows/MainPage.xaml.cs 	95d7b4c00174a7fb4022550bc85cee3aa71f2475
+windows/Echo.Windows/Core/Preferences.cs 	d95ac02876e7036179b3e57e4c850bbf8cb6e237
+windows/Echo.CoreChecks/Program.cs 	13d02a0c56547b55b7dd31bb69333c91b74b82da
+windows/Echo.CoreChecks/Echo.CoreChecks.csproj 	671f878defad3a360ddba956c319fe6f214c677a
+windows/ui-native-overlay-window.ps1 	fc1536ea290406dced86e13e945ed07dce866821
+docs/windows/testing.md 	1bb8fad5e700394e12aa4c2cf1cf50f5b70645cf
+docs/windows/mac-parity-matrix.md 	1fea86a7de571e137a687f2fb98bafb32a60c441
+docs/roadmap/数据清单.md 	d8520132b1434b563238da583098030cbf5eca99

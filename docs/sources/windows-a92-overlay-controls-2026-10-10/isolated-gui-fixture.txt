@@ -1,0 +1,5 @@
+identity=A92F3721-1586-4D09-9A92-79E7B8C95131
+checkout=C:\Users\HENRY\AppData\Local\Temp\Echo-A92-IsolatedGui
+mutex=Local\\EchoA92IsolatedGui
+fixture=synthetic bilingual overlay text
+base=329938b14bc2a657f39fd140618a4a7adf6af948

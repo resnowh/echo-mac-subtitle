@@ -1,0 +1,9 @@
+Windows floating subtitles now expose daily controls through a compact hover toolbar and an anchored settings popover. The toolbar is 184×40 DIP with five 30×30 icon buttons; the settings window is 304×416 DIP with a bounded scrolling body and collapsed advanced options.
+
+The caption keeps the existing transparent Direct2D HWND and subtitle feed. Separate WinUI HWNDs host controls. The drag handle owns pointer capture, lock and click-through remain independent, and close/reopen restores movement from the saved lock state. Keyboard focus keeps controls available, Escape closes settings and returns to the gear, validated language visibility is reflected in the controls, and resetting position preserves the current display. Short-screen placement reduces height before sacrificing control width.
+
+Validation: Release x64 builds with 0 warnings/errors; 197 CoreChecks pass. The GUI smoke script now records panel screenshots, UIA bounds and scroll viewport checks, and refuses mouse automation unless the operator explicitly confirms a dedicated test desktop.
+
+GUI acceptance remains incomplete. No GUI or mouse automation ran in the November 4 continuation because an independent VM/test desktop could not be confirmed. A92's earlier console-only success had no saved raw receipt, and its retained rerun JSON contains six failures; it is not reproducible passing evidence. New drag/capture, keyboard focus, clipping, multi-monitor/DPI changes and long-running HWND/GPU behavior still require isolated GUI validation. See [interaction design](docs/windows/overlay-interaction.md), [testing](docs/windows/testing.md) and [A95 raw evidence](docs/sources/windows-a95-overlay-resume-2026-11-04/README.md).
+
+Only Windows overlay code, Windows tests and related documentation changed. No macOS source, audio capture, Soniox, DeepSeek or archive business logic changed. The running Echo installation was not touched. Targets feature/windows-ui-mac-parity; not merged.
