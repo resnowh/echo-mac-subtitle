@@ -1,0 +1,17 @@
+D:\ProgramData\WorkSpace\Echo实时翻译\overlay-interaction\windows\Echo.Windows\OverlayInteractionWindows.cs(83,12): error CS0103: 当前上下文中不存在名称“FocusManager” [D:\ProgramData\WorkSpace\Echo实时翻译\overlay-interaction\windows\Echo.Windows\Echo.Windows.csproj]
+C:\Users\HENRY\.nuget\packages\microsoft.windowsappsdk.winui\2.3.6\buildTransitive\Microsoft.UI.Xaml.Markup.Compiler.interop.targets(864,9): XamlCompiler warning WMC1509: No LocalAssembly parameter given during MarkupCompilePass2 for the currently building project.  This will likely cause type resolution errors for any types from the current project. [D:\ProgramData\WorkSpace\Echo实时翻译\overlay-interaction\windows\Echo.Windows\Echo.Windows.csproj]
+D:\ProgramData\WorkSpace\Echo实时翻译\overlay-interaction\windows\Echo.Windows\MainPage.xaml(33,30): XamlCompiler error WMC0909: Cannot resolve DataType core:Subtitle [D:\ProgramData\WorkSpace\Echo实时翻译\overlay-interaction\windows\Echo.Windows\Echo.Windows.csproj]
+MainPage.xaml(35,9): XamlCompiler error WMC1111: DataTemplates containing x:Bind need a DataType to be specified using 'x:DataType' [D:\ProgramData\WorkSpace\Echo实时翻译\overlay-interaction\windows\Echo.Windows\Echo.Windows.csproj]
+C:\Users\HENRY\.nuget\packages\microsoft.windowsappsdk.winui\2.3.6\buildTransitive\Microsoft.UI.Xaml.Markup.Compiler.interop.targets(864,9): Xaml Internal Error error WMC9999: 未将对象引用设置到对象的实例。 [D:\ProgramData\WorkSpace\Echo实时翻译\overlay-interaction\windows\Echo.Windows\Echo.Windows.csproj]
+
+生成失败。
+
+C:\Users\HENRY\.nuget\packages\microsoft.windowsappsdk.winui\2.3.6\buildTransitive\Microsoft.UI.Xaml.Markup.Compiler.interop.targets(864,9): XamlCompiler warning WMC1509: No LocalAssembly parameter given during MarkupCompilePass2 for the currently building project.  This will likely cause type resolution errors for any types from the current project. [D:\ProgramData\WorkSpace\Echo实时翻译\overlay-interaction\windows\Echo.Windows\Echo.Windows.csproj]
+D:\ProgramData\WorkSpace\Echo实时翻译\overlay-interaction\windows\Echo.Windows\OverlayInteractionWindows.cs(83,12): error CS0103: 当前上下文中不存在名称“FocusManager” [D:\ProgramData\WorkSpace\Echo实时翻译\overlay-interaction\windows\Echo.Windows\Echo.Windows.csproj]
+D:\ProgramData\WorkSpace\Echo实时翻译\overlay-interaction\windows\Echo.Windows\MainPage.xaml(33,30): XamlCompiler error WMC0909: Cannot resolve DataType core:Subtitle [D:\ProgramData\WorkSpace\Echo实时翻译\overlay-interaction\windows\Echo.Windows\Echo.Windows.csproj]
+MainPage.xaml(35,9): XamlCompiler error WMC1111: DataTemplates containing x:Bind need a DataType to be specified using 'x:DataType' [D:\ProgramData\WorkSpace\Echo实时翻译\overlay-interaction\windows\Echo.Windows\Echo.Windows.csproj]
+C:\Users\HENRY\.nuget\packages\microsoft.windowsappsdk.winui\2.3.6\buildTransitive\Microsoft.UI.Xaml.Markup.Compiler.interop.targets(864,9): Xaml Internal Error error WMC9999: 未将对象引用设置到对象的实例。 [D:\ProgramData\WorkSpace\Echo实时翻译\overlay-interaction\windows\Echo.Windows\Echo.Windows.csproj]
+    1 个警告
+    4 个错误
+
+已用时间 00:00:13.11

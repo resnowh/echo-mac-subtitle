@@ -1,0 +1,31 @@
+PASS: main-window minimum and ideal sizes match Mac in DIPs, scale with DPI, and fit a smaller work area
+PASS: new and legacy preferences default to the Mac dark theme when no explicit theme is stored
+PASS: recognition mode keeps the last preferred language when switching to automatic and migrates legacy settings
+PASS: audio input mode defaults to Mac microphone, persists, and repairs unsupported values
+PASS: AI correction recognition snapshots become stale when any Mac-equivalent language or speaker option changes
+PASS: WASAPI microphone readiness accepts silent packets and marks converted output only after valid samples are buffered
+PASS: AI correction results are discarded when recognition settings change while the request is in flight
+PASS: new-content summaries are limited to segments created since the current recording session began
+PASS: AI summaries submit archive-aware bilingual transcript chunks with scope-specific Mac prompts
+PASS: live audio mode switching keeps only the capture routes required by the selected mode
+PASS: audio input mode remains available during recording and routes selections through the live switch handler
+PASS: compact audio source menu preserves the three existing modes and routes through live audio switching
+PASS: top language choices use accessible buttons, retain all options, keep the no-translation target visible, and use Mac tertiary emphasis for chevrons and recording hint
+PASS: new-content prompt occupies its own collapsed row below the transcript so it cannot cover subtitle edit actions
+PASS: transcript divider opacity is isolated to its one-pixel line so subtitles, empty state, and unread-content control keep full contrast
+PASS: translation column visibility follows the active recording config and refreshes when the saved language choice changes
+PASS: speaker metadata visibility follows the frozen recording setting during a session and saved preference while idle
+PASS: speaker labels and separator are hidden when disabled or absent, matching the Mac transcript metadata row
+PASS: transcript rows retain Mac empty-text placeholders, date spacing and tabular time with a quiet correction action and low-emphasis summary surface
+PASS: main spacing, expanding archive selection, quiet waveform surface and summary scope actions follow the Mac layout contract
+PASS: recording toolbar and margins adapt directly to the available content width
+PASS: low-emphasis background remains theme-aware and falls back to a system brush in High Contrast
+PASS: subtitle correction editor exposes dated history, bounded scrolling, and inline term addition like Mac
+PASS: theme choices and main-window cycling follow the Mac light, dark, system order
+PASS: desktop subtitle overlay defaults match the Mac visual baseline
+PASS: overlay placement scales with DPI, supports negative multi-monitor origins, and clamps to short work areas
+PASS: native overlay recomputes its placement when Windows reports display or work-area changes
+Unhandled exception. System.Exception: FAIL: hiding the native overlay hides its controls, stops hover polling, and exits adjustment mode
+   at Program.<>c__DisplayClass0_1.<<Main>$>g__Check|1(Boolean condition, String name) in D:\ProgramData\WorkSpace\Echo实时翻译\overlay-interaction\windows\Echo.CoreChecks\Program.cs:line 31
+   at Program.<Main>$(String[] args) in D:\ProgramData\WorkSpace\Echo实时翻译\overlay-interaction\windows\Echo.CoreChecks\Program.cs:line 319
+   at Program.<Main>(String[] args)

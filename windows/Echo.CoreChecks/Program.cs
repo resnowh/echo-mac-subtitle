@@ -316,7 +316,7 @@ string normalizedNativeOverlaySource = nativeOverlaySource.Replace("\r\n", "\n",
 Check(normalizedNativeOverlaySource.Contains("case WmSettingChange when wParam == SpiSetWorkArea:\n                OnDisplayConfigurationChanged();\n                return 0;", StringComparison.Ordinal)
     && normalizedNativeOverlaySource.Contains("case WmDisplayChange:\n                OnDisplayConfigurationChanged();\n                return 0;", StringComparison.Ordinal),
     "native overlay recomputes its placement when Windows reports display or work-area changes");
-Check(normalizedNativeOverlaySource.Contains("public void HideOverlay()\n    {\n        hoverTimer.Stop();\n        interactionWindows.HideAll();\n        if (adjusting) SetAdjusting(false);", StringComparison.Ordinal),
+Check(normalizedNativeOverlaySource.Contains("public void HideOverlay()\n    {\n        EndPointerOperation();\n        hoverTimer.Stop();\n        interactionWindows.HideAll();\n        if (adjusting) SetAdjusting(false);", StringComparison.Ordinal),
     "hiding the native overlay hides its controls, stops hover polling, and exits adjustment mode");
 Check(normalizedNativeOverlaySource.Contains("0, 0, GetModuleHandle(null), 0);", StringComparison.Ordinal)
     && normalizedNativeOverlaySource.Contains("ShowWindow(hwnd, SwShowNoActivate);", StringComparison.Ordinal)
@@ -440,6 +440,24 @@ Check(interactionSource.Contains("OverlayMoveHandle", StringComparison.Ordinal)
     "floating toolbar and its own settings window expose named controls for all requested adjustments");
 var topEdgePopover = OverlayPopoverLayout.Place(
     new OverlayPixelRect(1710, 24, 184, 40), new OverlayPixelRect(0, 0, 1920, 1040), 456, 624, 12);
+// Neither side can fit the panel: a larger-area narrow side strip used to win,
+// clipping controls even though a full-width, vertically scrolling panel fits.
+var shortScreenPopover = OverlayPopoverLayout.Place(
+    new OverlayPixelRect(208, 230, 184, 40), new OverlayPixelRect(0, 0, 600, 500), 304, 416, 8);
+Check(shortScreenPopover.Width == 304 && shortScreenPopover.Height == 222
+    && shortScreenPopover.Y == 0 && shortScreenPopover.Bottom <= 222,
+    "short screens preserve popover control width before reducing scroll viewport height");
+var compactScaleCases = new[] { 96, 120, 144, 192 }.Select(dpi =>
+{
+    int px(int dip) => (int)Math.Round(dip * dpi / 96d);
+    var work = new OverlayPixelRect(-px(600), px(40), px(600), px(500));
+    var panel = OverlayPopoverLayout.Place(
+        new OverlayPixelRect(-px(392), px(270), px(184), px(40)), work, px(304), px(416), px(8));
+    return panel.Width == px(304) && panel.Height <= px(222)
+        && panel.X >= work.X && panel.Y >= work.Y && panel.Right <= work.Right && panel.Bottom <= work.Bottom;
+});
+Check(compactScaleCases.All(valid => valid),
+    "short negative-origin work areas retain full popover width at 100/125/150/200 percent");
 var bottomEdgePopover = OverlayPopoverLayout.Place(
     new OverlayPixelRect(72, 970, 184, 40), new OverlayPixelRect(0, 0, 1920, 1040), 456, 624, 12);
 var compactWorkAreaPopover = OverlayPopoverLayout.Place(

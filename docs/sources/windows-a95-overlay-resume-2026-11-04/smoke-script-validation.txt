@@ -1,0 +1,3 @@
+PowerShell AST parse passed; GUI script has NOT been run.
+Mouse automation requires -DedicatedTestDesktop inside a dedicated VM/test session. Do not run on the user desktop.
+Final GUI script AST parsed after measurement/reopen additions; actual GUI not run.

@@ -2,9 +2,15 @@ param(
     [Parameter(Mandatory)][int]$AppPid,
     [Parameter(Mandatory)][guid]$TestPackageIdentity,
     [Parameter(Mandatory)][string]$DataRoot,
-    [Parameter(Mandatory)][string]$ResultsPath
+    [Parameter(Mandatory)][string]$ResultsPath,
+    [switch]$DedicatedTestDesktop
 )
 $ErrorActionPreference = 'Stop'
+# Operator attestation, not a mechanism for isolating the desktop. Run only inside
+# a dedicated VM/session. A distinct MSIX identity does not isolate mouse input.
+if (-not $DedicatedTestDesktop) {
+    throw 'Mouse automation requires -DedicatedTestDesktop inside a dedicated VM/test session. Do not run on the user desktop.'
+}
 $tempRoot = [IO.Path]::GetFullPath($env:TEMP).TrimEnd('\') + '\'
 $packageName = $TestPackageIdentity.ToString().ToUpperInvariant()
 $package = Get-AppxPackage -Name $packageName -ErrorAction SilentlyContinue
@@ -37,12 +43,17 @@ public static class EchoA92WindowApi {
   [DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(POINT point);
   [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hwnd, int command);
+  [DllImport("user32.dll")] public static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
+  [StructLayout(LayoutKind.Sequential)] public struct MONITORINFO { public int Size; public RECT Monitor, Work; public uint Flags; }
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern bool GetMonitorInfoW(IntPtr monitor, ref MONITORINFO info);
   [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; public POINT(int x, int y) { X=x; Y=y; } }
 }
 '@
 }
 
 $results = [System.Collections.Generic.List[object]]::new()
+$measurements = [System.Collections.Generic.List[object]]::new()
+Add-Type -AssemblyName UIAutomationClient
 New-Item -ItemType Directory -Path (Split-Path -Parent $ResultsPath) -Force | Out-Null
 function Add-Result([string]$Name, [bool]$Passed, [string]$Detail = '') {
     $results.Add([pscustomobject]@{ name = $Name; status = $(if ($Passed) { 'PASS' } else { 'FAIL' }); detail = $Detail })
@@ -92,6 +103,37 @@ function Read-Settings {
     if (-not (Test-Path -LiteralPath $file)) { throw "Isolated settings were not persisted: $file" }
     Get-Content -LiteralPath $file -Raw | ConvertFrom-Json
 }
+function Measure-Control([string]$Selector, [string]$Window, [string]$State) {
+    # Reacquire every element after layout/scroll instead of retaining stale UIA handles.
+    $root = [System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]::new([long]$Window))
+    $condition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::AutomationIdProperty, $Selector)
+    $control = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
+    if (-not $control) { throw "Missing measured control: $Selector" }
+    $bounds = $control.Current.BoundingRectangle
+    $windowBounds = New-Object EchoA92WindowApi+RECT
+    [EchoA92WindowApi]::GetWindowRect([IntPtr]::new([long]$Window), [ref]$windowBounds) | Out-Null
+    $visible = -not $control.Current.IsOffscreen -and $bounds.Width -gt 0 -and $bounds.Height -gt 0 -and
+        $bounds.Left -ge $windowBounds.Left -and $bounds.Right -le $windowBounds.Right -and
+        $bounds.Top -ge $windowBounds.Top -and $bounds.Bottom -le $windowBounds.Bottom
+    if ($State -eq 'advanced-scrolled' -or ($State -eq 'common' -and $Selector -notin @('OverlayMoreSettings', 'OverlaySettingsDone'))) {
+        $scrollCondition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'OverlaySettingsScrollViewer')
+        $viewport = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $scrollCondition).Current.BoundingRectangle
+        $visible = $visible -and $bounds.Top -ge $viewport.Top -and $bounds.Bottom -le $viewport.Bottom
+    }
+    $measurements.Add([pscustomobject]@{ state=$State; id=$Selector; x=$bounds.X; y=$bounds.Y; width=$bounds.Width; height=$bounds.Height; offscreen=$control.Current.IsOffscreen })
+    Add-Result "$State/$Selector has visible bounds inside its HWND" $visible
+}
+function Capture-State([string]$Window, [string]$Name) {
+    $path = Join-Path (Split-Path -Parent $ResultsPath) "$Name.png"
+    Invoke-Ui @('screenshot', '-w', $Window, '-o', $path) | Out-Null
+}
+function Move-PointerToCaption {
+    $rect = New-Object EchoA92WindowApi+RECT
+    if (-not [EchoA92WindowApi]::GetWindowRect($overlayHwnd, [ref]$rect)) { throw 'Caption bounds unavailable.' }
+    $script:centerX = [int](($rect.Left + $rect.Right) / 2)
+    $script:centerY = [int](($rect.Top + $rect.Bottom) / 2)
+    [EchoA92WindowApi]::SetCursorPos($script:centerX, $script:centerY) | Out-Null
+}
 
 try {
     $main = Wait-VisibleWindow 'Echo'
@@ -119,21 +161,36 @@ try {
     foreach ($control in $toolbarControls) {
         $match = Search-Ui $control $toolbarHwnd
         Add-Result "Toolbar control $control is visible to UI Automation" ($match.matchCount -gt 0) "matches=$($match.matchCount)"
+        Measure-Control $control $toolbarHwnd 'toolbar'
     }
+    Capture-State $toolbarHwnd '01-toolbar'
     Invoke-Control 'OverlayOpenSettings' $toolbarHwnd
     $settingsWindow = Wait-VisibleWindow 'Echo Subtitle Settings'
     $settingsHwnd = [string]$settingsWindow.hwnd
+    $panelBounds = New-Object EchoA92WindowApi+RECT
+    [EchoA92WindowApi]::GetWindowRect([IntPtr]::new([long]$settingsHwnd), [ref]$panelBounds) | Out-Null
+    $monitorInfo = New-Object EchoA92WindowApi+MONITORINFO
+    $monitorInfo.Size = [Runtime.InteropServices.Marshal]::SizeOf($monitorInfo)
+    if (-not [EchoA92WindowApi]::GetMonitorInfoW([EchoA92WindowApi]::MonitorFromWindow([IntPtr]::new([long]$settingsHwnd), 2), [ref]$monitorInfo)) { throw 'Monitor work area unavailable.' }
+    Add-Result 'Settings HWND fits monitor work area' ($panelBounds.Left -ge $monitorInfo.Work.Left -and $panelBounds.Top -ge $monitorInfo.Work.Top -and $panelBounds.Right -le $monitorInfo.Work.Right -and $panelBounds.Bottom -le $monitorInfo.Work.Bottom)
+    $measurements.Add([pscustomobject]@{ state='common'; panel=$panelBounds; workArea=$monitorInfo.Work })
+    Capture-State $settingsHwnd '02-common-settings'
     $commonSettings = @('OverlayShowOriginal', 'OverlayShowTranslation', 'OverlayOriginalFontSize', 'OverlayTranslationFontSize', 'OverlayOpacity', 'OverlayMaximumWidth', 'OverlayMoreSettings')
     foreach ($control in $commonSettings) {
         $match = Search-Ui $control $settingsHwnd
         Add-Result "Common setting $control is visible to UI Automation" ($match.matchCount -gt 0) "matches=$($match.matchCount)"
+        Measure-Control $control $settingsHwnd 'common'
     }
+    Measure-Control 'OverlaySettingsDone' $settingsHwnd 'common'
     Invoke-Control 'OverlayMoreSettings' $settingsHwnd
     $advancedSettings = @('OverlayRetention', 'OverlayShadow', 'OverlayPositionLocked', 'OverlayClickThrough', 'OverlayResetPosition', 'OverlayRestoreDefaults')
     foreach ($control in $advancedSettings) {
         $match = Search-Ui $control $settingsHwnd
         Add-Result "Advanced setting $control is visible after expanding More settings" ($match.matchCount -gt 0) "matches=$($match.matchCount)"
+        Invoke-Ui @('scroll-into-view', $control, '-w', $settingsHwnd) | Out-Null
+        Measure-Control $control $settingsHwnd 'advanced-scrolled'
     }
+    Capture-State $settingsHwnd '03-advanced-bottom'
     Invoke-Control 'OverlayRestoreDefaults' $settingsHwnd
     Start-Sleep -Milliseconds 500
     Invoke-Ui @('set-value', 'OverlayOriginalFontSize', '32', '-w', $settingsHwnd) | Out-Null
@@ -154,7 +211,22 @@ try {
         [math]::Abs([double]$saved.subtitleOverlay.shadowStrength - .65) -lt .02 -and
         $saved.subtitleOverlay.showTranslation -eq $false
     ) ("settingsPath=$((Join-Path $DataRoot 'settings.json'))")
+    Invoke-Control 'OverlayShowOriginal' $settingsHwnd
+    Invoke-Ui @('wait-for', 'OverlayShowOriginal', '-w', $settingsHwnd, '--value', 'On', '-t', '2000') | Out-Null
+    Add-Result 'Disabling both languages restores original toggle to the validated state' $true
+    # Closing immediately exercises the pending-write flush, not just the timer.
     Invoke-Control 'OverlaySettingsDone' $settingsHwnd
+    Add-Result 'Close flush retains at least one visible language' ((Read-Settings).subtitleOverlay.showOriginal -eq $true)
+    Invoke-Control 'OverlayOpenSettings' $toolbarHwnd
+    $settingsWindow = Wait-VisibleWindow 'Echo Subtitle Settings'
+    $settingsHwnd = [string]$settingsWindow.hwnd
+    Invoke-Ui @('wait-for', 'OverlayOriginalFontSize', '-w', $settingsHwnd, '--value', '32', '-t', '2000') | Out-Null
+    Capture-State $settingsHwnd '04-reopened-settings'
+    Invoke-Ui @('send-keys', 'escape', '-w', $settingsHwnd, '--via', 'send-input') | Out-Null
+    Start-Sleep -Milliseconds 250
+    Add-Result 'Escape hides settings and retains keyboard access to toolbar' (
+        -not [EchoA92WindowApi]::IsWindowVisible([IntPtr]::new([long]$settingsHwnd)) -and
+        [EchoA92WindowApi]::IsWindowVisible([IntPtr]::new([long]$toolbarHwnd)))
     [EchoA92WindowApi]::SetCursorPos($centerX, $centerY) | Out-Null
     Start-Sleep -Milliseconds 250
     $toolbar = Wait-VisibleWindow 'Echo Subtitle Controls'
@@ -195,7 +267,9 @@ try {
     Invoke-Control 'OverlayPositionLock' $toolbarHwnd
     Start-Sleep -Milliseconds 500
     $locked = Read-Settings
-    Add-Result 'Toolbar lock prevents further pointer movement' ($locked.subtitleOverlay.positionLocked -eq $true) "locked=$($locked.subtitleOverlay.positionLocked)"
+    Add-Result 'Toolbar lock persists positionLocked' ($locked.subtitleOverlay.positionLocked -eq $true) "locked=$($locked.subtitleOverlay.positionLocked)"
+    Invoke-Ui @('wait-for', 'OverlayMoveHandle', '-w', $toolbarHwnd, '-p', 'IsEnabled', '--value', 'False', '-t', '2000') | Out-Null
+    Add-Result 'Locked move handle is disabled' $true
 
     Invoke-Control 'OverlayClickThrough' $toolbarHwnd
     Start-Sleep -Milliseconds 400
@@ -231,7 +305,7 @@ try {
         Invoke-Control 'ToggleSubtitleOverlay' ([string]$main.hwnd)
         Start-Sleep -Milliseconds 250
         Add-Result "Close/reopen cycle $cycle preserves one native overlay" ($hidden -and (Get-Windows | Where-Object { $_.processId -eq $AppPid -and $_.className -eq 'Echo.Windows.NativeSubtitleOverlay.1' }).Count -eq 1) 'Overlay HWND count checked.'
-        [EchoA92WindowApi]::SetCursorPos($centerX, $centerY) | Out-Null
+        Move-PointerToCaption
         Start-Sleep -Milliseconds 200
         $toolbar = Wait-VisibleWindow 'Echo Subtitle Controls'
         $toolbarHwnd = [string]$toolbar.hwnd
@@ -252,6 +326,7 @@ catch {
 }
 finally {
     $results | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ResultsPath -Encoding utf8
+    $measurements | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath ([IO.Path]::ChangeExtension($ResultsPath, 'bounds.json')) -Encoding utf8
 }
 
 $results | Format-Table name, status, detail -AutoSize

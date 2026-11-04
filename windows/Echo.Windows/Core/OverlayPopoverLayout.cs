@@ -41,21 +41,15 @@ public static class OverlayPopoverLayout
             return new OverlayPixelRect(sideX, sideY, width, height);
         }
 
-        int aboveHeight = Math.Min(height, Math.Max(1, above));
-        int belowHeight = Math.Min(height, Math.Max(1, below));
-        int leftWidth = Math.Min(width, Math.Max(1, left));
-        int rightWidth = Math.Min(width, Math.Max(1, right));
-        var candidates = new[]
-        {
-            new OverlayPixelRect(Math.Clamp(anchor.Right - width, workArea.X, Math.Max(workArea.X, workArea.Right - width)),
-                Math.Clamp(anchor.Y - gap - aboveHeight, workArea.Y, Math.Max(workArea.Y, workArea.Bottom - aboveHeight)), width, aboveHeight),
-            new OverlayPixelRect(Math.Clamp(anchor.Right - width, workArea.X, Math.Max(workArea.X, workArea.Right - width)),
-                Math.Clamp(anchor.Bottom + gap, workArea.Y, Math.Max(workArea.Y, workArea.Bottom - belowHeight)), width, belowHeight),
-            new OverlayPixelRect(Math.Clamp(anchor.X - gap - leftWidth, workArea.X, Math.Max(workArea.X, workArea.Right - leftWidth)),
-                Math.Clamp(anchor.Y, workArea.Y, Math.Max(workArea.Y, workArea.Bottom - height)), leftWidth, height),
-            new OverlayPixelRect(Math.Clamp(anchor.Right + gap, workArea.X, Math.Max(workArea.X, workArea.Right - rightWidth)),
-                Math.Clamp(anchor.Y, workArea.Y, Math.Max(workArea.Y, workArea.Bottom - height)), rightWidth, height)
-        };
-        return candidates.OrderByDescending(candidate => candidate.Width * (long)candidate.Height).First();
+        // The body scrolls vertically, not horizontally. Maximizing rectangle area
+        // can choose a tall, narrow side strip and clip toggles/footer buttons.
+        // Preserve the available panel width and shrink height first.
+        bool useAbove = above >= below;
+        int compactHeight = Math.Min(height, Math.Max(1, useAbove ? above : below));
+        return new OverlayPixelRect(
+            Math.Clamp(anchor.Right - width, workArea.X, Math.Max(workArea.X, workArea.Right - width)),
+            Math.Clamp(useAbove ? anchor.Y - gap - compactHeight : anchor.Bottom + gap,
+                workArea.Y, Math.Max(workArea.Y, workArea.Bottom - compactHeight)),
+            width, compactHeight);
     }
 }

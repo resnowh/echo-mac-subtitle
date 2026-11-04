@@ -1,0 +1,148 @@
+PASS: main-window minimum and ideal sizes match Mac in DIPs, scale with DPI, and fit a smaller work area
+PASS: new and legacy preferences default to the Mac dark theme when no explicit theme is stored
+PASS: recognition mode keeps the last preferred language when switching to automatic and migrates legacy settings
+PASS: audio input mode defaults to Mac microphone, persists, and repairs unsupported values
+PASS: AI correction recognition snapshots become stale when any Mac-equivalent language or speaker option changes
+PASS: WASAPI microphone readiness accepts silent packets and marks converted output only after valid samples are buffered
+PASS: AI correction results are discarded when recognition settings change while the request is in flight
+PASS: new-content summaries are limited to segments created since the current recording session began
+PASS: AI summaries submit archive-aware bilingual transcript chunks with scope-specific Mac prompts
+PASS: live audio mode switching keeps only the capture routes required by the selected mode
+PASS: audio input mode remains available during recording and routes selections through the live switch handler
+PASS: compact audio source menu preserves the three existing modes and routes through live audio switching
+PASS: top language choices use accessible buttons, retain all options, keep the no-translation target visible, and use Mac tertiary emphasis for chevrons and recording hint
+PASS: new-content prompt occupies its own collapsed row below the transcript so it cannot cover subtitle edit actions
+PASS: transcript divider opacity is isolated to its one-pixel line so subtitles, empty state, and unread-content control keep full contrast
+PASS: translation column visibility follows the active recording config and refreshes when the saved language choice changes
+PASS: speaker metadata visibility follows the frozen recording setting during a session and saved preference while idle
+PASS: speaker labels and separator are hidden when disabled or absent, matching the Mac transcript metadata row
+PASS: transcript rows retain Mac empty-text placeholders, date spacing and tabular time with a quiet correction action and low-emphasis summary surface
+PASS: main spacing, expanding archive selection, quiet waveform surface and summary scope actions follow the Mac layout contract
+PASS: recording toolbar and margins adapt directly to the available content width
+PASS: low-emphasis background remains theme-aware and falls back to a system brush in High Contrast
+PASS: subtitle correction editor exposes dated history, bounded scrolling, and inline term addition like Mac
+PASS: theme choices and main-window cycling follow the Mac light, dark, system order
+PASS: desktop subtitle overlay defaults match the Mac visual baseline
+PASS: overlay placement scales with DPI, supports negative multi-monitor origins, and clamps to short work areas
+PASS: native overlay recomputes its placement when Windows reports display or work-area changes
+PASS: hiding the native overlay hides its controls, stops hover polling, and exits adjustment mode
+PASS: native subtitle overlay is an unowned, topmost window shown without activating or following main-window minimization
+PASS: closing the main window disposes the overlay timers, feed subscription, and native HWND
+PASS: overlay monitor identity round-trips while older settings remain compatible
+PASS: overlay settings retain a visible language and repair invalid persisted values
+PASS: overlay visibility matches Mac when translation is disabled, when only translation is selected, and when both language switches are off
+PASS: native DirectWrite overlay uses a bounded two-line layout with Mac-equivalent tail ellipsis for text and shadows
+PASS: native overlay constrains each subtitle line to at most two DirectWrite lines
+PASS: recording actions, archive picker, and live status expose contextual Narrator names
+PASS: recognition settings expose Mac-equivalent automatic/preferred modes and group preferred-language controls
+PASS: the main toolbar does not show a permanent return-to-latest button when Mac only shows it for unread content
+PASS: recognition mode persists the preferred language while automatic mode omits hints and hides strict-language controls
+PASS: main overlay menu keeps only enable/disable and a safe control-recovery route
+PASS: floating toolbar and its own settings window expose named controls for all requested adjustments
+PASS: short screens preserve popover control width before reducing scroll viewport height
+PASS: short negative-origin work areas retain full popover width at 100/125/150/200 percent
+PASS: overlay popover placement stays in the work area at all edges, short heights, and 100/125/150/200 percent scale
+PASS: compact settings keep a bounded scrolling body and cache stable monitor/DPI placement
+PASS: click-through caption and interactive HWNDs remain separate while hover and monitor placement are coordinated
+PASS: transcript follow state tracks direct, wheel and keyboard scrolling separately from content layout changes
+PASS: settings preserve an unreadable DPAPI secret until the user replaces it
+PASS: new transcript content stays followed when the user is at the live end
+PASS: content growth and passive view changes do not resume following after the user scrolls into history
+PASS: returning to the live end clears the new-content hint and resumes following
+PASS: settings panel keeps the Mac 520x560 DIP target, fits short work areas, and constrains its accessible scroll viewer to a star-sized row
+PASS: overlay feed presents a provisional bilingual subtitle
+PASS: identical updates do not extend the final subtitle retention window
+PASS: meaningful late translation resets the final subtitle retention window
+PASS: overlay feed clears stale subtitle state
+PASS: AI summary panel visibility matches Mac auto-summary, existing-summary and status conditions
+PASS: summary markdown blocks match the Mac title, heading, bullet, and paragraph rules across Windows line endings
+PASS: expanded AI summary yields excess height to the transcript while retaining its Mac 220 DIP content cap
+PASS: segmentation defaults match the Mac settings baseline
+PASS: segmentation settings persist in the existing Windows preferences file
+PASS: transcript day headers match the Mac cross-day rule and require adjacent wall-clock dates
+PASS: invalid segmentation preferences recover to safe defaults
+PASS: Soniox automatic-language request removes both hints and strict mode, carries endpoint settings, and omits disabled translation
+PASS: source-language selection and strict preference match Mac specified/automatic transitions without applying strict restriction to auto mode
+PASS: Soniox request preserves the Mac economics context, vocabulary, and translation pairs
+PASS: Soniox request appends normalized user terms with Mac line, length, and count limits and serializes valid context JSON
+PASS: Soniox custom terms truncate by Unicode text elements like Swift Character without splitting combining marks or ZWJ emoji
+PASS: inline correction terms trim input, normalize blank lines, reject case-insensitive duplicates and enforce the 100-term Mac limit
+PASS: inline correction term field uses the Mac 80-character limit measured in Unicode text elements
+PASS: audio meter computes Mac-scaled RMS over only valid captured samples
+PASS: audio meter samples at 20 Hz, attacks quickly and decays slowly like Mac
+PASS: audio waveform retains the newest 48 samples in order
+PASS: audio waveform history resets cleanly between recording sessions
+PASS: quiet-time tracking treats empty and endpoint responses as activity like Mac, but excludes finished and error responses
+PASS: Soniox control parsing accepts only boolean finished and string error messages while retaining error-code frames
+PASS: segmentation policy requires its thresholds, waits for enabled translation, and gives semantic endpoints priority
+PASS: Windows segmentation policy matches 13 Mac-source cases for endpoint precedence, silence/long thresholds, translation wait, and Unicode whitespace
+PASS: segmentation token/session event 1 preserves the Mac final rows, text, timestamps, metadata, and fallback timing
+PASS: segmentation token/session event 2 preserves the Mac final rows, text, timestamps, metadata, and fallback timing
+PASS: segmentation token/session event 3 preserves the Mac final rows, text, timestamps, metadata, and fallback timing
+PASS: segmentation token/session event 4 preserves the Mac final rows, text, timestamps, metadata, and fallback timing
+PASS: segmentation token/session event 5 preserves the Mac final rows, text, timestamps, metadata, and fallback timing
+PASS: segmentation token/session event 6 preserves the Mac final rows, text, timestamps, metadata, and fallback timing
+PASS: segmentation token/session event 7 preserves the Mac final rows, text, timestamps, metadata, and fallback timing
+PASS: segmentation token/session event 8 preserves the Mac final rows, text, timestamps, metadata, and fallback timing
+PASS: segmentation token/session event 9 preserves the Mac final rows, text, timestamps, metadata, and fallback timing
+PASS: Windows token assembler and production session finalizer match 9 Mac production session snapshots
+PASS: local segmentation finalizes the active subtitle through the shared finalization path
+PASS: speech after a local fallback begins a fresh subtitle without duplicating the prior phrase
+PASS: provisional replacement without duplicated prefix
+PASS: translation arriving before the endpoint stays paired, and the next response starts a new row
+PASS: DeepSeek correction requests match Mac thinking and distinguish translation-only from contextual proofreading instructions
+PASS: manual correction jobs jump ahead of pending automatic jobs, including promotion of a matching queued job
+PASS: DeepSeek correction response requires the Mac Codable uncertain field instead of silently defaulting to false
+PASS: multiple endpoint markers in one response finalize once after the complete bilingual response, matching Mac
+PASS: empty endpoint markers do not advance the cursor or create blank transcript rows
+PASS: economics terminology normalization follows the Mac strong-context rules without changing ambiguous contexts
+PASS: calculus and truncated-hand recognition corrections apply only in the Mac phrase contexts
+PASS: recognized transcript and its translation apply paired Mac calculus corrections while preserving ordinary tax text
+PASS: saving only the edited field preserves the current translation and leaves it open to live updates
+PASS: field-level undo restores the exact pre-edit pair and locks both restored values
+PASS: manual source lock preserves correction while live recognition updates raw text and unlocked translation
+PASS: undo restores prior subtitle and locks the restored human choice
+PASS: late recognition cannot overwrite text after undo
+PASS: one response-level endpoint advances both transcript and translation before the next response
+PASS: transcript final boundary triggers a single opt-in correction job
+PASS: final speaker change across responses splits rows, retains language and finalizes each turn once like Mac
+PASS: provisional language stays stable until final, null metadata is ignored, and non-string speaker/language values are rejected
+PASS: each Mac-style response replaces provisional source and translation as one snapshot, preventing stale opposite-lane text
+PASS: Mac production Soniox fixture response 1 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: Mac production Soniox fixture response 2 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: Mac production Soniox fixture response 3 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: Mac production Soniox fixture response 4 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: Mac production Soniox fixture response 5 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: Mac production Soniox fixture response 6 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: Mac production Soniox fixture response 7 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: Mac production Soniox fixture response 8 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: Mac production Soniox fixture response 9 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: Mac production Soniox fixture response 10 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: Mac production Soniox fixture response 11 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: Mac production Soniox fixture response 12 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: Mac production Soniox fixture response 13 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: Mac production Soniox fixture response 14 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: Mac production Soniox fixture response 15 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: Mac production Soniox fixture response 16 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: Mac production Soniox fixture response 17 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: Mac production Soniox fixture response 18 matches snapshots, metadata, timestamps, and finalization callbacks
+PASS: archive selection order follows Mac updatedAt descending semantics
+PASS: new Windows archive title follows the Mac Chinese title and local month-day time format
+PASS: background persistence snapshot is isolated from later edits and keeps archive metadata
+PASS: SRT preserves segment wall-clock gap and translation
+PASS: archive SRT export sorts unordered segments by wall clock and clamps overlaps so cue times never move backward
+PASS: anonymous speaker and detected language survive archive round trip, while SRT keeps the Mac speaker-line format
+PASS: archive summary, incremental signatures, legacy JSON fields and Apple reference date round trip
+PASS: summary selection excludes unchanged entries incrementally while current-segment and whole-archive scopes stay distinct
+PASS: new-content summaries exclude unsummarized historical segments while whole-archive summaries retain them
+PASS: legacy archive without language or speaker loads without inferred metadata and retains its UTC cross-midnight timestamp through SRT export
+PASS: Swift Codable-shaped archive preserves Apple epoch and correction history, and Windows SRT matches Mac speaker, offset, and millisecond formatting
+PASS: Swift-shaped multi-segment archive round trip preserves segment IDs, wall-clock gaps, metadata, and cross-segment SRT order
+PASS: Windows correction history still reads existing ISO-8601 revision dates after enabling Apple epoch dates
+Unhandled exception. System.UnauthorizedAccessException: Access to the path is denied.
+   at System.IO.FileSystem.ReplaceFile(String sourceFullPath, String destFullPath, String destBackupFullPath, Boolean ignoreMetadataErrors)
+   at Echo_Windows.Core.TranscriptFiles.AtomicWrite(String path, String text, Action`2 writeToTemp, Action afterFlushBeforeReplace) in D:\ProgramData\WorkSpace\Echo实时翻译\overlay-interaction\windows\Echo.Windows\Core\Transcript.cs:line 425
+   at Echo_Windows.Core.TranscriptFiles.AtomicWrite(String path, String text, Action afterFlushBeforeReplace) in D:\ProgramData\WorkSpace\Echo实时翻译\overlay-interaction\windows\Echo.Windows\Core\Transcript.cs:line 407
+   at Echo_Windows.Core.TranscriptFiles.AtomicWrite(String path, String text) in D:\ProgramData\WorkSpace\Echo实时翻译\overlay-interaction\windows\Echo.Windows\Core\Transcript.cs:line 404
+   at Program.<Main>$(String[] args) in D:\ProgramData\WorkSpace\Echo实时翻译\overlay-interaction\windows\Echo.CoreChecks\Program.cs:line 1160
+   at Program.<Main>(String[] args)

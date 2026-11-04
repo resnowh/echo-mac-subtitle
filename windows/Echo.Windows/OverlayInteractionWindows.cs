@@ -5,6 +5,7 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using System.Runtime.InteropServices;
 using System.Collections.Generic;
@@ -33,6 +34,7 @@ internal sealed class OverlayInteractionWindows : IDisposable
     private Button? moveButton;
     private Button? lockButton;
     private Button? clickThroughButton;
+    private Button? settingsButton;
     private FontIcon? lockIcon;
     private FontIcon? clickThroughIcon;
     private ToggleSwitch? settingsLockToggle;
@@ -71,11 +73,15 @@ internal sealed class OverlayInteractionWindows : IDisposable
         persistTimer.IsRepeating = false;
         persistTimer.Tick += (_, _) =>
         {
-            if (currentSettings is not null) saveSettings(currentSettings);
+            if (!disposed && currentSettings is not null) saveSettings(currentSettings);
         };
     }
 
     public bool IsSettingsVisible => settingsVisible;
+
+    public bool HasKeyboardFocus => toolbar?.Content is FrameworkElement { XamlRoot: { } root }
+        && IsWindowVisible(toolbarHwnd) && GetForegroundWindow() == toolbarHwnd
+        && FocusManager.GetFocusedElement(root) is Control { FocusState: FocusState.Keyboard or FocusState.Programmatic };
 
     public bool ContainsPoint(int x, int y) =>
         IsPointInside(toolbarHwnd, x, y) || (settingsVisible && IsPointInside(settingsHwnd, x, y));
@@ -116,6 +122,7 @@ internal sealed class OverlayInteractionWindows : IDisposable
 
     public void HideAll()
     {
+        moveButton?.ReleasePointerCaptures();
         FlushPendingSettings();
         settingsVisible = false;
         if (settingsHwnd != 0) ShowWindow(settingsHwnd, SwHide);
@@ -126,6 +133,7 @@ internal sealed class OverlayInteractionWindows : IDisposable
     {
         if (disposed) return;
         disposed = true;
+        moveButton?.ReleasePointerCaptures();
         FlushPendingSettings();
         settingsVisible = false;
         toolbar?.Close();
@@ -155,7 +163,7 @@ internal sealed class OverlayInteractionWindows : IDisposable
         lockIcon = (FontIcon)lockButton.Content;
         clickThroughButton = MakeIconButton("\uE962", "切换点击穿透；此工具栏仍可操作", "OverlayClickThrough");
         clickThroughIcon = (FontIcon)clickThroughButton.Content;
-        Button settingsButton = MakeIconButton("\uE713", "打开悬浮字幕设置", "OverlayOpenSettings");
+        settingsButton = MakeIconButton("\uE713", "打开悬浮字幕设置", "OverlayOpenSettings");
         Button closeButton = MakeIconButton("\uE8BB", "关闭悬浮字幕", "OverlayClose");
         Button[] buttons = [moveButton, lockButton, clickThroughButton, settingsButton, closeButton];
         for (int i = 0; i < buttons.Length; i++)
@@ -163,12 +171,25 @@ internal sealed class OverlayInteractionWindows : IDisposable
             Grid.SetColumn(buttons[i], i);
             row.Children.Add(buttons[i]);
         }
-        moveButton.PointerPressed += (_, args) =>
+        moveButton.AddHandler(UIElement.PointerPressedEvent, new Microsoft.UI.Xaml.Input.PointerEventHandler((_, args) =>
         {
-            if (currentSettings?.PositionLocked == true) return;
+            if (currentSettings?.PositionLocked != false || !args.GetCurrentPoint(moveButton).Properties.IsLeftButtonPressed) return;
+            if (!moveButton.CapturePointer(args.Pointer)) return;
             args.Handled = true;
             BeginMoveFromToolbar?.Invoke();
-        };
+        }), true);
+        moveButton.AddHandler(UIElement.PointerMovedEvent, new Microsoft.UI.Xaml.Input.PointerEventHandler((_, args) =>
+        {
+            if (args.GetCurrentPoint(moveButton).Properties.IsLeftButtonPressed)
+                ContinueMoveFromToolbar?.Invoke();
+        }), true);
+        moveButton.AddHandler(UIElement.PointerReleasedEvent, new Microsoft.UI.Xaml.Input.PointerEventHandler((_, args) =>
+        {
+            EndMoveFromToolbar?.Invoke();
+            moveButton.ReleasePointerCapture(args.Pointer);
+        }), true);
+        moveButton.PointerCaptureLost += (_, _) => EndMoveFromToolbar?.Invoke();
+        moveButton.PointerCanceled += (_, _) => EndMoveFromToolbar?.Invoke();
         moveButton.KeyDown += (_, args) =>
         {
             if (currentSettings?.PositionLocked != false) return;
@@ -208,13 +229,15 @@ internal sealed class OverlayInteractionWindows : IDisposable
         toolbar.Content = surface;
     }
 
-    // Installed by NativeDesktopSubtitleOverlayWindow so the drag handle can capture
-    // the pointer on the caption HWND even when the caption surface is click-through.
+    // The interactive WinUI handle owns capture; the transparent, non-activating
+    // caption HWND only consumes movement callbacks.
     public Action? BeginMoveFromToolbar { get; set; }
+    public Action? ContinueMoveFromToolbar { get; set; }
+    public Action? EndMoveFromToolbar { get; set; }
 
     private void OpenSettings()
     {
-        if (currentSettings is null) return;
+        if (disposed || currentSettings is null) return;
         EnsureSettingsWindow();
         settingsVisible = true;
         BuildSettings(currentSettings);
@@ -295,8 +318,8 @@ internal sealed class OverlayInteractionWindows : IDisposable
         resetPosition.Click += (_, _) =>
         {
             if (currentSettings is not { } s) return;
-            s.DisplayId = null;
-            s.DisplayDeviceName = null;
+            // Keep the caption's current monitor; resetting its position must not
+            // send it back to whichever screen happens to contain the main window.
             s.NormalizedX = .5;
             s.NormalizedBottom = .09;
             saveSettings(s);
@@ -346,12 +369,12 @@ internal sealed class OverlayInteractionWindows : IDisposable
         Grid.SetRow(footer, 2);
         layout.Children.Add(footer);
         root.Child = layout;
-        root.KeyDown += (_, args) =>
+        root.PreviewKeyDown += (_, args) =>
         {
             if (args.Key == Windows.System.VirtualKey.Escape)
             {
                 args.Handled = true;
-                CloseSettings();
+                CloseSettings(restoreKeyboardFocus: true);
             }
         };
         settingsWindow!.Content = root;
@@ -428,12 +451,17 @@ internal sealed class OverlayInteractionWindows : IDisposable
         }
     }
 
-    private void CloseSettings()
+    private void CloseSettings(bool restoreKeyboardFocus = false)
     {
         FlushPendingSettings();
         settingsVisible = false;
         settingsPlacementValid = false;
         ShowWindow(settingsHwnd, SwHide);
+        if (restoreKeyboardFocus && !disposed && toolbar is not null)
+        {
+            toolbar.Activate();
+            settingsButton?.Focus(FocusState.Programmatic);
+        }
     }
 
     private void SetMoreSettingsExpanded(bool expanded)
@@ -450,9 +478,13 @@ internal sealed class OverlayInteractionWindows : IDisposable
 
     private void SaveLiveChange()
     {
-        if (currentSettings is null) return;
+        if (disposed || currentSettings is null) return;
+        // Validation keeps at least one language visible. Reflect that correction
+        // back into the existing controls instead of showing two disabled toggles.
+        currentSettings.Validate();
         UpdateToolbarLabels(currentSettings, !currentSettings.PositionLocked);
         saveSettingsPreview?.Invoke(currentSettings);
+        SynchronizeSettingsControls(currentSettings);
         persistTimer.Stop();
         persistTimer.Start();
     }
@@ -623,5 +655,6 @@ internal sealed class OverlayInteractionWindows : IDisposable
     [DllImport("user32.dll")] private static extern nint MonitorFromWindow(nint hwnd, uint flags);
     [DllImport("user32.dll", EntryPoint = "GetMonitorInfoW", CharSet = CharSet.Unicode)] private static extern bool GetMonitorInfo(nint monitor, ref MonitorInfo info);
     [DllImport("user32.dll")] private static extern uint GetDpiForWindow(nint hwnd);
+    [DllImport("user32.dll")] private static extern nint GetForegroundWindow();
     [DllImport("user32.dll")] private static extern bool GetCursorPos(out Windows.Graphics.PointInt32 point);
 }
